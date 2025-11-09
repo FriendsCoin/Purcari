@@ -2,15 +2,26 @@ import { useState } from 'react';
 import { Upload, Sparkles } from 'lucide-react';
 import { Card } from './components/common/Card';
 import { Button } from './components/common/Button';
-import type { ViewState } from './types';
+import { Dashboard } from './components/dashboard/Dashboard';
+import { generateMockData } from './services/mockData';
+import type { ViewState, AnalysisData, Project, Hotspot } from './types';
 
 function App() {
   const [view, setView] = useState<ViewState>('upload');
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [hotspots, setHotspots] = useState<Hotspot[]>([]);
 
   const handleLoadDemo = () => {
-    // Load demo data
-    console.log('Loading demo data...');
+    const { analysis: mockAnalysis, hotspots: mockHotspots, projects: mockProjects } = generateMockData();
+    setAnalysis(mockAnalysis);
+    setHotspots(mockHotspots);
+    setProjects(mockProjects);
     setView('dashboard');
+  };
+
+  const handleBack = () => {
+    setView('upload');
   };
 
   if (view === 'upload') {
@@ -65,14 +76,11 @@ function App() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto p-8">
-        <h1 className="text-4xl font-bold mb-8">Dashboard View</h1>
-        <p className="text-gray-600">Dashboard content will be rendered here...</p>
-      </div>
-    </div>
-  );
+  if (view === 'dashboard' && analysis) {
+    return <Dashboard analysis={analysis} projects={projects} hotspots={hotspots} onBack={handleBack} />;
+  }
+
+  return null;
 }
 
 export default App;
