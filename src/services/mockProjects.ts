@@ -153,6 +153,7 @@ export const mockProjects: Project[] = [
     roi: {
       brand: 'Cutting-edge tech positions Purcari as innovator',
       engagement: 'Game-like: avg. 12 min interaction',
+      press: 'Tech media coverage: featured in digital art magazines',
       education: 'School groups: perfect for ecology lessons',
       scientific: 'Publishable as "public science communication" tool',
     },
@@ -314,6 +315,7 @@ export const mockProjects: Project[] = [
     roi: {
       brand: 'Younger demographic appeal (Gen Z/Millennials)',
       engagement: 'Repeat visits: avg. 3.2 visits to complete collection',
+      press: 'App Store features, gaming and tourism press coverage',
       data: 'Collect visitor analytics (which QR most popular?)',
       revenue: 'In-app purchases: "Rare species radar" €2.99',
     },

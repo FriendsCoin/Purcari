@@ -5,6 +5,8 @@ import { HypothesisModal } from '../analysis/HypothesisModal';
 import { TemporalTrends } from '../analysis/TemporalTrends';
 import { SiteComparison } from '../analysis/SiteComparison';
 import { DetailedMetrics } from '../analysis/DetailedMetrics';
+import { SpeciesDistribution } from '../analysis/SpeciesDistribution';
+import { HourlyActivityHeatmap } from '../analysis/HourlyActivityHeatmap';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
 import { Button } from '../common/Button';
@@ -26,7 +28,7 @@ interface DashboardProps {
 export function Dashboard({
   analysis,
   projects,
-  hotspots,
+  hotspots: _hotspots,
   isRealData = false,
   monthlyTrends = [],
   siteDiversity = [],
@@ -122,58 +124,13 @@ export function Dashboard({
       <div className="container mx-auto px-6 py-8">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-fade-in">
             <StatisticsCards analysis={analysis} />
 
-            {/* Species Distribution */}
-            <div className="bg-white rounded-2xl shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Species Distribution</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
-                  <p className="text-sm text-gray-600">Birds</p>
-                  <p className="text-3xl font-bold text-blue-600">{analysis.types.bird || 0}</p>
-                </div>
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4">
-                  <p className="text-sm text-gray-600">Mammals</p>
-                  <p className="text-3xl font-bold text-orange-600">{analysis.types.mammal || 0}</p>
-                </div>
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
-                  <p className="text-sm text-gray-600">Common Species</p>
-                  <p className="text-3xl font-bold text-green-600">{analysis.common?.length || 0}</p>
-                </div>
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
-                  <p className="text-sm text-gray-600">Rare Species</p>
-                  <p className="text-3xl font-bold text-purple-600">{analysis.rare?.length || 0}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Top Species */}
-            <div className="bg-white rounded-2xl shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Top Species Detected</h2>
-              <div className="space-y-3">
-                {Object.entries(analysis.species)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 8)
-                  .map(([species, count]) => {
-                    const maxCount = Math.max(...Object.values(analysis.species));
-                    const percentage = (count / maxCount) * 100;
-                    return (
-                      <div key={species}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-gray-700">{species}</span>
-                          <span className="text-gray-500">{count} detections</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-gradient-to-r from-purple-600 to-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
+            {/* New Enhanced Visualizations */}
+            <div className="grid grid-cols-1 gap-8">
+              <SpeciesDistribution analysis={analysis} />
+              <HourlyActivityHeatmap analysis={analysis} />
             </div>
           </div>
         )}

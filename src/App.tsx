@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Upload, Sparkles, Database } from 'lucide-react';
 import { Card } from './components/common/Card';
 import { Button } from './components/common/Button';
+import { LoadingSpinner } from './components/common/LoadingSpinner';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { generateMockData } from './services/mockData';
 import { loadRealGeoJSONData, processRealGeoJSON, extractHotspotsFromGeoJSON } from './services/realDataLoader';
@@ -66,6 +67,7 @@ function App() {
   if (view === 'upload') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
+        {isLoading && <LoadingSpinner fullScreen size="xl" text="Loading biodiversity data..." />}
         <div className="max-w-4xl w-full">
           <div className="text-center mb-12 animate-fade-in">
             <h1 className="text-6xl font-bold text-white mb-4">Purcari Biodiversity</h1>

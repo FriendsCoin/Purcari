@@ -66,7 +66,7 @@ export function DetailedMetrics({ metrics }: DetailedMetricsProps) {
 
       <CardContent>
         <div className="space-y-6">
-          {filteredMetrics.map((metric, index) => (
+          {filteredMetrics.map((metric) => (
             <div
               key={`${metric.site}-${metric.filter}`}
               className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-6 border border-gray-200 hover:border-purple-300 transition-colors"

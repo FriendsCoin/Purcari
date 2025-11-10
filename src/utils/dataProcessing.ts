@@ -1,4 +1,4 @@
-import type { ObservationPoint, Detection, GeoJSONData, AnalysisData } from '@/types';
+import type { Detection, GeoJSONData, AnalysisData } from '@/types';
 
 /**
  * Processes GeoJSON data from observation points

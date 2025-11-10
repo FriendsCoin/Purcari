@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import type { AnalysisData, GeoJSONData, FilterState } from '@/types';
-import { processGeoJSONData, filterByTimeRange } from '@/utils/dataProcessing';
+import { processGeoJSONData } from '@/utils/dataProcessing';
 import { validateGeoJSONData } from '@/utils/validation';
 
 interface UseDataAnalysisReturn {
