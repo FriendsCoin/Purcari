@@ -1,0 +1,9 @@
+site,filtre,MAX(shannon),MAX(simpson),MAX(richesse)
+Purcari,all species,2.18,0.86,15
+Organic vineyard,all species,2.06,0.82,36
+Purcari,wild species,2.03,0.85,12
+Hotel park,all species,1.85,0.76,21
+Organic vineyard,wild species,1.82,0.76,32
+Peri-urban area,wild species,1.78,0.77,13
+Hotel park,wild species,1.73,0.75,18
+Peri-urban area,all species,1.34,0.58,15
