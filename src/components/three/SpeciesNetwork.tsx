@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Sphere, Html } from '@react-three/drei';
+import { Sphere, Html, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface SpeciesNode {
@@ -236,6 +236,17 @@ export function SpeciesNetwork({ species, className }: SpeciesNetworkProps) {
 
         {/* Network */}
         <SpeciesNetworkScene species={species} />
+
+        {/* Interactive mouse controls */}
+        <OrbitControls
+          enableZoom
+          enablePan
+          enableRotate
+          zoomSpeed={0.6}
+          rotateSpeed={0.5}
+          minDistance={4}
+          maxDistance={15}
+        />
       </Canvas>
     </div>
   );

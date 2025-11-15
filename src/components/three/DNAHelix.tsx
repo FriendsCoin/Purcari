@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Sphere, Cylinder } from '@react-three/drei';
+import { Sphere, Cylinder, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface DNAStrandProps {
@@ -237,6 +237,17 @@ export function DNAHelix({
 
         {/* Data flow particles */}
         {showDataFlow && <DataFlowParticles count={40} />}
+
+        {/* Interactive mouse controls */}
+        <OrbitControls
+          enableZoom
+          enablePan={false}
+          enableRotate
+          zoomSpeed={0.5}
+          rotateSpeed={0.6}
+          minDistance={2}
+          maxDistance={6}
+        />
       </Canvas>
     </div>
   );

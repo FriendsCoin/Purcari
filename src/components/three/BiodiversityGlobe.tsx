@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Sphere, Html } from '@react-three/drei';
+import { Sphere, Html, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface Hotspot {
@@ -244,6 +244,19 @@ export function BiodiversityGlobe({
 
         {/* Orbital particles */}
         {showParticles && <OrbitalParticles count={150} radius={2.2} />}
+
+        {/* Interactive mouse controls */}
+        <OrbitControls
+          enableZoom
+          enablePan
+          enableRotate
+          zoomSpeed={0.5}
+          rotateSpeed={0.4}
+          minDistance={3}
+          maxDistance={10}
+          autoRotate
+          autoRotateSpeed={0.5}
+        />
       </Canvas>
     </div>
   );

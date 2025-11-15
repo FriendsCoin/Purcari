@@ -10,6 +10,9 @@ import { HourlyActivityHeatmap } from '../analysis/HourlyActivityHeatmap';
 import { DNAHelix } from '../three/DNAHelix';
 import { SpeciesNetwork } from '../three/SpeciesNetwork';
 import { BiodiversityGlobe } from '../three/BiodiversityGlobe';
+import { InteractiveParticleSystem } from '../three/InteractiveParticles';
+import { MediaControls } from '../three/MediaControls';
+import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
 import { Button } from '../common/Button';
@@ -41,6 +44,13 @@ export function Dashboard({
   const [selectedHypothesis, setSelectedHypothesis] = useState<Hypothesis | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data' | '3d-art'>('overview');
+
+  // Interactive media state
+  const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
+  const [webcamVideo, setWebcamVideo] = useState<HTMLVideoElement | null>(null);
+
+  // Audio analysis
+  const { audioData } = useAudioAnalyzer(microphoneStream || undefined);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -257,6 +267,28 @@ export function Dashboard({
             </div>
 
             <div className="space-y-8">
+              {/* Interactive Audio/Webcam Reactive Particles */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🎨</span>
+                  Interactive Particle System
+                  <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  <strong>Fully interactive!</strong> Enable your microphone to make particles dance to your voice.
+                  Enable your webcam to see yourself become part of the art. Use your mouse to rotate and zoom.
+                  Click the controls button below to activate.
+                </p>
+                <div className="relative w-full h-[500px] bg-gradient-to-br from-slate-900 via-purple-900 to-pink-900 rounded-xl overflow-hidden shadow-2xl">
+                  <InteractiveParticleSystem
+                    audioData={audioData}
+                    webcamVideo={webcamVideo}
+                    enableOrbitControls={true}
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
+
               {/* DNA Helix */}
               <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-200">
                 <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
@@ -371,6 +403,14 @@ export function Dashboard({
         isOpen={!!selectedProject}
         onClose={() => setSelectedProject(null)}
       />
+
+      {/* Media Controls - floating button for mic/webcam */}
+      {activeTab === '3d-art' && (
+        <MediaControls
+          onMicrophoneStream={setMicrophoneStream}
+          onWebcamStream={setWebcamVideo}
+        />
+      )}
     </div>
   );
 }
