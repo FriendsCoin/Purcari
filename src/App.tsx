@@ -4,6 +4,7 @@ import { Card } from './components/common/Card';
 import { Button } from './components/common/Button';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
 import { Dashboard } from './components/dashboard/Dashboard';
+import { ParticleEcosystem } from './components/three/ParticleEcosystem';
 import { generateMockData } from './services/mockData';
 import { loadRealGeoJSONData, processRealGeoJSON, extractHotspotsFromGeoJSON } from './services/realDataLoader';
 import { loadAllCSVData } from './services/csvParser';
@@ -66,9 +67,12 @@ function App() {
 
   if (view === 'upload') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8 relative overflow-hidden">
+        {/* 3D Particle Ecosystem Background */}
+        <ParticleEcosystem particleCount={2500} showConnections={true} />
+
         {isLoading && <LoadingSpinner fullScreen size="xl" text="Loading biodiversity data..." />}
-        <div className="max-w-4xl w-full">
+        <div className="max-w-4xl w-full relative z-10">
           <div className="text-center mb-12 animate-fade-in">
             <h1 className="text-6xl font-bold text-white mb-4">Purcari Biodiversity</h1>
             <h2 className="text-3xl text-purple-300 mb-6">Data Analysis Dashboard</h2>

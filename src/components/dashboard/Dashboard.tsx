@@ -7,10 +7,13 @@ import { SiteComparison } from '../analysis/SiteComparison';
 import { DetailedMetrics } from '../analysis/DetailedMetrics';
 import { SpeciesDistribution } from '../analysis/SpeciesDistribution';
 import { HourlyActivityHeatmap } from '../analysis/HourlyActivityHeatmap';
+import { DNAHelix } from '../three/DNAHelix';
+import { SpeciesNetwork } from '../three/SpeciesNetwork';
+import { BiodiversityGlobe } from '../three/BiodiversityGlobe';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
 import { Button } from '../common/Button';
-import { ArrowLeft, Database, Sparkles } from 'lucide-react';
+import { ArrowLeft, Database, Sparkles, Dna } from 'lucide-react';
 import type { AnalysisData, Project, Hypothesis, Hotspot } from '@/types';
 import type { MonthlyTrend, SiteDiversity, DetailedMetrics as DetailedMetricsType } from '@/services/csvParser';
 
@@ -37,7 +40,7 @@ export function Dashboard({
 }: DashboardProps) {
   const [selectedHypothesis, setSelectedHypothesis] = useState<Hypothesis | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data' | '3d-art'>('overview');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -116,6 +119,17 @@ export function Dashboard({
                 Real Data Analytics
               </button>
             )}
+            <button
+              onClick={() => setActiveTab('3d-art')}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                activeTab === '3d-art'
+                  ? 'bg-white text-purple-600 shadow-md'
+                  : 'bg-purple-500 bg-opacity-30 text-white hover:bg-opacity-50'
+              }`}
+            >
+              <Dna size={18} />
+              3D Art Science
+            </button>
           </div>
         </div>
       </div>
@@ -221,6 +235,122 @@ export function Dashboard({
                     <p className="text-sm text-gray-600">Monitoring Sites</p>
                     <p className="text-3xl font-bold text-green-600">{siteDiversity.length}</p>
                     <p className="text-xs text-gray-500 mt-1">Active locations</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3D Art Science Tab */}
+        {activeTab === '3d-art' && (
+          <div>
+            <div className="mb-6 text-center">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-3">
+                <Dna className="text-purple-600" size={32} />
+                3D Art Science Visualizations
+              </h2>
+              <p className="text-gray-600 max-w-3xl mx-auto">
+                Experience biodiversity data through immersive 3D visualizations that blend
+                scientific accuracy with artistic beauty
+              </p>
+            </div>
+
+            <div className="space-y-8">
+              {/* DNA Helix */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🧬</span>
+                  DNA Data Flow
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  A rotating DNA helix with flowing data particles representing the genetic
+                  diversity captured in biodiversity monitoring
+                </p>
+                <div className="w-full h-96 bg-gradient-to-br from-slate-900 to-purple-900 rounded-xl overflow-hidden shadow-2xl">
+                  <DNAHelix height={4} radius={0.5} turns={3} showDataFlow={true} />
+                </div>
+              </div>
+
+              {/* Species Network */}
+              <div className="bg-gradient-to-br from-pink-50 to-red-50 rounded-2xl p-6 border border-pink-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🕸️</span>
+                  Species Ecosystem Network
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  An interactive 3D network showing the interconnected relationships between species.
+                  Each node represents a species, sized by observation count. Hover to see details.
+                </p>
+                <div className="w-full h-96 bg-gradient-to-br from-slate-900 to-pink-900 rounded-xl overflow-hidden shadow-2xl">
+                  <SpeciesNetwork
+                    species={Object.entries(analysis.species).map(([name, count]) => ({
+                      name,
+                      count: count as number,
+                      type: Object.keys(analysis.types).find(t =>
+                        analysis.types[t] > 0
+                      ) || 'mammal'
+                    }))}
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
+
+              {/* Biodiversity Globe */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🌍</span>
+                  Global Biodiversity Hotspots
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  A 3D globe visualization showing monitoring sites as glowing hotspots.
+                  Hover over markers to see detailed statistics for each location.
+                </p>
+                <div className="w-full h-96 bg-gradient-to-br from-slate-900 to-blue-900 rounded-xl overflow-hidden shadow-2xl">
+                  <BiodiversityGlobe
+                    hotspots={_hotspots.map(h => ({
+                      id: h.id,
+                      name: h.name,
+                      lat: h.lat,
+                      lng: h.lng,
+                      detections: h.detections,
+                      species: h.species || 0
+                    }))}
+                    className="w-full h-full"
+                    showParticles={true}
+                  />
+                </div>
+              </div>
+
+              {/* Art-Science Philosophy */}
+              <div className="bg-gradient-to-br from-purple-100 to-pink-100 rounded-2xl p-8 border border-purple-300">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
+                  💫 Art Meets Science
+                </h3>
+                <div className="grid md:grid-cols-3 gap-6 text-center">
+                  <div>
+                    <div className="text-4xl mb-2">🔬</div>
+                    <h4 className="font-bold text-lg text-purple-900 mb-2">Scientific Rigor</h4>
+                    <p className="text-sm text-gray-700">
+                      Every visualization is built from real biodiversity data, maintaining
+                      scientific accuracy while creating beauty
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-4xl mb-2">🎨</div>
+                    <h4 className="font-bold text-lg text-pink-900 mb-2">Artistic Expression</h4>
+                    <p className="text-sm text-gray-700">
+                      Data transforms into living, breathing art that communicates the wonder
+                      of biodiversity through visual storytelling
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-4xl mb-2">🌱</div>
+                    <h4 className="font-bold text-lg text-green-900 mb-2">Ecological Impact</h4>
+                    <p className="text-sm text-gray-700">
+                      These visualizations engage audiences emotionally, inspiring conservation
+                      action through the beauty of data
+                    </p>
                   </div>
                 </div>
               </div>
