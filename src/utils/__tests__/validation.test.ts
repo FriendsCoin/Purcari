@@ -19,20 +19,26 @@ describe('validation utilities', () => {
 
   describe('validateDateRange', () => {
     it('should validate correct date range', () => {
-      const start = new Date('2025-01-01');
-      const end = new Date('2025-12-31');
+      const start = new Date('2024-01-01');
+      const end = new Date('2024-12-31');
       expect(validateDateRange(start, end)).toBe(true);
     });
 
     it('should reject invalid date range (start > end)', () => {
-      const start = new Date('2025-12-31');
-      const end = new Date('2025-01-01');
+      const start = new Date('2024-12-31');
+      const end = new Date('2024-01-01');
       expect(validateDateRange(start, end)).toBe(false);
     });
 
     it('should reject future dates', () => {
       const start = new Date('2030-01-01');
       const end = new Date('2030-12-31');
+      expect(validateDateRange(start, end)).toBe(false);
+    });
+
+    it('should reject partial future date ranges', () => {
+      const start = new Date('2025-01-01');
+      const end = new Date('2025-12-31'); // Future date
       expect(validateDateRange(start, end)).toBe(false);
     });
   });
