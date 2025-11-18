@@ -7,4 +7,5 @@ export { MediaControls } from './MediaControls';
 export { BiodiversitySynthesizer } from './BiodiversitySynthesizer';
 export { ARBiodiversityScene } from './ARBiodiversityScene';
 export { GestureController } from './GestureController';
+export { VoiceController } from './VoiceController';
 export type { Hotspot } from './BiodiversityGlobe';

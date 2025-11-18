@@ -15,6 +15,7 @@ import { MediaControls } from '../three/MediaControls';
 import { BiodiversitySynthesizer } from '../three/BiodiversitySynthesizer';
 import { ARBiodiversityScene } from '../three/ARBiodiversityScene';
 import { GestureController } from '../three/GestureController';
+import { VoiceController } from '../three/VoiceController';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
@@ -408,6 +409,24 @@ export function Dashboard({
                     console.log('Gesture detected:', gesture);
                   }}
                   showVideo={true}
+                />
+              </div>
+
+              {/* Voice Commands */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🎤</span>
+                  Voice Commands
+                  <span className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  Talk to your data! Control visualizations with natural language voice commands. Say "zoom in",
+                  "show species", or "play music" - your voice becomes the interface.
+                </p>
+                <VoiceController
+                  onCommand={(command) => {
+                    console.log('Voice command executed:', command);
+                  }}
                 />
               </div>
 
