@@ -14,6 +14,7 @@ import { InteractiveParticleSystem } from '../three/InteractiveParticles';
 import { MediaControls } from '../three/MediaControls';
 import { BiodiversitySynthesizer } from '../three/BiodiversitySynthesizer';
 import { ARBiodiversityScene } from '../three/ARBiodiversityScene';
+import { GestureController } from '../three/GestureController';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
@@ -389,6 +390,25 @@ export function Dashboard({
                     count: count as number,
                     type: 'mammal'
                   }))} />
+              </div>
+
+              {/* Gesture Controls */}
+              <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-2xl p-6 border border-pink-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>✨</span>
+                  Gesture Controls
+                  <span className="text-xs bg-pink-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  Control 3D visualizations with your hands! Use natural hand gestures to zoom, rotate, and interact
+                  with the biodiversity data. Wave, point, make thumbs up - your hands become the controller.
+                </p>
+                <GestureController
+                  onGestureDetected={(gesture) => {
+                    console.log('Gesture detected:', gesture);
+                  }}
+                  showVideo={true}
+                />
               </div>
 
               {/* Art-Science Philosophy */}
