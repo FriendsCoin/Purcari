@@ -13,6 +13,7 @@ import { BiodiversityGlobe } from '../three/BiodiversityGlobe';
 import { InteractiveParticleSystem } from '../three/InteractiveParticles';
 import { MediaControls } from '../three/MediaControls';
 import { BiodiversitySynthesizer } from '../three/BiodiversitySynthesizer';
+import { ARBiodiversityScene } from '../three/ARBiodiversityScene';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
@@ -367,6 +368,27 @@ export function Dashboard({
                   and the entire ecosystem plays as a unique composition. Science transformed into sound.
                 </p>
                 <BiodiversitySynthesizer speciesData={analysis.species} />
+              </div>
+
+              {/* Augmented Reality */}
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border border-blue-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>📱</span>
+                  Augmented Reality
+                  <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  Step into a new dimension! Place 3D biodiversity models in your real environment using your phone's camera.
+                  Experience the data in physical space, walk around species, and interact with nature in AR.
+                </p>
+                <ARBiodiversityScene species={Object.entries(analysis.species)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .slice(0, 5)
+                  .map(([name, count]) => ({
+                    name,
+                    count: count as number,
+                    type: 'mammal'
+                  }))} />
               </div>
 
               {/* Art-Science Philosophy */}
