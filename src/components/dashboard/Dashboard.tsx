@@ -12,6 +12,7 @@ import { SpeciesNetwork } from '../three/SpeciesNetwork';
 import { BiodiversityGlobe } from '../three/BiodiversityGlobe';
 import { InteractiveParticleSystem } from '../three/InteractiveParticles';
 import { MediaControls } from '../three/MediaControls';
+import { BiodiversitySynthesizer } from '../three/BiodiversitySynthesizer';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
@@ -352,6 +353,20 @@ export function Dashboard({
                     showParticles={true}
                   />
                 </div>
+              </div>
+
+              {/* Data Sonification */}
+              <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-2xl p-6 border border-green-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🎵</span>
+                  Data Sonification
+                  <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  Listen to biodiversity! Each species becomes a musical note, observation counts control volume,
+                  and the entire ecosystem plays as a unique composition. Science transformed into sound.
+                </p>
+                <BiodiversitySynthesizer speciesData={analysis.species} />
               </div>
 
               {/* Art-Science Philosophy */}
