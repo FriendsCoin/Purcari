@@ -19,8 +19,13 @@ import { VoiceController } from '../three/VoiceController';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
+import { SpeciesClustering3D } from '../ml/SpeciesClustering3D';
+import { NeuralNetworkViz } from '../ml/NeuralNetworkViz';
+import { FeatureImportance } from '../ml/FeatureImportance';
+import { AnomalyDetection } from '../ml/AnomalyDetection';
+import { TimeSeriesForecasting } from '../ml/TimeSeriesForecasting';
 import { Button } from '../common/Button';
-import { ArrowLeft, Database, Sparkles, Dna } from 'lucide-react';
+import { ArrowLeft, Database, Sparkles, Dna, Brain } from 'lucide-react';
 import type { AnalysisData, Project, Hypothesis, Hotspot } from '@/types';
 import type { MonthlyTrend, SiteDiversity, DetailedMetrics as DetailedMetricsType } from '@/services/csvParser';
 
@@ -47,7 +52,7 @@ export function Dashboard({
 }: DashboardProps) {
   const [selectedHypothesis, setSelectedHypothesis] = useState<Hypothesis | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data' | '3d-art'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data' | '3d-art' | 'ml'>('overview');
 
   // Interactive media state
   const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
@@ -143,6 +148,17 @@ export function Dashboard({
             >
               <Dna size={18} />
               3D Art Science
+            </button>
+            <button
+              onClick={() => setActiveTab('ml')}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                activeTab === 'ml'
+                  ? 'bg-white text-purple-600 shadow-md'
+                  : 'bg-purple-500 bg-opacity-30 text-white hover:bg-opacity-50'
+              }`}
+            >
+              <Brain size={18} />
+              Machine Learning
             </button>
           </div>
         </div>
@@ -460,6 +476,116 @@ export function Dashboard({
                       action through the beauty of data
                     </p>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Machine Learning Tab */}
+        {activeTab === 'ml' && (
+          <div>
+            <div className="mb-6 text-center">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-3">
+                <Brain className="text-indigo-600" size={32} />
+                Machine Learning Visualizations
+              </h2>
+              <p className="text-gray-600 max-w-3xl mx-auto">
+                Advanced AI-powered analysis and predictions using state-of-the-art machine learning algorithms
+              </p>
+            </div>
+
+            <div className="space-y-8">
+              {/* Species Clustering 3D */}
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 border border-purple-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🔬</span>
+                  Species Clustering (PCA/t-SNE)
+                  <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full ml-2">ML</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  3D visualization of species relationships using Principal Component Analysis.
+                  Similar species cluster together based on behavioral patterns, observation counts, and temporal distribution.
+                </p>
+                <div className="w-full h-[600px] bg-gradient-to-br from-slate-900 to-purple-900 rounded-xl overflow-hidden shadow-2xl">
+                  <SpeciesClustering3D
+                    speciesData={analysis.species}
+                    numClusters={3}
+                    showLabels={false}
+                    autoRotate={true}
+                  />
+                </div>
+              </div>
+
+              {/* Neural Network Visualization */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>🧠</span>
+                  Neural Network Architecture
+                  <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full ml-2">ML</span>
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  Interactive visualization of a deep learning model for species classification.
+                  Watch data flow through the network layers in real-time. This model learns to classify species
+                  based on multiple features like activity patterns, observation frequency, and seasonal behavior.
+                </p>
+                <div className="w-full h-[500px] bg-gradient-to-br from-indigo-900 to-pink-900 rounded-xl overflow-hidden shadow-2xl">
+                  <NeuralNetworkViz
+                    architecture={[6, 16, 8, 4]}
+                    isTraining={false}
+                    accuracy={0.87}
+                  />
+                </div>
+              </div>
+
+              {/* Feature Importance */}
+              <FeatureImportance speciesData={analysis.species} />
+
+              {/* Anomaly Detection */}
+              <AnomalyDetection speciesData={analysis.species} threshold={2} />
+
+              {/* Time Series Forecasting */}
+              <TimeSeriesForecasting
+                speciesName="All Species"
+                forecastSteps={6}
+              />
+
+              {/* ML Philosophy */}
+              <div className="bg-gradient-to-br from-indigo-100 to-purple-100 rounded-2xl p-8 border border-indigo-300">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
+                  🤖 AI-Powered Biodiversity Analysis
+                </h3>
+                <div className="grid md:grid-cols-3 gap-6 text-center">
+                  <div>
+                    <div className="text-4xl mb-2">📊</div>
+                    <h4 className="font-bold text-lg text-indigo-900 mb-2">Pattern Recognition</h4>
+                    <p className="text-sm text-gray-700">
+                      Machine learning algorithms detect complex patterns in biodiversity data
+                      that traditional analysis might miss
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-4xl mb-2">🔮</div>
+                    <h4 className="font-bold text-lg text-purple-900 mb-2">Predictive Analytics</h4>
+                    <p className="text-sm text-gray-700">
+                      Time series forecasting helps predict future population trends and
+                      seasonal variations in species activity
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-4xl mb-2">🎯</div>
+                    <h4 className="font-bold text-lg text-pink-900 mb-2">Anomaly Detection</h4>
+                    <p className="text-sm text-gray-700">
+                      AI identifies unusual species behaviors that may indicate ecological
+                      changes or require further investigation
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-indigo-300 text-center text-sm text-gray-700">
+                  <p>
+                    <strong>Powered by:</strong> TensorFlow.js, PCA, K-means Clustering,
+                    Neural Networks, and Statistical Learning
+                  </p>
                 </div>
               </div>
             </div>
