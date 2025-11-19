@@ -70,7 +70,7 @@ export function AnomalyDetection({ speciesData, threshold = 2 }: AnomalyDetectio
     return { anomalies, normalData, stats };
   }, [speciesData, threshold]);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: AnomalyPoint }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as AnomalyPoint;
       return (

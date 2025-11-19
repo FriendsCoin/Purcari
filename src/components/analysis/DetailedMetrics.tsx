@@ -137,7 +137,7 @@ export function DetailedMetrics({ metrics }: DetailedMetricsProps) {
           <h4 className="text-sm font-semibold text-gray-900 mb-3">Understanding the Metrics</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div className="bg-blue-50 rounded-lg p-3">
-              <p className="font-semibold text-blue-900 mb-1">Shannon Index (H')</p>
+              <p className="font-semibold text-blue-900 mb-1">Shannon Index (H&apos;)</p>
               <p className="text-blue-700">
                 Measures both richness and evenness. Range: 0-5. Higher values indicate more diverse ecosystems.
               </p>

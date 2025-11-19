@@ -396,7 +396,7 @@ export function Dashboard({
                   <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
                 </h3>
                 <p className="text-gray-700 mb-4">
-                  Step into a new dimension! Place 3D biodiversity models in your real environment using your phone's camera.
+                  Step into a new dimension! Place 3D biodiversity models in your real environment using your phone&apos;s camera.
                   Experience the data in physical space, walk around species, and interact with nature in AR.
                 </p>
                 <ARBiodiversityScene species={Object.entries(analysis.species)
@@ -421,8 +421,8 @@ export function Dashboard({
                   with the biodiversity data. Wave, point, make thumbs up - your hands become the controller.
                 </p>
                 <GestureController
-                  onGestureDetected={(gesture) => {
-                    console.log('Gesture detected:', gesture);
+                  onGestureDetected={() => {
+                    // Gesture detected - could trigger actions here
                   }}
                   showVideo={true}
                 />
@@ -436,12 +436,12 @@ export function Dashboard({
                   <span className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-full ml-2">NEW</span>
                 </h3>
                 <p className="text-gray-700 mb-4">
-                  Talk to your data! Control visualizations with natural language voice commands. Say "zoom in",
-                  "show species", or "play music" - your voice becomes the interface.
+                  Talk to your data! Control visualizations with natural language voice commands. Say &quot;zoom in&quot;,
+                  &quot;show species&quot;, or &quot;play music&quot; - your voice becomes the interface.
                 </p>
                 <VoiceController
-                  onCommand={(command) => {
-                    console.log('Voice command executed:', command);
+                  onCommand={() => {
+                    // Voice command executed - could trigger actions here
                   }}
                 />
               </div>

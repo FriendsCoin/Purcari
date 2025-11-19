@@ -85,7 +85,7 @@ export function TimeSeriesForecasting({
     return { chartData, metrics };
   }, [historicalData, forecastSteps]);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { month: string; actual: number | null; forecast: number | null; lowerBound: number | null; upperBound: number | null } }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

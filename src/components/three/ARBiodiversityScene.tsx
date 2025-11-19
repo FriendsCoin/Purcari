@@ -186,10 +186,10 @@ export function ARBiodiversityScene({ species }: ARBiodiversitySceneProps) {
 
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
               <h4 className="font-bold text-gray-900 mb-2">
-                🌟 What You're Missing
+                🌟 What You&apos;re Missing
               </h4>
               <p className="text-sm text-gray-700">
-                AR mode lets you place 3D biodiversity models in your real environment using your phone's camera.
+                AR mode lets you place 3D biodiversity models in your real environment using your phone&apos;s camera.
                 Each species appears as a colored sphere sized by observation count. Walk around them, tap for details!
               </p>
             </div>
@@ -244,7 +244,7 @@ export function ARBiodiversityScene({ species }: ARBiodiversitySceneProps) {
             <div className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
               <h4 className="font-bold text-gray-900 mb-2">How to use AR mode</h4>
               <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
-                <li>Tap "Enter AR Mode" below</li>
+                <li>Tap &quot;Enter AR Mode&quot; below</li>
                 <li>Grant camera permissions when prompted</li>
                 <li>Point your camera at a flat surface (floor, table)</li>
                 <li>Tap on detected surfaces to place biodiversity models</li>
@@ -284,7 +284,7 @@ export function ARBiodiversityScene({ species }: ARBiodiversitySceneProps) {
               </Button>
 
               <p className="text-xs text-center text-gray-500">
-                Make sure you're in a well-lit area with a flat surface
+                Make sure you&apos;re in a well-lit area with a flat surface
               </p>
             </div>
           ) : (
