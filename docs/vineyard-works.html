@@ -1,0 +1,949 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purcari · Vineyard works / Lucrări în vie / Работы на винограднике</title>
+<style>
+  :root {
+    --ground:#ecefe4; --surface:#f6f7f0; --surface-2:#e6ead9;
+    --ink:#1b231a; --ink-soft:#4a5442; --ink-faint:#71795f; --line:#d2d8c3;
+    --vine:#2e5a38; --vine-deep:#1d3f26; --gold:#a5761f; --gold-soft:#f0e6cd;
+    --hi:#a53c2d; --med:#a5761f; --low:#416389;
+    --spring:#4e7a3b; --summer:#bd881b; --autumn:#a2502f; --winter:#416389; --year:#6a487a;
+    --shadow:0 1px 2px rgba(27,35,26,.06),0 8px 24px -12px rgba(27,35,26,.22);
+    --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,'Times New Roman',serif;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#12160e; --surface:#1b2016; --surface-2:#232a1c;
+      --ink:#e9ecdd; --ink-soft:#aab19a; --ink-faint:#7f8770; --line:#333b2a;
+      --vine:#74ab7c; --vine-deep:#93c39a; --gold:#d3a748; --gold-soft:#33301f;
+      --hi:#d97363; --med:#d3a748; --low:#7ba3cd;
+      --spring:#7cae5f; --summer:#d9ac47; --autumn:#d07f57; --winter:#7ba3cd; --year:#ac86bd;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#ecefe4; --surface:#f6f7f0; --surface-2:#e6ead9;
+    --ink:#1b231a; --ink-soft:#4a5442; --ink-faint:#71795f; --line:#d2d8c3;
+    --vine:#2e5a38; --vine-deep:#1d3f26; --gold:#a5761f; --gold-soft:#f0e6cd;
+    --hi:#a53c2d; --med:#a5761f; --low:#416389;
+    --spring:#4e7a3b; --summer:#bd881b; --autumn:#a2502f; --winter:#416389; --year:#6a487a;
+    --shadow:0 1px 2px rgba(27,35,26,.06),0 8px 24px -12px rgba(27,35,26,.22);
+  }
+  :root[data-theme="dark"]{
+    --ground:#12160e; --surface:#1b2016; --surface-2:#232a1c;
+    --ink:#e9ecdd; --ink-soft:#aab19a; --ink-faint:#7f8770; --line:#333b2a;
+    --vine:#74ab7c; --vine-deep:#93c39a; --gold:#d3a748; --gold-soft:#33301f;
+    --hi:#d97363; --med:#d3a748; --low:#7ba3cd;
+    --spring:#7cae5f; --summer:#d9ac47; --autumn:#d07f57; --winter:#7ba3cd; --year:#ac86bd;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:radial-gradient(120% 80% at 100% 0%,color-mix(in srgb,var(--vine) 8%,transparent),transparent 60%),var(--ground);
+    color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; min-height:100vh;
+  }
+  .app{max-width:1120px;margin:0 auto;padding:clamp(16px,3vw,32px);display:flex;flex-direction:column;gap:14px;min-height:100vh;}
+
+  .topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.02em;}
+  .brand .mark{width:30px;height:30px;border-radius:8px;flex:none;background:var(--vine);color:#fff;display:grid;place-items:center;font-size:17px;}
+  .brand small{display:block;font-size:11px;color:var(--ink-faint);font-weight:500;letter-spacing:.1em;text-transform:uppercase;}
+  .topbar .spacer{flex:1;}
+  .langsw{display:flex;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:2px;}
+  .langsw button{border:none;background:none;padding:5px 10px;border-radius:6px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--ink-faint);cursor:pointer;}
+  .langsw button.on{background:var(--vine);color:#fff;}
+  .theme-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);border-radius:8px;padding:7px 11px;font:inherit;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .theme-btn:hover{border-color:var(--vine);color:var(--vine);}
+  .progress{height:3px;background:var(--line);border-radius:3px;overflow:hidden;}
+  .progress i{display:block;height:100%;background:var(--vine);transition:width .35s ease;}
+
+  .deck{position:relative;height:min(74vh,660px);}
+  @media (max-width:720px){.deck{height:auto;}}
+  .slide{
+    position:absolute;inset:0;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);padding:clamp(20px,3vw,40px);overflow-y:auto;
+    opacity:0;visibility:hidden;transform:translateY(6px);
+    transition:opacity .34s ease,transform .34s ease,visibility .34s;
+  }
+  .slide.active{opacity:1;visibility:visible;transform:none;}
+  @media (max-width:720px){
+    .slide{position:static;opacity:1;visibility:visible;transform:none;display:none;}
+    .slide.active{display:block;}
+  }
+
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);display:flex;align-items:center;gap:10px;margin:0 0 14px;}
+  .eyebrow .idx{color:var(--vine);font-weight:600;}
+  .eyebrow .rule{flex:1;height:1px;background:var(--line);}
+
+  h1,h2,h3{font-family:var(--serif);font-weight:600;text-wrap:balance;line-height:1.1;margin:0;}
+  .slide h2{font-size:clamp(24px,3.4vw,38px);color:var(--ink);letter-spacing:-.01em;}
+  p{line-height:1.55;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  .chip.zone{font-family:var(--mono);font-weight:600;color:var(--vine);}
+  .pri{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:4px 10px;border-radius:999px;color:#fff;white-space:nowrap;}
+  .pri.high{background:var(--hi);} .pri.medium{background:var(--med);} .pri.low{background:var(--low);}
+
+  .cover{display:flex;flex-direction:column;height:100%;}
+  .cover .mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;}
+  .cover h1{font-size:clamp(32px,5.6vw,64px);letter-spacing:-.02em;}
+  .cover h1 .accent{color:var(--vine);font-style:italic;}
+  .cover .lede{font-size:clamp(15px,1.8vw,19px);color:var(--ink-soft);max-width:62ch;line-height:1.5;}
+  .cover .meta{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:13px;color:var(--ink-faint);font-family:var(--mono);}
+  .cover .meta b{color:var(--ink);font-weight:600;}
+  .vine-emblem{width:46px;height:46px;color:var(--vine);}
+
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;}
+  @media (max-width:820px){.kpis{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:480px){.kpis{grid-template-columns:repeat(2,1fr);}}
+  .kpi{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px;}
+  .kpi .v{font-family:var(--serif);font-size:clamp(20px,2.6vw,28px);color:var(--vine-deep);font-variant-numeric:tabular-nums;}
+  .kpi .l{font-size:12px;font-weight:600;color:var(--ink);margin-top:2px;}
+  .kpi .h{font-size:11px;color:var(--ink-faint);margin-top:2px;line-height:1.3;}
+
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+  @media (max-width:720px){.cols2{grid-template-columns:1fr;gap:16px;}}
+  .findlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;}
+  .findlist li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--ink-soft);line-height:1.45;}
+  .findlist li::before{content:"";width:7px;height:7px;margin-top:7px;border-radius:50%;background:var(--vine);flex:none;}
+  .findlist.data b{color:var(--ink);font-variant-numeric:tabular-nums;}
+  .panel{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .panel h3{font-family:var(--sans);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+  .panel h3 .dot{width:8px;height:8px;border-radius:2px;}
+
+  .lead{color:var(--ink-soft);font-size:14.5px;margin:14px 0 16px;max-width:80ch;line-height:1.5;}
+
+  /* systems */
+  .sysgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+  @media (max-width:900px){.sysgrid{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:560px){.sysgrid{grid-template-columns:repeat(2,1fr);}}
+  .syscard{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px;}
+  .syscard.hl{border-color:color-mix(in srgb,var(--vine) 45%,var(--line));background:color-mix(in srgb,var(--vine) 8%,var(--surface-2));}
+  .syscard .ico{font-size:26px;line-height:1;}
+  .syscard b{font-size:14px;color:var(--ink);}
+  .syscard p{font-size:12px;color:var(--ink-soft);margin:0;line-height:1.4;}
+  .syscard .badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--vine);}
+
+  /* zone map */
+  .zonemap{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:start;}
+  @media (max-width:720px){.zonemap{grid-template-columns:1fr;}}
+  .mapwrap{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px;}
+  .mapwrap svg{width:auto;max-width:100%;max-height:326px;height:auto;display:block;margin:0 auto;}
+  .maptitle{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:2px 2px 8px;}
+  .mapnote{font-size:11.5px;color:var(--ink-faint);margin:8px 2px 0;line-height:1.4;}
+  .mapwrap.sm svg{max-height:246px;}
+  .dmaps{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media (max-width:720px){.dmaps{grid-template-columns:1fr;}}
+  .dmap .maptitle{margin-bottom:6px;}
+  .insight{margin-top:14px;background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));border-radius:12px;padding:11px 15px;font-size:13px;color:var(--ink);line-height:1.45;}
+  .alegwrap{display:flex;flex-direction:column;gap:10px;justify-content:center;}
+  .aleg{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--ink-soft);line-height:1.4;}
+  .aleg .sw{width:14px;height:14px;border-radius:4px;flex:none;margin-top:2px;}
+  .aleg b{color:var(--ink);}
+  .zlegend{display:flex;flex-direction:column;gap:10px;}
+  .zonecard{border:1px solid var(--line);border-radius:12px;padding:12px 15px;background:var(--surface-2);}
+  .zonecard .tag{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+  .zonecard.core .tag{color:var(--vine);} .zonecard.mid .tag{color:var(--med);} .zonecard.edge .tag{color:var(--hi);}
+  .zonecard h3{font-family:var(--sans);font-size:15px;margin:4px 0 7px;}
+  .zonecard p{font-size:13px;color:var(--ink-soft);margin:6px 0 0;line-height:1.4;}
+  .hotspots{display:flex;flex-wrap:wrap;gap:6px;}
+  .hs{font-family:var(--mono);font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--line);}
+  .zonecard.core .hs{color:var(--vine);border-color:color-mix(in srgb,var(--vine) 40%,var(--line));}
+  .zonecard.mid .hs{color:var(--med);}
+  .zonecard.edge .hs{color:var(--hi);border-color:color-mix(in srgb,var(--hi) 40%,var(--line));}
+
+  /* technique */
+  .tech-head{display:flex;align-items:flex-start;gap:16px;}
+  .tech-ico{font-size:40px;line-height:1;flex:none;}
+  .tech-head .grow{flex:1;}
+  .tech-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;}
+  .tech-summary{color:var(--ink-soft);font-size:14.5px;margin:14px 0 18px;max-width:80ch;line-height:1.5;}
+  .tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:720px){.tech-grid{grid-template-columns:1fr;}}
+  .why .dot{background:var(--low);} .what .dot{background:var(--vine);}
+  .why ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+  .why li{font-size:13.5px;color:var(--ink-soft);line-height:1.45;padding-left:14px;position:relative;}
+  .why li::before{content:"–";position:absolute;left:0;color:var(--low);}
+  .why b{color:var(--ink);font-variant-numeric:tabular-nums;}
+  .works{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+  .work{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--ink);line-height:1.4;}
+  .season{flex:none;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 8px;border-radius:6px;color:#fff;margin-top:1px;min-width:74px;text-align:center;}
+  .s-spring{background:var(--spring);} .s-summer{background:var(--summer);} .s-autumn{background:var(--autumn);} .s-winter{background:var(--winter);} .s-year{background:var(--year);}
+  .benefit{margin-top:16px;background:color-mix(in srgb,var(--vine) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--vine) 26%,var(--line));border-radius:12px;padding:12px 16px;font-size:13.5px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;}
+  .benefit b{color:var(--vine-deep);}
+
+  /* calendar */
+  .calgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+  @media (max-width:900px){.calgrid{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:480px){.calgrid{grid-template-columns:1fr;}}
+  .calcol{border:1px solid var(--line);border-radius:12px;padding:11px;background:var(--surface-2);}
+  .calcol header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;}
+  .calcol header b{font-family:var(--serif);font-size:16px;}
+  .calcol header .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);}
+  .calcol.c-spring{border-top:3px solid var(--spring);} .calcol.c-summer{border-top:3px solid var(--summer);}
+  .calcol.c-autumn{border-top:3px solid var(--autumn);} .calcol.c-winter{border-top:3px solid var(--winter);}
+  .calcol.c-year{border-top:3px solid var(--year);}
+  .calcol ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;}
+  .calcol li{font-size:11px;color:var(--ink-soft);line-height:1.32;padding-left:12px;position:relative;}
+  .calcol li::before{content:"·";position:absolute;left:2px;color:var(--ink-faint);font-weight:700;}
+
+  /* roadmap */
+  .road{display:flex;flex-direction:column;gap:14px;}
+  .roadrow{display:grid;grid-template-columns:156px 1fr;gap:16px;align-items:start;}
+  @media (max-width:600px){.roadrow{grid-template-columns:1fr;gap:8px;}}
+  .roadrow .when{display:flex;flex-direction:column;gap:6px;align-items:flex-start;}
+  .roadrow .when .pri{font-size:10px;letter-spacing:.06em;}
+  .roadrow .when .lab{font-family:var(--serif);font-size:18px;}
+  .roadrow .items{display:flex;flex-wrap:wrap;gap:8px;}
+  .ritem{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:8px 12px;font-size:13px;display:flex;align-items:center;gap:8px;}
+  .ritem .e{font-size:16px;}
+
+  .close-list{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;}
+  @media (max-width:640px){.close-list{grid-template-columns:1fr;}}
+  .close-list .item{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--ink-soft);}
+  .close-list .item b{color:var(--ink);}
+  .source{margin-top:22px;font-size:12px;color:var(--ink-faint);font-family:var(--mono);line-height:1.4;}
+
+  .nav{display:flex;align-items:center;gap:12px;}
+  .nav .dots{flex:1;display:flex;flex-wrap:wrap;gap:6px;}
+  .dot{width:9px;height:9px;border-radius:50%;border:none;background:var(--line);cursor:pointer;padding:0;}
+  .dot.on{background:var(--vine);transform:scale(1.15);}
+  .navbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 15px;font:inherit;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  .navbtn:hover:not(:disabled){border-color:var(--vine);color:var(--vine);}
+  .navbtn:disabled{opacity:.4;cursor:default;}
+  .counter{font-family:var(--mono);font-size:13px;color:var(--ink-faint);font-variant-numeric:tabular-nums;min-width:56px;text-align:center;}
+  :focus-visible{outline:2px solid var(--vine);outline-offset:2px;border-radius:4px;}
+
+  @media (prefers-reduced-motion:reduce){.slide,.progress i,.dot{transition:none !important;}}
+  @media print{
+    .topbar,.theme-btn,.langsw,.nav,.progress{display:none !important;}
+    .app{max-width:none;padding:0;gap:0;min-height:0;}
+    .deck{height:auto;position:static;}
+    .slide{position:static;opacity:1;visibility:visible;transform:none;overflow:visible;
+      page-break-after:always;break-after:page;box-shadow:none;border:none;border-radius:0;margin:0;
+      min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:44px 56px;}
+    .slide:last-child{page-break-after:auto;break-after:auto;}
+    .cover{justify-content:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">🍇</span>
+      <span>Château&nbsp;Purcari<small id="brandSub">Vineyard · biodiversity</small></span>
+    </div>
+    <span class="spacer"></span>
+    <div class="langsw" id="langsw" role="tablist" aria-label="Language">
+      <button data-lang="ru">RU</button><button data-lang="ro">RO</button><button data-lang="en">EN</button>
+    </div>
+    <button class="theme-btn" id="themeBtn" aria-label="Theme">◑ <span id="themeLbl">Theme</span></button>
+  </div>
+  <div class="progress"><i id="prog"></i></div>
+
+  <div class="deck" id="deck" aria-live="polite"></div>
+
+  <div class="nav">
+    <button class="navbtn" id="prev">← Back</button>
+    <span class="counter" id="counter">1 / 1</span>
+    <button class="navbtn" id="next">Next →</button>
+    <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // Hotspot layout (relative positions faithful to the estate's satellite map, north-up) + zone.
+  // Coordinate frame anchored to the real GPS extent recorded on site:
+  //   lon 29.865–29.882°E (x), lat 46.534–46.500°N (y, top→bottom). Placement is approximate.
+  var NODES = [
+    {id:'H10',x:50,y:12,z:'mid'}, {id:'HC',x:65,y:13,z:'edge'},
+    {id:'H13',x:44,y:22,z:'core'}, {id:'H9',x:60,y:30,z:'core'},
+    {id:'H1',x:62,y:40,z:'core'}, {id:'H4',x:25,y:41,z:'edge'},
+    {id:'H11',x:30,y:56,z:'core'}, {id:'H12',x:58,y:57,z:'mid'},
+    {id:'H7',x:67,y:63,z:'mid'}, {id:'H14',x:55,y:67,z:'core'},
+    {id:'H5',x:44,y:75,z:'mid'}, {id:'H6',x:54,y:90,z:'edge'}
+  ];
+  var NODEBY = {}; NODES.forEach(function(n){ NODEBY[n.id]=n; });
+  var ZCOL = {core:'var(--vine)', mid:'var(--med)', edge:'var(--hi)'};
+  var BOUNDARY = "M48,5 L67,9 L71,26 L67,45 L73,58 L70,71 L60,95 L49,97 L45,80 L28,66 L22,50 L21,34 L31,15 Z";
+  // Per-hotspot totals read from the final report bar charts (approximate).
+  var CAM = {H13:1100,H1:920,H14:680,H11:530,H9:430,H4:285,H12:195,H5:150,H6:120,H10:110,HC:8,H7:6};
+  var SND = {H10:7800,HC:3900,H12:3800,H1:3650,H13:3300,H7:1500,H11:1400,H5:1050,H6:1000,H4:950,H14:950,H9:850};
+
+  var _uid = 0;
+  function mapFrame(uid, extras, opts){
+    opts = opts || {};
+    var north = '<g transform="translate(90,13)" fill="var(--ink-faint)">'+
+      '<path d="M0,-5 L2.3,4 L0,1.4 L-2.3,4 Z"/>'+
+      '<text x="0" y="-6.2" text-anchor="middle" font-size="3.6" font-family="var(--mono)">N</text></g>';
+    var ticks = '';
+    if (opts.ticks){
+      ticks =
+        '<text x="24" y="99.2" text-anchor="middle" font-size="2.5" font-family="var(--mono)" fill="var(--ink-faint)">29.87°E</text>'+
+        '<text x="70" y="99.2" text-anchor="middle" font-size="2.5" font-family="var(--mono)" fill="var(--ink-faint)">29.88°E</text>'+
+        '<text x="2.5" y="9" text-anchor="start" font-size="2.5" font-family="var(--mono)" fill="var(--ink-faint)">46.53°N</text>'+
+        '<text x="2.5" y="94" text-anchor="start" font-size="2.5" font-family="var(--mono)" fill="var(--ink-faint)">46.50°N</text>';
+    }
+    return '<svg viewBox="0 0 100 100" role="img" aria-label="'+(opts.label||'Estate map')+'">'+
+      '<defs><pattern id="rows'+uid+'" width="3.4" height="3.4" patternTransform="rotate(-18)" patternUnits="userSpaceOnUse">'+
+        '<line x1="0" y1="0" x2="0" y2="3.4" stroke="var(--line)" stroke-width="0.35"/></pattern>'+
+        '<clipPath id="clip'+uid+'"><path d="'+BOUNDARY+'"/></clipPath>'+(opts.defs||'')+'</defs>'+
+      '<path d="'+BOUNDARY+'" fill="var(--surface)" stroke="var(--line)" stroke-width="0.6"/>'+
+      '<g clip-path="url(#clip'+uid+')"><rect x="0" y="0" width="100" height="100" fill="url(#rows'+uid+')" opacity="0.7"/>'+(opts.clipped||'')+'</g>'+
+      '<path d="'+BOUNDARY+'" fill="none" stroke="var(--vine)" stroke-width="0.5" opacity="0.5"/>'+
+      ticks + north + extras +
+    '</svg>';
+  }
+  function nodeDot(n, r, fill, showLabel, labelSize){
+    var g = '<circle cx="'+n.x+'" cy="'+n.y+'" r="'+r+'" fill="'+fill+'" stroke="var(--surface)" stroke-width="0.6"/>';
+    if (showLabel){
+      g += '<text x="'+n.x+'" y="'+(n.y-r-1.2)+'" text-anchor="middle" font-family="var(--mono)" font-size="'+(labelSize||3.05)+'" '+
+        'font-weight="700" fill="var(--ink)" stroke="var(--surface)" stroke-width="0.9" paint-order="stroke">'+n.id+'</text>';
+    }
+    return g;
+  }
+  // Zone map (used on the priority slide)
+  function buildMap(){
+    var uid = ++_uid;
+    var pts = NODES.map(function(n){ return nodeDot(n, 2.5, ZCOL[n.z], true, 3.05); }).join('');
+    return mapFrame(uid, pts, {ticks:true, label:'Monitoring hotspots by zone'});
+  }
+  // Proportional-symbol map (activity by hotspot)
+  function buildSizeMap(vals, color){
+    var uid = ++_uid;
+    var maxv = Math.max.apply(null, Object.keys(vals).map(function(k){ return vals[k]; }));
+    var pts = NODES.slice().sort(function(a,b){ return (vals[b.id]||0)-(vals[a.id]||0); }).map(function(n){
+      var v = vals[n.id]||0;
+      var r = 1.4 + Math.sqrt(v/maxv)*5.2;
+      var big = v/maxv > 0.55;
+      return '<g>'+nodeDot(n, r, color, big, 3)+'</g>';
+    }).join('');
+    return mapFrame(uid, pts, {label:'Detections by hotspot'});
+  }
+  // Action map (where each work happens)
+  function buildActionMap(){
+    var uid = ++_uid;
+    function curve(a,b){ var A=NODEBY[a],B=NODEBY[b]; var mx=(A.x+B.x)/2+(B.y-A.y)*0.18, my=(A.y+B.y)/2-(B.x-A.x)*0.18;
+      return 'M'+A.x+','+A.y+' Q'+mx+','+my+' '+B.x+','+B.y; }
+    var defs = '<marker id="arr'+uid+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">'+
+      '<path d="M0,0 L10,5 L0,10 z" fill="var(--vine)"/></marker>';
+    // core protective halos
+    var halos = NODES.filter(function(n){return n.z==='core';}).map(function(n){
+      return '<circle cx="'+n.x+'" cy="'+n.y+'" r="5.4" fill="var(--vine)" opacity="0.12"/>'; }).join('');
+    // corridors edge -> core
+    var corr = [['H4','H11'],['H6','H14'],['HC','H9']].map(function(p){
+      return '<path d="'+curve(p[0],p[1])+'" fill="none" stroke="var(--vine)" stroke-width="0.9" stroke-dasharray="2.4 1.8" marker-end="url(#arr'+uid+')" opacity="0.85"/>';
+    }).join('');
+    // riparian buffer (central-south corridor)
+    var rip = '<path d="M36,58 Q44,74 54,92" fill="none" stroke="var(--low)" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="0.1 2.6" opacity="0.75"/>';
+    // boar-risk wood edge (SE)
+    var boar = '<path d="M60,58 Q69,63 60,71" fill="none" stroke="var(--hi)" stroke-width="1.3" stroke-dasharray="2 1.6" opacity="0.8"/>';
+    var pts = NODES.map(function(n){ return nodeDot(n, 2.2, ZCOL[n.z], true, 2.9); }).join('');
+    return mapFrame(uid, halos+corr+rip+boar+pts, {ticks:true, defs:defs, label:'Where each work happens'});
+  }
+
+  // ---------- content, three languages ----------
+  function T(icon,pri,cat,title,zones,summary,why,works,benefit){
+    return {icon:icon,pri:pri,cat:cat,title:title,zones:zones,summary:summary,why:why,works:works,benefit:benefit};
+  }
+
+  var DECK = {
+
+    ru:{
+      brandSub:"Виноградник · биоразнообразие", theme:"Тема", back:"← Назад", next:"Далее →",
+      practice:"Приём", whyH:"Зачем · обоснование", whatH:"Что конкретно · и когда", benefitH:"Выгода",
+      seasons:{spring:"Весна",summer:"Лето",autumn:"Осень",winter:"Зима",year:"Круглый год"},
+      pri:{high:"Высокий приоритет",medium:"Средний приоритет",low:"Низкий приоритет"},
+      cover:{
+        title:"Работы на винограднике:", accent:"приёмы, обоснование, календарь",
+        lede:"Как перевести итоги 12-месячного мониторинга биоразнообразия в конкретные полевые работы — что делать, зачем, на каких данных это основано и в какой сезон.",
+        meta:["Château Purcari · Ștefan Vodă PGI, Молдова","Период: 29.05.2025 – 28.05.2026 (365 дней)","Источник: Every1Counts, финальный отчёт"]
+      },
+      why:{eyebrow:"Зачем это нужно", h2:"Виноградник с богатым биоразнообразием — его стоит защищать",
+        summary:"По обеим методикам мониторинга Purcari входит в число лучших измеренных участков. Камеры зафиксировали 35 наземных видов, акустика — 195 видов птиц; сообщества сбалансированы. На участке уже работает функциональная пищевая сеть «хищник–жертва» и живут виды из Красных списков. Задача работ ниже — сохранить богатое ядро, поднять бедные края и оставить виноградник убежищем для полевой фауны, не теряя в производстве.",
+        kpis:[["35","наземных видов","камеры, 12 мес."],["195","видов птиц","акустика, conf. >0.8"],["2.26","Shannon H′","разнообразие (камеры)"],["42.9%","ночная активность","ниже порога 70%"],["5","видов из Красных списков","МСОП / нац."],["6.0","видов в утреннем хоре","в среднем за утро"]]},
+      ev:{eyebrow:"На чём основано", h2:"Данные, на которые опираются рекомендации",
+        mTitle:"Методология", method:["12 хотспотов, на каждом камера + акустический рекордер.","Камера — по датчику движения; рекордер — по расписанию.","365 дней сбора; активных хотспотов колебалось от 6 до 10.","Индексы посчитаны бутстрапом (1000 детекций × 400) при равном усилии."],
+        fTitle:"Ключевые находки", find:["Shannon H′ = 2.26, выравненность Pielou J = 0.70 — без доминирования одного вида.","Горлица (глоб. уязвимый вид) — самый частый в акустике: 1428 детекций.","Ночная активность 42.9% — ниже порога беспокойства 70%.","Разнообразие структурировано: устойчивое ядро против бедных краёв."]},
+      sys:{eyebrow:"На что опираемся · существующие системы", h2:"Рекомендации строятся на уже работающих системах",
+        summary:"Участок уже оснащён точным земледелием и биомониторингом — работы ниже расширяют то, что есть, а не начинают с нуля.",
+        items:[
+          {icon:"💧",title:"Метео-автополив",desc:"Подземный капельный полив со станцией, которая по погоде советует что, где и когда поливать (−15–30% воды).",badge:"−15–30% воды",hl:true},
+          {icon:"🔦",title:"UV-тракторы",desc:"Облучают лозу УФ-светом вместо химического опрыскивания.",badge:"−40% обработок",hl:true},
+          {icon:"🌿",title:"Травяной покров",desc:"Травосев в междурядьях и заделка остатков лозы в почву.",badge:"",hl:false},
+          {icon:"🍇",title:"25 га органики",desc:"Участок в процессе органической конверсии.",badge:"",hl:false},
+          {icon:"📡",title:"Сеть биомониторинга",desc:"12 хотспотов: камера + акустика, круглогодично.",badge:"",hl:false}
+        ]},
+      zones:{eyebrow:"Карта приоритетов", h2:"Три типа зон определяют, где что делать",
+        summary:"Пространственный анализ и кластеризация по составу видов делят участок на устойчивое ядро, переходные зоны и бедную периферию. Работы адресуются зонам, а не «вообще».",
+        mapTitle:"Хотспоты по зонам", note:"Север сверху. H1–H14, HC — станции мониторинга; цвет точки = тип зоны. Координатная привязка приблизительная (≈3 км с севера на юг).",
+        legend:[
+          {cls:"core",tag:"● Ядро",title:"Эталонные зоны",desc:"Богатые, сбалансированные — источник расселения видов. Защищать.",hs:["H9","H1","H13","H11","H14"]},
+          {cls:"mid",tag:"● Переходные",title:"Функциональные, но однороднее",desc:"Доминируют генералисты. Потенциал роста при добавлении структуры.",hs:["H5","H7","H12","H10"]},
+          {cls:"edge",tag:"● Периферия",title:"Экологически упрощённые",desc:"Самые бедные и обособленные. Главный рычаг улучшений.",hs:["H4","H6","HC"]}
+        ]},
+      dat:{eyebrow:"Карта активности · по хотспотам", h2:"Где сколько фиксируется — камеры и звук расходятся",
+        summary:"Размер точки — число детекций на станции (по данным отчёта, приблизительно). Наземная и птичья активность подсвечивают разные места: карта подтверждает, что «богатство» зависит от таксона.",
+        camTitle:"Камеры · наземная активность", sndTitle:"Звук · активность птиц", topLbl:"Больше всего",
+        insight:"H13, H1, H14 лидируют по камерам, но по звуку впереди H10 и HC — бедные для наземных, богатые для птиц. Поэтому решения принимаем по обоим методам, а не по одному."},
+      act:{eyebrow:"Карта действий · где выполнять", h2:"Где на участке выполнять каждую работу",
+        summary:"Карта переводит приёмы в пространство: что защищаем, откуда куда тянем коридоры, где буфер у воды и где кромка риска кабана.",
+        mapTitle:"Пространственный план работ", note:"Север сверху. Зелёные стрелки — коридоры от бедных краёв к ядру; синяя линия — прибрежный буфер; красная — лесная кромка риска кабана.",
+        legend:[
+          {c:"var(--vine)",t:"Защита ядра",d:"— ореол вокруг H9, H1, H13, H11, H14."},
+          {c:"var(--vine)",t:"Коридоры к ядру",d:"— изгороди от H4, H6, HC к ядру (стрелки)."},
+          {c:"var(--low)",t:"Прибрежный буфер",d:"— полосы без опрыскивания вдоль воды (выдра)."},
+          {c:"var(--hi)",t:"Кромка риска кабана",d:"— мониторинг и изгороди у H14, H7."},
+          {c:"var(--med)",t:"UV и полив — по всему участку",d:"— UV-тракторы и метео-автополив."}
+        ]},
+      tech:[
+        T("🛡️","high","Местообитания","Защита ядра биоразнообразия",["H9","H1","H13","H11","H14"],
+          "Хотспоты H9, H1, H13 (обе методики), усиленные H11 и H14 на камерах, образуют устойчивое богатое ядро. Это эталонные зоны — их защищают от интенсификации.",
+          ["Пространственный анализ называет <b>H9, H1, H13</b> устойчивым ядром по камерам и акустике.","Кластер Жаккара: H1/H10/H11/H12/H13/H14 делят большую часть видов (H11–H14 = <b>0.69</b>).","Kruskal-Wallis: H11, H14, H13, H1, H9 — топ-группа (буква A)."],
+          [["winter","Обозначить лесные опушки вокруг как буферы без гербицидов."],["spring","Сохранять постоянный травяной покров и отложить скашивание на прилегающих междурядьях."],["year","Не прокладывать новые дороги, дренаж и не раскорчёвывать в буфере."]],
+          "Сохраняет эталонные зоны и источники популяций, которые заселяют остальной виноградник."),
+        T("🌱","high","Местообитания","Восстановление и обогащение бедных краёв",["H4","H6","H-Château"],
+          "H4, H6 и H-Château — самые бедные и обособленные по составу, вероятно фрагментированы. Добавление структуры здесь — крупнейший рычаг прироста.",
+          ["H4 и H6 — устойчивая бедная периферия по обеим методикам.","H-Château, H4 и H7 — композиционные выбросы, делят с остальными очень мало видов.","Отчёт: эти края «экологически упрощены… вероятно фрагментированы или под влиянием инфраструктуры»."],
+          [["autumn","Высадить местные живые изгороди и кустарниковые коридоры к зонам ядра."],["spring","Посеять многовидовые цветочные полосы для опылителей и семяедных птиц."],["winter","Установить гнездовья, домики для насекомых и «жучиные банки»."]],
+          "Поднимает разнообразие там, где оно ниже всего, и сшивает изолированные фрагменты в связную мозаику."),
+        T("🕊️","high","Фауна","Сохранение уязвимой горлицы",["Весь участок","Изгороди","Залежные полосы"],
+          "Обыкновенная горлица — глобально уязвимый вид (МСОП) — самый частый птичий вид на участке. Purcari служит настоящим убежищем для снижающегося полевого вида.",
+          ["<b>1428</b> акустических детекций Streptopelia turtur, мировой статус <b>VU — уязвимый</b>.","Мигрирующий полевой вид, сильно снизившийся по всей Европе.","Отчёт отмечает её присутствие как «консервационную значимость» участка."],
+          [["summer","Сохранять семенные сорные полосы и залежи для летнего корма."],["summer","Не резать изгороди и кустарник в сезон гнездования (май–август)."],["spring","Поддерживать неглубокие водопои / лужи для питья."],["year","Минимизировать гербициды у гнездовых изгородей ради семенной кормовой базы."]],
+          "Поддерживает размножение глобально уязвимого вида и укрепляет консервационные и ESG-позиции Purcari."),
+        T("🧪","high","Фитосанитария","Удержание низкой фитосанитарной нагрузки",["Весь участок","25 га органики"],
+          "Богатый утренний хор и низкая ночная нарушенность указывают на слабо стрессированную систему. UV-тракторы уже облучают лозу вместо опрыскивания — программу стоит расширять.",
+          ["UV-тракторы дают <b>−40%</b> химических обработок, облучая УФ-светом вместо опрыскивания.","Утренний хор <b>6.0</b> вида/утро — «богатый хор, участок жив и мало нарушен».","Всего <b>42.9%</b> ночной активности — ниже порога 70%."],
+          [["spring","Расширить покрытие UV-тракторов на участки за пределами текущей программы."],["summer","Феромонная дезориентация гроздевых листовёрток вместо инсектицидов широкого спектра."],["summer","Снизить нагрузку медью/серой где позволяет давление болезней; приоритет биоконтролю."]],
+          "Сохраняет обилие птиц и беспозвоночных и приближает цель конверсии 25 га в органику."),
+        T("🦦","medium","Вода","Защита водотоков ради выдры",["Прибрежные коридоры","Пруды","Дренаж"],
+          "Выдра (Lutra lutra, близка к угрозе) зафиксирована на участке — индикатор здоровой воды. Метео-автополив уже советует что/где/когда поливать; его график помогает держать снос СЗР подальше от воды.",
+          ["<b>3</b> детекции Lutra lutra, мировой статус <b>NT — близок к угрозе</b>.","Присутствие выдры сигналит о хорошем качестве воды.","Метео-автополив и подземный капельный полив дают <b>−15–30%</b> воды и меньше стока."],
+          [["year","Сохранять невозделанные буферные полосы вдоль всех водотоков и прудов."],["summer","Согласовать график автополива с погодой, чтобы избегать сноса СЗР и стока к воде."],["spring","Продолжать расширять подземный капельный полив для снижения стока и эрозии."]],
+          "Сохраняет качество водного местообитания и выдру как биоиндикатор чистой воды."),
+        T("🐗","medium","Фауна","Управление ущербом от кабана",["H14","H7","Опушечные участки"],
+          "Кабан регулярно присутствует (102 детекции). Он часть пищевой сети, но может повреждать лозу, ягоды и почву — особенно там, где виноградник граничит с лесом (H14, H7).",
+          ["<b>102</b> детекции кабана на камерах за год.","H14 и H7 на лесной юго-восточной опушке, где давление кабана концентрируется.","Присутствуют и хищники, и травоядные — функциональная, но нагруженная система."],
+          [["autumn","Мониторить ущерб на опушечных участках ближе к сбору и фиксировать инциденты."],["summer","Целевые электроизгороди на самых уязвимых участках до верезона."],["autumn","Убирать приманки (падалицу, разлитые выжимки) с краёв полей."]],
+          "Ограничивает ущерб урожаю и почве, сохраняя кабана частью экосистемы, а не истребляя его."),
+        T("🌾","medium","Почва и покров","Щадящий режим скашивания",["Междурядья","Задернённые аллеи","Края полей"],
+          "В данных камер доминируют наземные виды — фазан, заяц — рядом с наземногнездящимися птицами и беспозвоночными. Как и когда косят междурядья, напрямую влияет на них.",
+          ["Фазан (<b>1171</b>) и заяц (<b>818</b>) — два самых частых вида на камерах.","На участке уже практикуют травосев и заделку остатков лозы в почву.","Активность непрерывна в течение суток — типично для агролесной мозаики."],
+          [["spring","Скашивать через междурядье, оставляя полосы стоящего покрова-убежища."],["spring","Отложить первое скашивание до конца пика наземного гнездования (поздняя весна)."],["summer","Косить от центра к краям, чтобы животные уходили к обочинам."]],
+          "Защищает зайцев, наземногнездящихся птиц и опылителей, сохраняя агрономию покровных культур."),
+        T("📷","medium","Мониторинг","Защита и продолжение сети мониторинга",["Все хотспоты","Сначала ядро"],
+          "Пропажи оборудования и отказы датчиков прерывали сбор данных. Защищённая непрерывная сеть превращает этот базис в многолетний тренд и подкрепляет органическую / регенеративную сертификацию.",
+          ["Повторные «пропажи оборудования» и отказ акустики на H9 (с 17.03.26).","Мониторинг был «не непрерывным», активных хотспотов от 6 до 10.","Обследовано 12 хотспотов — но лишь после переносов исходных 10."],
+          [["year","Установить антивандальные крепления и скрытое размещение, приоритет — ядро."],["spring","Добавить резерв (запасная камера/рекордер) в эталонных зонах H9, H1, H13."],["year","Планово проверять исправность датчиков, чтобы рано ловить отказы как на H9."]],
+          "Даёт надёжный годовой тренд биоразнообразия и доказательную базу для сертификации и ESG-отчётности."),
+        T("🚦","low","Фауна","Снижение антропогенного давления на дневных краях",["H7","H-Château","H4"],
+          "H7, H-Château и H4 сильно смещены в день (>80% дневных детекций). Это может отражать открытое местообитание, но и людскую/транспортную активность, вытесняющую фауну.",
+          ["Дневная доля детекций: H7 <b>83.3%</b>, H-Château <b>85.7%</b>, H4 <b>89.7%</b>.","Отчёт: людское давление может усиливать дневную активность на краевых участках.","Эти же участки — композиционные выбросы с наименьшим числом общих видов."],
+          [["summer","Сводить проходы техники в заданные окна времени, оставляя тихие периоды."],["autumn","Добавить экранирующую растительность между дорогами/постройками и участками."],["year","Снизить или экранировать ночное освещение у château и подъездных дорог."]],
+          "Восстанавливает пригодность местообитаний и ночной доступ для осторожных видов на самых оживлённых краях.")
+      ],
+      cal:{eyebrow:"Когда · сезонный календарь", h2:"Все работы по сезонам",
+        summary:"28 конкретных работ, распределённых по сезонам — рабочий график для планирования на год.",
+        cols:[
+          {cls:"c-spring",name:"🌸 Весна",n:8,items:["Постоянный травяной покров у ядра, отложить скашивание","Многовидовые цветочные полосы в междурядьях","Неглубокие водопои / лужи для горлицы","Расширять подземный капельный полив (метео-автополив)","Расширить покрытие UV-тракторов на новые участки","Скашивать через ряд, оставляя полосы-убежища","Отложить первое скашивание до конца гнездования","Резерв оборудования на H9, H1, H13"]},
+          {cls:"c-summer",name:"☀️ Лето",n:8,items:["Семенные сорные полосы и залежи для корма","Не резать изгороди/кустарник (май–август)","Согласовать график автополива с погодой, снос СЗР от воды","Целевые электроизгороди до верезона","Феромонная дезориентация вместо инсектицидов","Снизить медь/серу, приоритет биоконтролю","Косить от центра к краям","Проходы техники — в окна времени"]},
+          {cls:"c-autumn",name:"🍂 Осень",n:4,items:["Живые изгороди / кустарниковые коридоры к ядру","Мониторить ущерб от кабана на опушках","Убирать приманки — падалицу, выжимки","Экранирующая растительность у дорог и построек"]},
+          {cls:"c-winter",name:"❄️ Зима",n:2,items:["Опушки у ядра — буферы без гербицидов","Гнездовья, домики для насекомых, «жучиные банки»"]},
+          {cls:"c-year",name:"🔁 Круглый год",n:6,items:["Без новых дорог, дренажа, раскорчёвки в буфере","Минимум гербицидов у гнездовых изгородей","Невозделанные буферы вдоль воды","Снизить/экранировать ночное освещение","Антивандальные крепления оборудования","Регулярные проверки исправности датчиков"]}
+        ]},
+      road:{eyebrow:"Приоритеты · с чего начать", h2:"Порядок внедрения по приоритету",
+        summary:"9 приёмов ранжированы по отдаче для биоразнообразия и срочности. Начинать с высокого приоритета, затем средний, край — по возможности.",
+        rows:[
+          {pri:"high",when:"Сначала",lab:"Высокий",items:[["🛡️","Защита ядра"],["🌱","Восстановление краёв"],["🕊️","Сохранение горлицы"],["🧪","Низкая фитосан. нагрузка (UV-тракторы)"]]},
+          {pri:"medium",when:"Затем",lab:"Средний",items:[["🦦","Защита водотоков (выдра)"],["🐗","Управление кабаном"],["🌾","Щадящее скашивание"],["📷","Защита сети мониторинга"]]},
+          {pri:"low",when:"По возможности",lab:"Низкий",items:[["🚦","Снижение давления на дневных краях"]]}
+        ]},
+      close:{eyebrow:"Итог", h2:"Сохранить ядро, поднять края, продолжить наблюдение",
+        items:[
+          ["🛡️","Защищаем то, что уже ценно.","Ядро H9/H1/H13/H11/H14 — эталон; интенсификация здесь недопустима."],
+          ["🌱","Улучшаем там, где беднее всего.","Изгороди и коридоры на H4/H6/H-Château дают наибольший прирост."],
+          ["🕊️","Флагман — горлица.","Простые меры поддерживают глобально уязвимый вид и укрепляют ESG."],
+          ["🧪","Держим низкую нагрузку.","UV-тракторы, биоконтроль и феромоны сохраняют богатый хор и путь к 25 га органики."],
+          ["💧","Поливаем умно.","Метео-автополив советует что/где/когда — экономит воду и снижает снос к водотокам."],
+          ["📷","Продолжаем мониторинг.","Защищённая сеть даёт многолетний тренд и базу для сертификации."]
+        ],
+        source:"Основано на: Every1Counts — «Analysis of data collected over 12 months on the Château Purcari site», финальный отчёт, 08.07.2026."}
+    },
+
+    ro:{
+      brandSub:"Vie · biodiversitate", theme:"Temă", back:"← Înapoi", next:"Înainte →",
+      practice:"Procedeu", whyH:"De ce · justificare", whatH:"Ce anume · și când", benefitH:"Beneficiu",
+      seasons:{spring:"Primăvara",summer:"Vara",autumn:"Toamna",winter:"Iarna",year:"Tot anul"},
+      pri:{high:"Prioritate ridicată",medium:"Prioritate medie",low:"Prioritate scăzută"},
+      cover:{
+        title:"Lucrări în vie:", accent:"procedee, justificare, calendar",
+        lede:"Cum transformăm rezultatele monitorizării biodiversității pe 12 luni în lucrări concrete — ce, de ce, pe ce date se bazează și în ce sezon.",
+        meta:["Château Purcari · Ștefan Vodă PGI, Moldova","Perioada: 29.05.2025 – 28.05.2026 (365 de zile)","Sursă: Every1Counts, raport final"]
+      },
+      why:{eyebrow:"De ce", h2:"O vie bogată în biodiversitate — merită protejată",
+        summary:"Prin ambele metode de monitorizare, Purcari se numără printre cele mai bune situri măsurate. Camerele au înregistrat 35 de specii terestre, iar acustica 195 de specii de păsări; comunitățile sunt echilibrate. Situl găzduiește deja o rețea trofică funcțională pradă–prădător și specii din listele roșii. Scopul lucrărilor de mai jos: să păstreze nucleul bogat, să ridice marginile sărace și să mențină via un refugiu pentru fauna de câmp, fără pierderi de producție.",
+        kpis:[["35","specii terestre","camere, 12 luni"],["195","specii de păsări","acustică, conf. >0.8"],["2.26","Shannon H′","diversitate (camere)"],["42.9%","activitate nocturnă","sub pragul de 70%"],["5","specii din liste roșii","IUCN / naț."],["6.0","specii în corul de dimineață","în medie pe dimineață"]]},
+      ev:{eyebrow:"Pe ce se bazează", h2:"Datele pe care se sprijină recomandările",
+        mTitle:"Metodologie", method:["12 hotspoturi, fiecare cu cameră + înregistrator acustic.","Camera — la detecția mișcării; înregistratorul — după program.","365 de zile de colectare; hotspoturi active între 6 și 10.","Indici prin bootstrap (1000 detecții × 400) la efort egal."],
+        fTitle:"Constatări-cheie", find:["Shannon H′ = 2.26, uniformitate Pielou J = 0.70 — fără dominarea unei specii.","Turturica (vulnerabilă global) — cea mai frecventă acustic: 1428 detecții.","Activitate nocturnă 42.9% — sub pragul de deranj de 70%.","Diversitatea e structurată spațial: nucleu stabil vs margini sărace."]},
+      sys:{eyebrow:"Pe ce ne sprijinim · sisteme existente", h2:"Recomandările se construiesc pe sisteme deja funcționale",
+        summary:"Domeniul are deja agricultură de precizie și biomonitorizare — lucrările de mai jos extind ce există, nu pornesc de la zero.",
+        items:[
+          {icon:"💧",title:"Irigare automată meteo",desc:"Picurare subterană cu stație care, după vreme, recomandă ce, unde și când să uzi.",badge:"−15–30% apă",hl:true},
+          {icon:"🔦",title:"Tractoare UV",desc:"Iradiază vița cu lumină UV în loc de stropire chimică.",badge:"−40% tratamente",hl:true},
+          {icon:"🌿",title:"Covor ierbos",desc:"Însămânțare pe intervale și încorporarea resturilor de viță în sol.",badge:"",hl:false},
+          {icon:"🍇",title:"25 ha ecologic",desc:"Suprafață în conversie ecologică.",badge:"",hl:false},
+          {icon:"📡",title:"Rețea de biomonitorizare",desc:"12 hotspoturi: cameră + acustică, tot anul.",badge:"",hl:false}
+        ]},
+      zones:{eyebrow:"Harta priorităților", h2:"Trei tipuri de zone stabilesc unde ce facem",
+        summary:"Analiza spațială și gruparea după compoziția speciilor împart situl într-un nucleu stabil, zone de tranziție și o periferie săracă. Lucrările vizează zone, nu „în general”.",
+        mapTitle:"Hotspoturi pe zone", note:"Nord sus. H1–H14, HC — stații de monitorizare; culoarea punctului = tipul zonei. Localizare aproximativă (≈3 km nord–sud).",
+        legend:[
+          {cls:"core",tag:"● Nucleu",title:"Zone de referință",desc:"Bogate, echilibrate — sursă de recolonizare. De protejat.",hs:["H9","H1","H13","H11","H14"]},
+          {cls:"mid",tag:"● Tranziție",title:"Funcționale, dar mai omogene",desc:"Domină generaliștii. Potențial de creștere prin adăugarea de structură.",hs:["H5","H7","H12","H10"]},
+          {cls:"edge",tag:"● Periferie",title:"Simplificate ecologic",desc:"Cele mai sărace și izolate. Principala pârghie de îmbunătățire.",hs:["H4","H6","HC"]}
+        ]},
+      dat:{eyebrow:"Harta activității · pe hotspoturi", h2:"Unde se înregistrează cât — camerele și sunetul diferă",
+        summary:"Mărimea punctului = numărul de detecții pe stație (din raport, aproximativ). Activitatea terestră și cea a păsărilor evidențiază locuri diferite: harta confirmă că „bogăția” depinde de taxon.",
+        camTitle:"Camere · activitate terestră", sndTitle:"Sunet · activitatea păsărilor", topLbl:"Cele mai active",
+        insight:"H13, H1, H14 conduc la camere, dar la sunet sunt în frunte H10 și HC — sărace pentru terestre, bogate pentru păsări. De aceea deciziile se iau pe ambele metode, nu pe una singură."},
+      act:{eyebrow:"Harta acțiunilor · unde executăm", h2:"Unde pe sit executăm fiecare lucrare",
+        summary:"Harta traduce procedeele în spațiu: ce protejăm, de unde spre unde tragem coridoare, unde e tamponul lângă apă și unde e marginea de risc pentru mistreți.",
+        mapTitle:"Plan spatial al lucrărilor", note:"Nord sus. Săgeți verzi — coridoare de la marginile sărace spre nucleu; linie albastră — tampon riparian; roșu — liziera de risc pentru mistreți.",
+        legend:[
+          {c:"var(--vine)",t:"Protecția nucleului",d:"— halou în jurul H9, H1, H13, H11, H14."},
+          {c:"var(--vine)",t:"Coridoare spre nucleu",d:"— garduri vii de la H4, H6, HC spre nucleu (săgeți)."},
+          {c:"var(--low)",t:"Tampon riparian",d:"— benzi fără stropire de-a lungul apei (vidra)."},
+          {c:"var(--hi)",t:"Marginea de risc mistreți",d:"— monitorizare și garduri la H14, H7."},
+          {c:"var(--med)",t:"UV și irigare — pe tot situl",d:"— tractoare UV și irigare meteo."}
+        ]},
+      tech:[
+        T("🛡️","high","Habitate","Protecția nucleului de biodiversitate",["H9","H1","H13","H11","H14"],
+          "Hotspoturile H9, H1, H13 (ambele metode), întărite de H11 și H14 pe camere, formează un nucleu bogat și stabil. Sunt zone de referință — de protejat de intensificare.",
+          ["Analiza spațială indică <b>H9, H1, H13</b> drept nucleu stabil pe camere și acustică.","Cluster Jaccard: H1/H10/H11/H12/H13/H14 împart majoritatea speciilor (H11–H14 = <b>0.69</b>).","Kruskal-Wallis: H11, H14, H13, H1, H9 — grupul de top (litera A)."],
+          [["winter","Delimitează liziera pădurii din jur ca tampon fără erbicide."],["spring","Menține covor ierbos permanent și amână cositul pe intervalele adiacente."],["year","Fără drumuri noi, drenaj sau defrișare în tampon."]],
+          "Păstrează zonele de referință și populațiile-sursă care recolonizează restul viei."),
+        T("🌱","high","Habitate","Refacerea și îmbogățirea marginilor sărace",["H4","H6","H-Château"],
+          "H4, H6 și H-Château sunt cele mai sărace și izolate ca structură, probabil fragmentate. Adăugarea de structură aici e cea mai mare pârghie de câștig.",
+          ["H4 și H6 — periferie săracă stabilă pe ambele metode.","H-Château, H4 și H7 — valori atipice, împart foarte puține specii cu restul.","Raport: aceste margini sunt „simplificate ecologic… probabil fragmentate sau sub influența infrastructurii”."],
+          [["autumn","Plantează garduri vii autohtone și coridoare de arbuști către zonele nucleu."],["spring","Însămânțează benzi florale multi-specie pentru polenizatori și păsări granivore."],["winter","Instalează cuiburi artificiale, hoteluri de insecte și „bănci de gândaci”."]],
+          "Ridică diversitatea acolo unde e cea mai mică și coase fragmentele izolate într-un mozaic conectat."),
+        T("🕊️","high","Faună","Protejarea turturicii vulnerabile",["Tot situl","Garduri vii","Benzi necultivate"],
+          "Turturica — specie vulnerabilă global (IUCN) — este cea mai frecventă pasăre din sit. Purcari e un refugiu real pentru o specie de câmp în declin.",
+          ["<b>1428</b> detecții acustice Streptopelia turtur, statut mondial <b>VU — vulnerabil</b>.","Specie migratoare de câmp, în declin puternic în Europa.","Raportul îi menționează prezența ca „relevanță de conservare” a sitului."],
+          [["summer","Menține benzi cu semințe și pârloage pentru hrana de vară."],["summer","Nu tăia gardurile vii și tufișurile în sezonul de cuibărit (mai–august)."],["spring","Menține adăpători puțin adânci / bălți pentru adăpat."],["year","Minimizează erbicidele lângă gardurile vii de cuibărit."]],
+          "Susține reproducerea unei specii vulnerabile global și întărește poziția de conservare și ESG a Purcari."),
+        T("🧪","high","Fitosanitar","Menținerea unei presiuni fitosanitare reduse",["Tot situl","25 ha ecologic"],
+          "Corul bogat de dimineață și deranjul nocturn scăzut arată un sistem puțin stresat. Tractoarele UV iradiază deja vița în loc de stropire — programul merită extins.",
+          ["Tractoarele UV aduc <b>−40%</b> tratamente chimice, iradiind cu UV în loc de stropire.","Cor de dimineață <b>6.0</b> specii/dimineață — „cor bogat, situl e viu și puțin deranjat”.","Doar <b>42.9%</b> activitate nocturnă — sub pragul de 70%."],
+          [["spring","Extinde acoperirea tractoarelor UV pe parcele din afara programului actual."],["summer","Dezorientare cu feromoni a moliei strugurilor în loc de insecticide cu spectru larg."],["summer","Reduce cuprul/sulful unde presiunea bolilor permite; prioritate biocontrolului."]],
+          "Menține abundența păsărilor și nevertebratelor și apropie ținta de conversie ecologică a 25 ha."),
+        T("🦦","medium","Apă","Protejarea cursurilor de apă pentru vidră",["Coridoare ripariene","Iazuri","Drenaj"],
+          "Vidra (Lutra lutra, aproape amenințată) a fost înregistrată în sit — indicator de apă sănătoasă. Irigarea automată meteo recomandă deja ce/unde/când să uzi; programul ei ajută să ții stropirea departe de apă.",
+          ["<b>3</b> detecții Lutra lutra, statut mondial <b>NT — aproape amenințată</b>.","Prezența vidrei semnalează calitate bună a apei.","Irigarea meteo și picurarea subterană dau <b>−15–30%</b> apă și mai puțină scurgere."],
+          [["year","Menține benzi tampon necultivate de-a lungul tuturor cursurilor și iazurilor."],["summer","Corelează programul de irigare cu vremea pentru a evita scurgerea tratamentelor spre apă."],["spring","Extinde picurarea subterană pentru a reduce scurgerea și eroziunea."]],
+          "Păstrează calitatea habitatului acvatic și vidra ca bioindicator de apă curată."),
+        T("🐗","medium","Faună","Gestionarea pagubelor produse de mistreți",["H14","H7","Parcele de lizieră"],
+          "Mistrețul e prezent regulat (102 detecții). Face parte din rețeaua trofică, dar poate afecta vița, strugurii și solul — mai ales la contactul cu pădurea (H14, H7).",
+          ["<b>102</b> detecții de mistreț pe camere într-un an.","H14 și H7 sunt pe liziera sud-estică, unde presiunea mistrețului se concentrează.","Prezenți și prădători, și ierbivore — sistem funcțional, dar solicitat."],
+          [["autumn","Monitorizează pagubele pe parcelele de lizieră spre recoltă și notează incidentele."],["summer","Garduri electrice punctuale pe parcelele vulnerabile înainte de pârgă."],["autumn","Îndepărtează momelile (fructe căzute, tescovină) de pe margini."]],
+          "Limitează pagubele la recoltă și sol, păstrând mistrețul ca parte a ecosistemului, nu eliminându-l."),
+        T("🌾","medium","Sol și covor vegetal","Regim de cosit prietenos cu fauna",["Intervale","Alei înierbate","Margini"],
+          "În datele camerelor domină speciile terestre — fazan, iepure — alături de păsări care cuibăresc pe sol și nevertebrate. Cum și când cosești intervalele le afectează direct.",
+          ["Fazanul (<b>1171</b>) și iepurele (<b>818</b>) — cele mai frecvente două specii pe camere.","Domeniul practică deja înierbarea și încorporarea resturilor de viță.","Activitatea e continuă pe parcursul zilei — tipic mozaicului agro-forestier."],
+          [["spring","Cosește intervale alternative, lăsând benzi de refugiu în picioare."],["spring","Amână prima cosire până după vârful cuibăritului pe sol (primăvară târzie)."],["summer","Cosește dinspre centru spre margini, ca animalele să scape spre exterior."]],
+          "Protejează iepurii, păsările care cuibăresc pe sol și polenizatorii, păstrând agronomia culturilor de acoperire."),
+        T("📷","medium","Monitorizare","Protejarea și continuarea rețelei de monitorizare",["Toate hotspoturile","Întâi nucleul"],
+          "Pierderile de echipamente și defecțiunile senzorilor au întrerupt colectarea. O rețea securizată și continuă transformă această bază într-un trend multianual și susține certificarea ecologică / regenerativă.",
+          ["„Dispariții de echipamente” repetate și defectarea acusticii la H9 (din 17.03.26).","Monitorizarea a fost „discontinuă”, hotspoturi active între 6 și 10.","12 hotspoturi investigate — dar abia după mutări ale celor 10 inițiale."],
+          [["year","Montaje antifurt și amplasare discretă, prioritate nucleul."],["spring","Rezervă (cameră/înregistrator) în zonele de referință H9, H1, H13."],["year","Verificări periodice ale senzorilor pentru a prinde din timp defecțiuni ca la H9."]],
+          "Oferă un trend anual fiabil al biodiversității și o bază de dovezi pentru certificare și raportare ESG."),
+        T("🚦","low","Faună","Reducerea presiunii antropice pe marginile diurne",["H7","H-Château","H4"],
+          "H7, H-Château și H4 sunt puternic deplasate spre zi (>80% detecții diurne). Poate reflecta habitat deschis, dar și activitate umană/de transport care alungă fauna.",
+          ["Ponderea diurnă a detecțiilor: H7 <b>83.3%</b>, H-Château <b>85.7%</b>, H4 <b>89.7%</b>.","Raport: presiunea umană poate accentua activitatea diurnă pe parcelele de margine.","Aceleași parcele — valori atipice, cu cele mai puține specii comune."],
+          [["summer","Concentrează trecerile utilajelor în ferestre de timp, lăsând perioade liniștite."],["autumn","Adaugă vegetație-ecran între drumuri/clădiri și parcele."],["year","Reduce sau ecranează iluminatul nocturn la château și drumurile de acces."]],
+          "Reface valoarea habitatului și accesul nocturn pentru speciile prudente pe cele mai aglomerate margini.")
+      ],
+      cal:{eyebrow:"Când · calendar sezonier", h2:"Toate lucrările pe sezoane",
+        summary:"28 de lucrări concrete, distribuite pe sezoane — un grafic de lucru pentru planificarea pe an.",
+        cols:[
+          {cls:"c-spring",name:"🌸 Primăvara",n:8,items:["Covor ierbos permanent la nucleu, amână cositul","Benzi florale multi-specie pe intervale","Adăpători puțin adânci / bălți pentru turturică","Extinde picurarea subterană (irigare meteo)","Extinde acoperirea tractoarelor UV pe parcele noi","Cosește intervale alternative, benzi de refugiu","Amână prima cosire până după cuibărit","Rezervă de echipamente la H9, H1, H13"]},
+          {cls:"c-summer",name:"☀️ Vara",n:8,items:["Benzi cu semințe și pârloage pentru hrană","Nu tăia gardurile vii/tufișurile (mai–august)","Corelează irigarea cu vremea, ferește apa de stropire","Garduri electrice punctuale înainte de pârgă","Dezorientare cu feromoni în loc de insecticide","Reduce cuprul/sulful, prioritate biocontrolului","Cosește dinspre centru spre margini","Treceri de utilaje în ferestre de timp"]},
+          {cls:"c-autumn",name:"🍂 Toamna",n:4,items:["Garduri vii / coridoare de arbuști către nucleu","Monitorizează pagubele de mistreț pe lizieră","Îndepărtează momelile — fructe căzute, tescovină","Vegetație-ecran lângă drumuri și clădiri"]},
+          {cls:"c-winter",name:"❄️ Iarna",n:2,items:["Liziera la nucleu — tampon fără erbicide","Cuiburi, hoteluri de insecte, „bănci de gândaci”"]},
+          {cls:"c-year",name:"🔁 Tot anul",n:6,items:["Fără drumuri noi, drenaj, defrișare în tampon","Erbicide minime lângă gardurile de cuibărit","Benzi tampon necultivate de-a lungul apei","Reduce/ecranează iluminatul nocturn","Montaje antifurt pentru echipamente","Verificări periodice ale senzorilor"]}
+        ]},
+      road:{eyebrow:"Priorități · de unde începem", h2:"Ordinea de implementare după prioritate",
+        summary:"9 procedee ordonate după impactul asupra biodiversității și urgență. Începe cu prioritatea ridicată, apoi medie, marginea — când e posibil.",
+        rows:[
+          {pri:"high",when:"Întâi",lab:"Ridicat",items:[["🛡️","Protecția nucleului"],["🌱","Refacerea marginilor"],["🕊️","Protejarea turturicii"],["🧪","Presiune fitosanitară redusă (tractoare UV)"]]},
+          {pri:"medium",when:"Apoi",lab:"Mediu",items:[["🦦","Protecția cursurilor de apă (vidra)"],["🐗","Gestionarea mistreților"],["🌾","Cosit prietenos cu fauna"],["📷","Protecția rețelei de monitorizare"]]},
+          {pri:"low",when:"Când e posibil",lab:"Scăzut",items:[["🚦","Reducerea presiunii pe marginile diurne"]]}
+        ]},
+      close:{eyebrow:"Concluzie", h2:"Păstrăm nucleul, ridicăm marginile, continuăm observația",
+        items:[
+          ["🛡️","Protejăm ce e deja valoros.","Nucleul H9/H1/H13/H11/H14 — referință; fără intensificare aici."],
+          ["🌱","Îmbunătățim unde e cel mai sărac.","Gardurile vii și coridoarele pe H4/H6/H-Château aduc cel mai mare câștig."],
+          ["🕊️","Emblema — turturica.","Măsuri simple susțin o specie vulnerabilă global și întăresc ESG."],
+          ["🧪","Menținem presiune redusă.","Tractoarele UV, biocontrolul și feromonii păstrează corul bogat și drumul spre 25 ha ecologic."],
+          ["💧","Udăm inteligent.","Irigarea meteo recomandă ce/unde/când — economisește apă și reduce scurgerea spre ape."],
+          ["📷","Continuăm monitorizarea.","O rețea securizată dă un trend multianual și o bază pentru certificare."]
+        ],
+        source:"Pe baza: Every1Counts — «Analysis of data collected over 12 months on the Château Purcari site», raport final, 08.07.2026."}
+    },
+
+    en:{
+      brandSub:"Vineyard · biodiversity", theme:"Theme", back:"← Back", next:"Next →",
+      practice:"Practice", whyH:"Why · rationale", whatH:"What exactly · and when", benefitH:"Benefit",
+      seasons:{spring:"Spring",summer:"Summer",autumn:"Autumn",winter:"Winter",year:"Year-round"},
+      pri:{high:"High priority",medium:"Medium priority",low:"Low priority"},
+      cover:{
+        title:"Vineyard works:", accent:"practices, rationale, calendar",
+        lede:"Turning 12 months of biodiversity monitoring into concrete field works — what to do, why, what data it rests on, and in which season.",
+        meta:["Château Purcari · Ștefan Vodă PGI, Moldova","Period: 29 May 2025 – 28 May 2026 (365 days)","Source: Every1Counts, final report"]
+      },
+      why:{eyebrow:"Why this matters", h2:"A biodiversity-rich vineyard worth protecting",
+        summary:"Across both monitoring methods Purcari ranks among the very top sites measured. Cameras recorded 35 terrestrial species and acoustics 195 bird species, with balanced communities. The estate already hosts a functional predator–prey web and Red-List species. The works below aim to protect the rich core, lift the poor edges and keep the vineyard a refuge for farmland wildlife without losing production.",
+        kpis:[["35","terrestrial species","cameras, 12 months"],["195","bird species","acoustic, conf. >0.8"],["2.26","Shannon H′","diversity (cameras)"],["42.9%","nocturnal activity","below the 70% threshold"],["5","Red-List species","IUCN / national"],["6.0","species in the dawn chorus","average per morning"]]},
+      ev:{eyebrow:"The evidence", h2:"The data behind the recommendations",
+        mTitle:"Methodology", method:["12 hotspots, each with a camera + acoustic recorder.","Camera — motion-triggered; recorder — on a schedule.","365 days of collection; active hotspots ranged 6 to 10.","Indices via bootstrap (1000 detections × 400) at equal effort."],
+        fTitle:"Key findings", find:["Shannon H′ = 2.26, Pielou evenness J = 0.70 — no single species dominates.","Turtle Dove (globally Vulnerable) — most frequent acoustically: 1428 detections.","Nocturnal activity 42.9% — below the 70% disturbance threshold.","Diversity is spatially structured: a stable core vs poorer edges."]},
+      sys:{eyebrow:"What we build on · existing systems", h2:"The advice builds on systems already running",
+        summary:"The estate already runs precision farming and biomonitoring — the works below extend what exists rather than starting from scratch.",
+        items:[
+          {icon:"💧",title:"Weather-based auto-irrigation",desc:"Subsurface drip with a station that, from the weather, advises what, where and when to water.",badge:"−15–30% water",hl:true},
+          {icon:"🔦",title:"UV tractors",desc:"Irradiate the vines with UV light instead of chemical spraying.",badge:"−40% treatments",hl:true},
+          {icon:"🌿",title:"Grass cover",desc:"Inter-row grass seeding and vine-residue return to the soil.",badge:"",hl:false},
+          {icon:"🍇",title:"25 ha organic",desc:"Area under organic conversion.",badge:"",hl:false},
+          {icon:"📡",title:"Biomonitoring network",desc:"12 hotspots: camera + acoustics, year-round.",badge:"",hl:false}
+        ]},
+      zones:{eyebrow:"Priority map", h2:"Three zone types set where to do what",
+        summary:"Spatial analysis and species-composition clustering split the site into a stable core, transition zones and a poor periphery. Works target zones, not the site 'in general'.",
+        mapTitle:"Hotspots by zone", note:"North up. H1–H14, HC — monitoring stations; dot colour = zone type. Positions approximate (≈3 km north–south).",
+        legend:[
+          {cls:"core",tag:"● Core",title:"Reference zones",desc:"Rich, balanced — a source for recolonisation. Protect.",hs:["H9","H1","H13","H11","H14"]},
+          {cls:"mid",tag:"● Transition",title:"Functional but more uniform",desc:"Generalists dominate. Room to grow by adding structure.",hs:["H5","H7","H12","H10"]},
+          {cls:"edge",tag:"● Periphery",title:"Ecologically simplified",desc:"Poorest and most isolated. The main lever for gains.",hs:["H4","H6","HC"]}
+        ]},
+      dat:{eyebrow:"Activity map · by hotspot", h2:"Where activity concentrates — cameras and sound diverge",
+        summary:"Dot size = detections at each station (from the report, approximate). Terrestrial and bird activity highlight different places: the map confirms that 'richness' depends on the taxon.",
+        camTitle:"Cameras · terrestrial activity", sndTitle:"Sound · bird activity", topLbl:"Busiest",
+        insight:"H13, H1, H14 lead on cameras, but on sound H10 and HC come first — poor for terrestrial, rich for birds. So decisions use both methods, not one."},
+      act:{eyebrow:"Action map · where to work", h2:"Where on the site each work happens",
+        summary:"The map turns practices into space: what to protect, where corridors run, where the water buffer sits and where the boar-risk edge is.",
+        mapTitle:"Spatial work plan", note:"North up. Green arrows — corridors from poor edges to the core; blue line — riparian buffer; red — boar-risk woodland edge.",
+        legend:[
+          {c:"var(--vine)",t:"Protect the core",d:"— halo around H9, H1, H13, H11, H14."},
+          {c:"var(--vine)",t:"Corridors to the core",d:"— hedgerows from H4, H6, HC to the core (arrows)."},
+          {c:"var(--low)",t:"Riparian buffer",d:"— no-spray strips along water (otter)."},
+          {c:"var(--hi)",t:"Boar-risk edge",d:"— monitoring and fencing at H14, H7."},
+          {c:"var(--med)",t:"UV & irrigation — site-wide",d:"— UV tractors and weather-based irrigation."}
+        ]},
+      tech:[
+        T("🛡️","high","Habitat","Protect the biodiversity core",["H9","H1","H13","H11","H14"],
+          "Hotspots H9, H1, H13 (both methods), reinforced by H11 and H14 on cameras, form a stable rich core. These are reference zones — shield them from intensification.",
+          ["Spatial analysis names <b>H9, H1, H13</b> as the stable core across cameras and acoustics.","Jaccard cluster: H1/H10/H11/H12/H13/H14 share most species (H11–H14 = <b>0.69</b>).","Kruskal-Wallis: H11, H14, H13, H1, H9 — the top group (letter A)."],
+          [["winter","Mark the surrounding woodland edges as herbicide-free buffers."],["spring","Keep permanent grass cover and delay mowing on the adjacent inter-rows."],["year","No new tracks, drainage or grubbing inside the buffer."]],
+          "Preserves the reference zones and the source populations that recolonise the rest of the vineyard."),
+        T("🌱","high","Habitat","Restore and enrich the poor edges",["H4","H6","H-Château"],
+          "H4, H6 and H-Château are the poorest and most isolated in composition, likely fragmented. Adding structure here is the biggest lever for gains.",
+          ["H4 and H6 — a stable poor periphery on both methods.","H-Château, H4 and H7 — outliers, sharing very few species with the rest.","Report: these edges are 'ecologically simplified… likely fragmented or infrastructure-influenced'."],
+          [["autumn","Plant native hedgerows and shrub corridors toward the core zones."],["spring","Sow multi-species flower strips for pollinators and seed-eating birds."],["winter","Install nest boxes, insect hotels and beetle banks."]],
+          "Raises diversity where it is lowest and stitches isolated fragments into a connected mosaic."),
+        T("🕊️","high","Fauna","Safeguard the Vulnerable Turtle Dove",["Whole site","Hedgerows","Fallow strips"],
+          "The Turtle Dove — globally Vulnerable (IUCN) — is the most frequent bird on site. Purcari is a real refuge for a declining farmland species.",
+          ["<b>1428</b> acoustic detections of Streptopelia turtur, world status <b>VU — Vulnerable</b>.","A migratory farmland species in steep decline across Europe.","The report cites its presence as the site's 'conservation relevance'."],
+          [["summer","Keep seed-bearing strips and fallow patches for summer food."],["summer","Do not cut hedgerows or scrub in the nesting season (May–August)."],["spring","Keep shallow drinking pools / puddles."],["year","Minimise herbicides near nesting hedgerows for the seed food supply."]],
+          "Supports breeding of a globally Vulnerable species and strengthens Purcari's conservation and ESG standing."),
+        T("🧪","high","Phytosanitary","Keep phytosanitary pressure low",["Whole site","25 ha organic"],
+          "The rich dawn chorus and low nocturnal disturbance show a lightly stressed system. UV tractors already irradiate the vines instead of spraying — worth extending.",
+          ["UV tractors deliver <b>−40%</b> chemical treatments, irradiating with UV instead of spraying.","Dawn chorus <b>6.0</b> species/morning — 'rich chorus, the site is alive and little disturbed'.","Only <b>42.9%</b> nocturnal activity — below the 70% threshold."],
+          [["spring","Extend UV-tractor coverage to parcels beyond the current programme."],["summer","Pheromone mating disruption for grape moths instead of broad-spectrum insecticides."],["summer","Cut copper/sulphur where disease pressure allows; prioritise biocontrol."]],
+          "Sustains bird and invertebrate abundance and moves toward the 25 ha organic-conversion goal."),
+        T("🦦","medium","Water","Protect watercourses for the otter",["Riparian corridors","Ponds","Drainage"],
+          "The otter (Lutra lutra, Near Threatened) was recorded on site — an indicator of healthy water. Weather-based auto-irrigation already advises what/where/when to water; its schedule helps keep spray drift away from water.",
+          ["<b>3</b> detections of Lutra lutra, world status <b>NT — Near Threatened</b>.","The otter's presence signals good water quality.","Weather irrigation and subsurface drip cut water by <b>−15–30%</b> and reduce runoff."],
+          [["year","Keep uncultivated buffer strips along all watercourses and ponds."],["summer","Align the irrigation schedule with the weather to avoid drift and runoff toward water."],["spring","Extend subsurface drip to reduce runoff and erosion."]],
+          "Preserves aquatic habitat quality and the otter as a clean-water bioindicator."),
+        T("🐗","medium","Fauna","Manage wild-boar damage",["H14","H7","Wood-edge parcels"],
+          "Wild boar are regularly present (102 detections). Part of the food web, but they can damage vines, grapes and soil — especially where the vineyard meets the forest (H14, H7).",
+          ["<b>102</b> wild-boar detections on cameras over a year.","H14 and H7 sit on the south-east forest edge, where boar pressure concentrates.","Both predators and herbivores present — a functional but stressed system."],
+          [["autumn","Monitor damage on wood-edge parcels toward harvest and log incidents."],["summer","Targeted electric fencing on vulnerable parcels before véraison."],["autumn","Remove attractants (fallen fruit, pomace) from field edges."]],
+          "Limits crop and soil damage while keeping boar part of the ecosystem rather than removing it."),
+        T("🌾","medium","Soil & cover","A wildlife-friendly mowing regime",["Inter-rows","Grassed alleys","Edges"],
+          "Camera data are dominated by ground species — pheasant, hare — alongside ground-nesting birds and invertebrates. How and when the inter-rows are mown affects them directly.",
+          ["Pheasant (<b>1171</b>) and hare (<b>818</b>) — the two most frequent species on cameras.","The estate already practises grass seeding and vine-residue return.","Activity is continuous through the day — typical of the agro-forestry mosaic."],
+          [["spring","Mow alternate inter-rows, leaving standing refuge strips."],["spring","Delay first mowing until after the ground-nesting peak (late spring)."],["summer","Mow from the centre outward so animals escape to the edges."]],
+          "Protects hares, ground-nesting birds and pollinators while keeping the cover-crop agronomy."),
+        T("📷","medium","Monitoring","Protect and continue the monitoring network",["All hotspots","Core first"],
+          "Equipment losses and sensor failures interrupted collection. A secured, continuous network turns this baseline into a multi-year trend and supports organic / regenerative certification.",
+          ["Repeated 'equipment disappearance' and the H9 acoustic failure (from 17.03.26).","Monitoring was 'discontinuous', active hotspots ranging 6 to 10.","12 hotspots surveyed — but only after relocating the original 10."],
+          [["year","Anti-theft mounts and discreet placement, core first."],["spring","Redundancy (a spare camera/recorder) at reference zones H9, H1, H13."],["year","Regular sensor checks to catch failures like H9 early."]],
+          "Gives a reliable yearly biodiversity trend and an evidence base for certification and ESG reporting."),
+        T("🚦","low","Fauna","Ease human pressure on the diurnal edges",["H7","H-Château","H4"],
+          "H7, H-Château and H4 skew strongly to daytime (>80% diurnal detections). This may reflect open habitat, but also human/vehicle activity that pushes fauna away.",
+          ["Diurnal share of detections: H7 <b>83.3%</b>, H-Château <b>85.7%</b>, H4 <b>89.7%</b>.","Report: human pressure can heighten daytime activity on edge parcels.","The same parcels — outliers with the fewest shared species."],
+          [["summer","Concentrate machinery passes into time windows, leaving quiet periods."],["autumn","Add screening vegetation between tracks/buildings and parcels."],["year","Reduce or shield night lighting at the château and access roads."]],
+          "Restores habitat value and nocturnal access for wary species on the busiest edges.")
+      ],
+      cal:{eyebrow:"When · seasonal calendar", h2:"All works by season",
+        summary:"28 concrete works spread across the seasons — a working schedule for planning the year.",
+        cols:[
+          {cls:"c-spring",name:"🌸 Spring",n:8,items:["Permanent grass cover at the core, delay mowing","Multi-species flower strips in the inter-rows","Shallow drinking pools / puddles for the dove","Extend subsurface drip (weather irrigation)","Extend UV-tractor coverage to new parcels","Mow alternate rows, leaving refuge strips","Delay first mowing until after nesting","Equipment redundancy at H9, H1, H13"]},
+          {cls:"c-summer",name:"☀️ Summer",n:8,items:["Seed-bearing strips and fallow for food","Do not cut hedgerows/scrub (May–August)","Align irrigation with weather, keep spray off water","Targeted electric fencing before véraison","Pheromone mating disruption vs insecticides","Cut copper/sulphur, prioritise biocontrol","Mow from the centre outward","Machinery passes in time windows"]},
+          {cls:"c-autumn",name:"🍂 Autumn",n:4,items:["Hedgerows / shrub corridors toward the core","Monitor wild-boar damage on wood edges","Remove attractants — fallen fruit, pomace","Screening vegetation by tracks and buildings"]},
+          {cls:"c-winter",name:"❄️ Winter",n:2,items:["Woodland edges at the core — herbicide-free buffers","Nest boxes, insect hotels, beetle banks"]},
+          {cls:"c-year",name:"🔁 Year-round",n:6,items:["No new tracks, drainage or grubbing in the buffer","Minimal herbicides near nesting hedgerows","Uncultivated buffer strips along water","Reduce/shield night lighting","Anti-theft equipment mounts","Regular sensor health checks"]}
+        ]},
+      road:{eyebrow:"Priorities · where to start", h2:"Rollout order by priority",
+        summary:"9 practices ranked by biodiversity impact and urgency. Start with high priority, then medium; the edge — when possible.",
+        rows:[
+          {pri:"high",when:"First",lab:"High",items:[["🛡️","Protect the core"],["🌱","Restore the edges"],["🕊️","Safeguard the Turtle Dove"],["🧪","Low phytosanitary pressure (UV tractors)"]]},
+          {pri:"medium",when:"Then",lab:"Medium",items:[["🦦","Protect watercourses (otter)"],["🐗","Manage wild boar"],["🌾","Wildlife-friendly mowing"],["📷","Protect the monitoring network"]]},
+          {pri:"low",when:"When possible",lab:"Low",items:[["🚦","Ease pressure on diurnal edges"]]}
+        ]},
+      close:{eyebrow:"Takeaway", h2:"Keep the core, lift the edges, keep watching",
+        items:[
+          ["🛡️","Protect what's already valuable.","The H9/H1/H13/H11/H14 core is the reference; no intensification here."],
+          ["🌱","Improve where it's poorest.","Hedgerows and corridors on H4/H6/H-Château give the biggest gain."],
+          ["🕊️","The flagship is the Turtle Dove.","Simple measures support a globally Vulnerable species and strengthen ESG."],
+          ["🧪","Keep pressure low.","UV tractors, biocontrol and pheromones preserve the rich chorus and the path to 25 ha organic."],
+          ["💧","Irrigate smartly.","Weather-based auto-irrigation advises what/where/when — saving water and cutting runoff to watercourses."],
+          ["📷","Keep monitoring.","A secured network gives a multi-year trend and a basis for certification."]
+        ],
+        source:"Based on: Every1Counts — 'Analysis of data collected over 12 months on the Château Purcari site', final report, 08.07.2026."}
+    }
+  };
+
+  // ---------- rendering ----------
+  var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  // NB: why/works/summaries may contain intended <b> tags → rendered as-is (trusted static content).
+
+  function eyebrow(idx, label, right){
+    return '<p class="eyebrow"><span class="idx">'+idx+'</span> '+label+' <span class="rule"></span>'+(right?(' '+right):'')+'</p>';
+  }
+  function pad(n){ return (n<10?'0':'')+n; }
+
+  function slideCover(D){
+    var meta = D.cover.meta.map(function(m){ return '<span>'+m+'</span>'; }).join('');
+    return '<section class="slide cover" role="group" aria-label="Title">'+
+      '<div><svg class="vine-emblem" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+
+        '<path d="M24 44V22"/><path d="M24 22c0-6 5-9 5-14"/><circle cx="16" cy="16" r="4"/><circle cx="32" cy="14" r="4"/><circle cx="24" cy="8" r="4"/><circle cx="15" cy="27" r="4"/><circle cx="33" cy="26" r="4"/></svg></div>'+
+      '<div class="mid"><h1>'+D.cover.title+' <span class="accent">'+D.cover.accent+'</span></h1>'+
+        '<p class="lede">'+D.cover.lede+'</p>'+
+        '<div class="meta">'+meta+'</div></div>'+
+    '</section>';
+  }
+  function slideWhy(D,idx){
+    var k = D.why.kpis.map(function(x){ return '<div class="kpi"><div class="v">'+x[0]+'</div><div class="l">'+x[1]+'</div><div class="h">'+x[2]+'</div></div>'; }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.why.h2)+'">'+
+      eyebrow(idx, D.why.eyebrow)+'<h2>'+D.why.h2+'</h2>'+
+      '<p class="lead">'+D.why.summary+'</p><div class="kpis">'+k+'</div></section>';
+  }
+  function slideEv(D,idx){
+    var m = D.ev.method.map(function(x){ return '<li>'+x+'</li>'; }).join('');
+    var f = D.ev.find.map(function(x){ return '<li>'+x+'</li>'; }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.ev.h2)+'">'+
+      eyebrow(idx, D.ev.eyebrow)+'<h2>'+D.ev.h2+'</h2>'+
+      '<div class="cols2" style="margin-top:16px">'+
+        '<div class="panel"><h3><span class="dot" style="background:var(--vine)"></span> '+D.ev.mTitle+'</h3><ul class="findlist data">'+m+'</ul></div>'+
+        '<div class="panel"><h3><span class="dot" style="background:var(--low)"></span> '+D.ev.fTitle+'</h3><ul class="findlist data">'+f+'</ul></div>'+
+      '</div></section>';
+  }
+  function slideSys(D,idx){
+    var items = D.sys.items.map(function(it){
+      return '<div class="syscard'+(it.hl?' hl':'')+'"><span class="ico">'+it.icon+'</span><b>'+it.title+'</b>'+
+        (it.badge?'<span class="badge">'+it.badge+'</span>':'')+'<p>'+it.desc+'</p></div>';
+    }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.sys.h2)+'">'+
+      eyebrow(idx, D.sys.eyebrow)+'<h2>'+D.sys.h2+'</h2>'+
+      '<p class="lead">'+D.sys.summary+'</p><div class="sysgrid">'+items+'</div></section>';
+  }
+  function slideZones(D,idx){
+    var leg = D.zones.legend.map(function(z){
+      var hs = z.hs.map(function(h){ return '<span class="hs">'+h+'</span>'; }).join('');
+      return '<div class="zonecard '+z.cls+'"><span class="tag">'+z.tag+'</span><h3>'+z.title+'</h3>'+
+        '<div class="hotspots">'+hs+'</div><p>'+z.desc+'</p></div>';
+    }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.zones.h2)+'">'+
+      eyebrow(idx, D.zones.eyebrow)+'<h2>'+D.zones.h2+'</h2>'+
+      '<p class="lead">'+D.zones.summary+'</p>'+
+      '<div class="zonemap"><div><div class="maptitle">'+D.zones.mapTitle+'</div>'+
+        '<div class="mapwrap">'+buildMap()+'</div><p class="mapnote">'+D.zones.note+'</p></div>'+
+        '<div class="zlegend">'+leg+'</div></div></section>';
+  }
+  function rank(vals){ return Object.keys(vals).sort(function(a,b){return vals[b]-vals[a];}); }
+  function slideActivity(D,idx){
+    var camTop = rank(CAM).slice(0,3), sndTop = rank(SND).slice(0,3);
+    return '<section class="slide" role="group" aria-label="'+esc(D.dat.h2)+'">'+
+      eyebrow(idx, D.dat.eyebrow)+'<h2>'+D.dat.h2+'</h2>'+
+      '<p class="lead">'+D.dat.summary+'</p>'+
+      '<div class="dmaps">'+
+        '<div class="dmap"><div class="maptitle">'+D.dat.camTitle+'</div><div class="mapwrap sm">'+buildSizeMap(CAM,'var(--vine)')+'</div>'+
+          '<p class="mapnote"><b>'+D.dat.topLbl+':</b> '+camTop.join(', ')+'</p></div>'+
+        '<div class="dmap"><div class="maptitle">'+D.dat.sndTitle+'</div><div class="mapwrap sm">'+buildSizeMap(SND,'var(--low)')+'</div>'+
+          '<p class="mapnote"><b>'+D.dat.topLbl+':</b> '+sndTop.join(', ')+'</p></div>'+
+      '</div>'+
+      '<div class="insight">💡 '+D.dat.insight+'</div></section>';
+  }
+  function slideAction(D,idx){
+    var leg = D.act.legend.map(function(l){
+      return '<div class="aleg"><span class="sw" style="background:'+l.c+'"></span><div><b>'+l.t+'</b> <span>'+l.d+'</span></div></div>';
+    }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.act.h2)+'">'+
+      eyebrow(idx, D.act.eyebrow)+'<h2>'+D.act.h2+'</h2>'+
+      '<p class="lead">'+D.act.summary+'</p>'+
+      '<div class="zonemap"><div><div class="maptitle">'+D.act.mapTitle+'</div>'+
+        '<div class="mapwrap">'+buildActionMap()+'</div><p class="mapnote">'+D.act.note+'</p></div>'+
+        '<div class="alegwrap">'+leg+'</div></div></section>';
+  }
+  function slideTech(D,t,idx,i){
+    var Sn = D.seasons;
+    var scls = {spring:'s-spring',summer:'s-summer',autumn:'s-autumn',winter:'s-winter',year:'s-year'};
+    var zones = t.zones.map(function(z){ return '<span class="chip zone">'+z+'</span>'; }).join('');
+    var why = t.why.map(function(w){ return '<li>'+w+'</li>'; }).join('');
+    var works = t.works.map(function(w){
+      return '<li class="work"><span class="season '+scls[w[0]]+'">'+Sn[w[0]]+'</span><span>'+w[1]+'</span></li>';
+    }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(t.title)+'">'+
+      eyebrow(idx, D.practice+' · '+t.cat, (i+1)+'/9')+
+      '<div class="tech-head"><span class="tech-ico">'+t.icon+'</span><div class="grow">'+
+        '<h2>'+t.title+'</h2><div class="tech-meta"><span class="pri '+t.pri+'">'+D.pri[t.pri]+'</span>'+zones+'</div></div></div>'+
+      '<p class="tech-summary">'+t.summary+'</p>'+
+      '<div class="tech-grid">'+
+        '<div class="panel why"><h3><span class="dot"></span> '+D.whyH+'</h3><ul>'+why+'</ul></div>'+
+        '<div class="panel what"><h3><span class="dot"></span> '+D.whatH+'</h3><ul class="works">'+works+'</ul></div>'+
+      '</div>'+
+      '<div class="benefit">✓ <span><b>'+D.benefitH+'.</b> '+t.benefit+'</span></div></section>';
+  }
+  function slideCal(D,idx){
+    var cols = D.cal.cols.map(function(c){
+      var li = c.items.map(function(x){ return '<li>'+x+'</li>'; }).join('');
+      return '<div class="calcol '+c.cls+'"><header><b>'+c.name+'</b><span class="n">'+c.n+'</span></header><ul>'+li+'</ul></div>';
+    }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.cal.h2)+'">'+
+      eyebrow(idx, D.cal.eyebrow)+'<h2>'+D.cal.h2+'</h2>'+
+      '<p class="lead">'+D.cal.summary+'</p><div class="calgrid">'+cols+'</div></section>';
+  }
+  function slideRoad(D,idx){
+    var rows = D.road.rows.map(function(r){
+      var items = r.items.map(function(it){ return '<span class="ritem"><span class="e">'+it[0]+'</span> '+it[1]+'</span>'; }).join('');
+      return '<div class="roadrow"><div class="when"><span class="pri '+r.pri+'">'+r.when+'</span><span class="lab">'+r.lab+'</span></div>'+
+        '<div class="items">'+items+'</div></div>';
+    }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.road.h2)+'">'+
+      eyebrow(idx, D.road.eyebrow)+'<h2>'+D.road.h2+'</h2>'+
+      '<p class="lead">'+D.road.summary+'</p><div class="road">'+rows+'</div></section>';
+  }
+  function slideClose(D,idx){
+    var items = D.close.items.map(function(x){ return '<div class="item">'+x[0]+' <span><b>'+x[1]+'</b> '+x[2]+'</span></div>'; }).join('');
+    return '<section class="slide" role="group" aria-label="'+esc(D.close.h2)+'">'+
+      eyebrow(idx, D.close.eyebrow)+'<h2>'+D.close.h2+'</h2>'+
+      '<div class="close-list">'+items+'</div><p class="source">'+D.close.source+'</p></section>';
+  }
+
+  function buildDeck(D){
+    var html = [];
+    html.push(slideCover(D));
+    var n = 1;
+    html.push(slideWhy(D, pad(n++)));
+    html.push(slideEv(D, pad(n++)));
+    html.push(slideSys(D, pad(n++)));
+    html.push(slideZones(D, pad(n++)));
+    html.push(slideActivity(D, pad(n++)));
+    html.push(slideAction(D, pad(n++)));
+    D.tech.forEach(function(t,i){ html.push(slideTech(D,t,pad(n++),i)); });
+    html.push(slideCal(D, pad(n++)));
+    html.push(slideRoad(D, pad(n++)));
+    html.push(slideClose(D, pad(n++)));
+    return html.join('');
+  }
+
+  // ---------- app state ----------
+  var lang = 'ru', cur = 0;
+  var deck = document.getElementById('deck');
+  var prog = document.getElementById('prog');
+  var counter = document.getElementById('counter');
+  var prevB = document.getElementById('prev');
+  var nextB = document.getElementById('next');
+  var dotsWrap = document.getElementById('dots');
+  var slides = [], dots = [];
+
+  function mount(){
+    var D = DECK[lang];
+    document.documentElement.lang = lang;
+    document.getElementById('brandSub').textContent = D.brandSub;
+    document.getElementById('themeLbl').textContent = D.theme;
+    prevB.textContent = D.back; nextB.textContent = D.next;
+    Array.prototype.forEach.call(document.querySelectorAll('#langsw button'), function(b){
+      b.classList.toggle('on', b.getAttribute('data-lang') === lang);
+    });
+    deck.innerHTML = buildDeck(D);
+    slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+    dotsWrap.innerHTML = '';
+    dots = slides.map(function(_, i){
+      var d = document.createElement('button');
+      d.className = 'dot'; d.setAttribute('role','tab'); d.setAttribute('aria-label','Slide '+(i+1));
+      d.addEventListener('click', function(){ go(i); });
+      dotsWrap.appendChild(d);
+      return d;
+    });
+    if (cur > slides.length - 1) cur = slides.length - 1;
+    render();
+  }
+  function render(){
+    slides.forEach(function(s,i){ var on = i===cur; s.classList.toggle('active',on); s.setAttribute('aria-hidden',on?'false':'true'); if(on) s.scrollTop=0; });
+    dots.forEach(function(d,i){ d.classList.toggle('on', i===cur); });
+    counter.textContent = (cur+1)+' / '+slides.length;
+    prog.style.width = ((cur+1)/slides.length*100)+'%';
+    prevB.disabled = cur===0; nextB.disabled = cur===slides.length-1;
+  }
+  function go(i){ cur = Math.max(0, Math.min(slides.length-1, i)); render(); }
+
+  prevB.addEventListener('click', function(){ go(cur-1); });
+  nextB.addEventListener('click', function(){ go(cur+1); });
+  document.addEventListener('keydown', function(e){
+    if (e.target && /^(INPUT|TEXTAREA|BUTTON)$/.test(e.target.tagName) && (e.key===' '||e.key==='Enter')) return;
+    if (e.key==='ArrowRight'||e.key==='PageDown') go(cur+1);
+    else if (e.key==='ArrowLeft'||e.key==='PageUp') go(cur-1);
+    else if (e.key==='Home') go(0);
+    else if (e.key==='End') go(slides.length-1);
+  });
+  var x0=null;
+  deck.addEventListener('touchstart', function(e){ x0=e.touches[0].clientX; }, {passive:true});
+  deck.addEventListener('touchend', function(e){
+    if (x0===null) return; var dx=e.changedTouches[0].clientX-x0;
+    if (Math.abs(dx)>55) go(cur+(dx<0?1:-1)); x0=null;
+  }, {passive:true});
+
+  Array.prototype.forEach.call(document.querySelectorAll('#langsw button'), function(b){
+    b.addEventListener('click', function(){ lang = b.getAttribute('data-lang'); mount(); });
+  });
+  document.getElementById('themeBtn').addEventListener('click', function(){
+    var root = document.documentElement;
+    var isDark = root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  });
+
+  mount();
+})();
+</script>
+
+</body>
+</html>
