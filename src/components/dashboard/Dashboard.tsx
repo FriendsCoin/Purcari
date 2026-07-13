@@ -7,6 +7,7 @@ import { SiteComparison } from '../analysis/SiteComparison';
 import { DetailedMetrics } from '../analysis/DetailedMetrics';
 import { SpeciesDistribution } from '../analysis/SpeciesDistribution';
 import { HourlyActivityHeatmap } from '../analysis/HourlyActivityHeatmap';
+import { VineyardReview } from '../vineyard';
 import { DNAHelix } from '../three/DNAHelix';
 import { SpeciesNetwork } from '../three/SpeciesNetwork';
 import { BiodiversityGlobe } from '../three/BiodiversityGlobe';
@@ -20,7 +21,7 @@ import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { ProjectCard } from '../projects/ProjectCard';
 import { ProjectModal } from '../projects/ProjectModal';
 import { Button } from '../common/Button';
-import { ArrowLeft, Database, Sparkles, Dna } from 'lucide-react';
+import { ArrowLeft, Database, Sparkles, Dna, Sprout } from 'lucide-react';
 import type { AnalysisData, Project, Hypothesis, Hotspot } from '@/types';
 import type { MonthlyTrend, SiteDiversity, DetailedMetrics as DetailedMetricsType } from '@/services/csvParser';
 
@@ -47,7 +48,7 @@ export function Dashboard({
 }: DashboardProps) {
   const [selectedHypothesis, setSelectedHypothesis] = useState<Hypothesis | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data' | '3d-art'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'hypotheses' | 'projects' | 'real-data' | 'vineyard' | '3d-art'>('overview');
 
   // Interactive media state
   const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
@@ -119,6 +120,17 @@ export function Dashboard({
               }`}
             >
               Art Projects ({projects.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('vineyard')}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                activeTab === 'vineyard'
+                  ? 'bg-white text-purple-600 shadow-md'
+                  : 'bg-purple-500 bg-opacity-30 text-white hover:bg-opacity-50'
+              }`}
+            >
+              <Sprout size={18} />
+              Vineyard Advice
             </button>
             {isRealData && (
               <button
@@ -253,6 +265,22 @@ export function Dashboard({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Vineyard Advice Tab */}
+        {activeTab === 'vineyard' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Vineyard Review & Advice
+              </h2>
+              <p className="text-gray-600">
+                A review of the final 12-month biodiversity monitoring, translated into concrete
+                agronomic recommendations and seasonal field works for the vineyard
+              </p>
+            </div>
+            <VineyardReview />
           </div>
         )}
 

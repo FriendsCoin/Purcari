@@ -5,6 +5,23 @@ All notable changes to the Purcari Biodiversity Dashboard will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Vineyard Advice track
+- New "Vineyard Advice" dashboard tab reviewing the final 12-month biodiversity
+  monitoring report and translating it into agronomic recommendations
+- Review header with a data-grounded verdict, six KPIs and the key findings from
+  the final report
+- Nine traceable recommendations (habitat, phytosanitary, water, fauna, soil &
+  cover, monitoring), each linking its field works to the underlying evidence
+- Per-recommendation detail modal (target zones, what the data shows, seasonal
+  field works with effort estimates, expected benefit)
+- Seasonal calendar aggregating all field works by season
+- `VineyardAdvice` / `VineyardReviewSummary` type definitions and a curated
+  `vineyardAdvice` dataset
+
 ## [2.0.0] - 2025-11-09
 
 ### Added

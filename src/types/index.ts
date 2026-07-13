@@ -111,6 +111,49 @@ export interface Project {
   };
 }
 
+export type AdvicePriority = 'high' | 'medium' | 'low';
+
+export type AdviceCategory =
+  | 'habitat'
+  | 'phytosanitary'
+  | 'water'
+  | 'fauna'
+  | 'soil-cover'
+  | 'monitoring';
+
+export type WorkSeason = 'spring' | 'summer' | 'autumn' | 'winter' | 'year-round';
+
+export interface VineyardWork {
+  action: string;
+  season: WorkSeason;
+  effort: 'low' | 'medium' | 'high';
+}
+
+export interface VineyardAdvice {
+  id: string;
+  title: string;
+  icon: string;
+  category: AdviceCategory;
+  priority: AdvicePriority;
+  color: string;
+  summary: string;
+  /** What the monitoring data shows that motivates this advice. */
+  evidence: string[];
+  /** The zones / hotspots this advice applies to. */
+  zones: string[];
+  /** Concrete field works, each with a season and effort estimate. */
+  works: VineyardWork[];
+  /** Expected ecological / agronomic benefit. */
+  benefit: string;
+}
+
+export interface VineyardReviewSummary {
+  headline: string;
+  verdict: string;
+  highlights: string[];
+  kpis: Array<{ label: string; value: string; hint: string }>;
+}
+
 export interface AnalysisData {
   summary: {
     total: number;
