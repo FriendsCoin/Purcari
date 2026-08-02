@@ -1,17 +1,25 @@
-import { useState } from 'react';
-import { Upload, Sparkles, Database } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Upload, Sparkles, Database, Orbit } from 'lucide-react';
 import { Card } from './components/common/Card';
 import { Button } from './components/common/Button';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { ParticleEcosystem } from './components/three/ParticleEcosystem';
+import { Installation } from './installation/Installation';
 import { generateMockData } from './services/mockData';
 import { loadRealGeoJSONData, processRealGeoJSON, extractHotspotsFromGeoJSON } from './services/realDataLoader';
 import { loadAllCSVData } from './services/csvParser';
 import type { ViewState, AnalysisData, Project, Hotspot } from './types';
 import type { MonthlyTrend, SiteDiversity, DetailedMetrics } from './services/csvParser';
 
+/**
+ * The installation is the front door; the analytical dashboard lives behind
+ * #dashboard for anyone who came for the tables rather than the piece.
+ */
 function App() {
+  const [mode, setMode] = useState<'installation' | 'classic'>(() =>
+    globalThis.location?.hash === '#dashboard' ? 'classic' : 'installation'
+  );
   const [view, setView] = useState<ViewState>('upload');
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -65,6 +73,26 @@ function App() {
     setView('upload');
   };
 
+  useEffect(() => {
+    const sync = () => setMode(globalThis.location.hash === '#dashboard' ? 'classic' : 'installation');
+    globalThis.addEventListener('hashchange', sync);
+    return () => globalThis.removeEventListener('hashchange', sync);
+  }, []);
+
+  const openDashboard = () => {
+    globalThis.location.hash = '#dashboard';
+    setMode('classic');
+  };
+
+  const openInstallation = () => {
+    globalThis.location.hash = '';
+    setMode('installation');
+  };
+
+  if (mode === 'installation') {
+    return <Installation onExit={openDashboard} />;
+  }
+
   if (view === 'upload') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8 relative overflow-hidden">
@@ -79,6 +107,14 @@ function App() {
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
               Analyze biodiversity monitoring data and get art project recommendations
             </p>
+            <button
+              type="button"
+              onClick={openInstallation}
+              className="mt-8 inline-flex items-center gap-3 border border-white/20 px-6 py-3 text-white/80 tracking-[0.2em] text-xs uppercase transition hover:border-amber-400 hover:text-amber-300"
+            >
+              <Orbit size={16} />
+              Живой архив — инсталляция
+            </button>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">

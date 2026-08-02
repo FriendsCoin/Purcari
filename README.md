@@ -7,6 +7,65 @@
 
 An interactive data visualization dashboard for analyzing biodiversity monitoring data at the Purcari Winery in Moldova. This application processes wildlife observation data from camera traps and BirdNET audio recordings, providing insights into species diversity, temporal patterns, and ecological interactions.
 
+## Living Archive — the installation
+
+The front door of the app is **Живой архив**, a WebGL installation piece built on
+the same monitoring data. It renders one particle per real detection — 3 015 of
+them — as a single cloud of light that reorganises itself into six readings of
+the 2025 season. It is meant to run unattended on a wall or projector as much as
+in a browser tab, so it plays itself when nobody is driving.
+
+Open it at `/`; the analytical dashboard lives at `/#dashboard`.
+
+### The six acts
+
+| # | Act | What the cloud becomes |
+|---|-----|------------------------|
+| 00 | Пролог | A dormant shell of grains behind the title |
+| I | Земля | Plumes of light at the ten stations' true coordinates, over relief interpolated from their altitudes |
+| II | Хронос | A 24-hour dial — acoustic inside, camera traps outside |
+| III | Голоса | 136 species as a spiral galaxy, common at the core, single records at the rim, linked where they share a station |
+| IV | Станции | Helical columns per station; the five silenced ones burn down to ember and ash |
+| V | Индекс | Four land uses as blooms, sized and shaped by their Shannon and Simpson indices |
+
+### What the data says
+
+- Two networks, two rhythms: birds peak at **05:00**, mammals at **02:00** — the
+  same landscape running two shifts.
+- The dial shows **24 discrete tufts** because the acoustic recorder listens for
+  ten minutes at the top of each hour. Sampling effort is not equal between the
+  networks, and the piece says so rather than smoothing it away.
+- Five of ten stations fell silent in June and August 2025. The gap is rendered,
+  not hidden.
+
+### Controls
+
+| Input | Action |
+|-------|--------|
+| `←` `→`, scroll, swipe | Previous / next act |
+| `0`–`5` | Jump to an act |
+| Space | Toggle autoplay |
+| `P` | Play the season back day by day |
+| Drag the 24 h track | Narrow the cloud to a slice of the day |
+| Click the track / `Esc` | Reset to the full day |
+| Hover a panel row | Focus those grains in the cloud |
+
+Left idle for 45 seconds the piece resumes autoplay on its own.
+
+### How it is built
+
+No new dependencies: `@react-three/fiber` drives raw `three`, with a custom GLSL
+point shader doing the morphing, drift, pointer repulsion and time filtering on
+the GPU. Post-processing is three's own `EffectComposer` — bloom, then a film
+pass for grain, vignette and chromatic aberration. Labels are DOM elements
+projected each frame, so the typography is real text rather than textures.
+
+`npm run data` regenerates `public/installation.json` from the raw exports; it
+runs automatically before `dev` and `build`.
+
+Source lives in `src/installation/` — `layouts.ts` holds the act geometry,
+`acts.ts` the score, `gl/` the renderer, `ui/` the chrome.
+
 ## Features
 
 - **Interactive Map Visualization** - Leaflet-based mapping with hotspot markers and heatmaps
