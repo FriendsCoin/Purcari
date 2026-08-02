@@ -143,6 +143,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Stacked on the kiosk, wrapping inline on a phone — see the phone block. */
+.inst-statline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+}
+
 .inst-sci {
   font-style: italic;
   font-family: var(--display);
@@ -448,6 +456,244 @@
   line-height: 1.12;
   margin: 0 0 0.8rem;
   transition: color 900ms ease;
+}
+
+/* ---------------------------------------------------------------- phone */
+
+/*
+ * A phone is not a small kiosk. The kiosk layout pins four independent blocks
+ * to four corners, which is right on a 55" panel and collides on every axis at
+ * 390px. On a handset the piece becomes a vertical stack instead: a title band
+ * at the top, the artwork taking the whole middle, and controls in the thumb
+ * zone at the bottom. Detail panels become bottom sheets.
+ *
+ * Everything below is layout only — the palette, type scale and motion are the
+ * same system the kiosk uses.
+ */
+@media (max-width: 820px) {
+  :root {
+    --touch: 56px;
+  }
+
+  .inst-corner {
+    padding: 1rem 1.1rem;
+  }
+
+  /* Title band, with a scrim so type stays legible over a bright scene. */
+  .inst-corner--tl {
+    top: 0;
+    left: 0;
+    right: 0;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    background: linear-gradient(
+      180deg,
+      rgba(5, 4, 10, 0.92) 0%,
+      rgba(5, 4, 10, 0.72) 55%,
+      transparent 100%
+    );
+    padding-bottom: 2.2rem;
+  }
+
+  .inst-title {
+    font-size: clamp(2.1rem, 10vw, 3.1rem);
+    white-space: normal !important;
+  }
+
+  /* The lede is wall text — too long to hold a phone screen hostage. */
+  .inst-lede {
+    font-size: 0.98rem;
+    line-height: 1.4;
+    max-width: 100%;
+    margin-top: 0.7rem;
+  }
+
+  /*
+   * Totals collapse from a four-element corner block into one baseline row —
+   * "213 SPECIES · 37,948 DETECTIONS" — so it costs a single line instead of
+   * fighting the chapter controls for the bottom of the screen.
+   */
+  .inst-corner--tr {
+    top: auto;
+    bottom: calc(var(--touch) + 0.7rem + env(safe-area-inset-bottom));
+    right: 0;
+    left: 0;
+    text-align: left;
+    padding: 0 1.1rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .inst-corner--tr .inst-figure {
+    font-size: 1.35rem;
+  }
+
+  .inst-corner--tr .inst-label,
+  .inst-corner--tr .inst-rule {
+    display: none;
+  }
+
+  .inst-corner--tr .inst-mono {
+    line-height: 1.4 !important;
+    font-size: 0.58rem;
+  }
+
+  /* The stacked totals become one row, separated properly rather than run together. */
+  .inst-statline {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    overflow: hidden;
+  }
+
+  .inst-statline span + span::before {
+    content: '· ';
+    color: var(--gold);
+  }
+
+  /* Only the first two fit at 390px; Shannon stays on the kiosk. */
+  .inst-statline span:nth-child(3) {
+    display: none;
+  }
+
+  /* Chapter controls stack above the totals row. */
+  .inst-corner--bl {
+    bottom: calc(var(--touch) + 3.1rem + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    padding: 0 1.1rem;
+  }
+
+  /* Wall credits and the touch prompt are gallery furniture; a phone has neither. */
+  .inst-corner--br,
+  .inst-prompt {
+    display: none;
+  }
+
+  .inst-nav {
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    transform: none;
+    justify-content: space-around;
+    gap: 0;
+    background: linear-gradient(0deg, rgba(5, 4, 10, 0.94), transparent);
+    padding-top: 0.6rem;
+  }
+
+  .inst-nav-item {
+    min-height: var(--touch);
+    padding: 0.9rem 0.5rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+  }
+
+  /* Detail panels become bottom sheets, clear of the nav. */
+  .inst-panel--right {
+    top: auto;
+    bottom: calc(var(--touch) + 0.6rem + env(safe-area-inset-bottom));
+    left: 0.6rem;
+    right: 0.6rem;
+    margin: 0;
+    width: auto;
+    max-height: 52vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    animation: inst-sheet 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes inst-sheet {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /*
+   * Outdoor: the headline is the piece on a phone, so it gets the room. The
+   * count and the clock share the top row, so the count must stop short of the
+   * clock rather than running the full width the way the indoor title does.
+   */
+  .inst-outdoor .inst-corner--tl {
+    background: none;
+    padding-bottom: 1rem;
+    right: auto;
+    max-width: 60%;
+  }
+
+  .inst-hint {
+    bottom: auto;
+    top: 42%;
+    left: 1.1rem;
+    right: 1.1rem;
+    transform: none;
+    max-width: 100%;
+  }
+
+  .inst-hint-title {
+    font-size: clamp(1.6rem, 8vw, 2.4rem);
+  }
+
+  .inst-outdoor .inst-body {
+    font-size: 0.95rem;
+    max-width: 100%;
+  }
+
+  .inst-outdoor .inst-figure {
+    font-size: 3.2rem;
+  }
+
+  /* Tightened so "SPECIES PRESENT · AWAKE NOW" holds one line beside the clock. */
+  .inst-outdoor .inst-label {
+    font-size: 0.56rem;
+    letter-spacing: 0.13em;
+  }
+
+  .inst-outdoor .inst-mono {
+    font-size: 0.72rem;
+  }
+
+  /* The returning-species ticker keeps to the bottom-left, above the fold. */
+  .inst-outdoor .inst-corner--bl {
+    bottom: max(0.8rem, env(safe-area-inset-bottom));
+  }
+
+  .inst-outdoor .inst-corner--tr {
+    top: max(1rem, env(safe-area-inset-top));
+    bottom: auto;
+    left: auto;
+    right: 0;
+    text-align: right;
+    display: block;
+  }
+
+  .inst-gate button {
+    padding: 1.1rem 2.2rem;
+  }
+
+  .inst-diag {
+    font-size: 0.58rem;
+    max-width: 100%;
+  }
+}
+
+/* Landscape phone: short and wide, so the title band must not eat the scene. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .inst-title {
+    font-size: 1.7rem;
+  }
+  .inst-lede,
+  .inst-corner--br,
+  .inst-prompt {
+    display: none;
+  }
+  .inst-corner {
+    padding: 0.7rem 1rem;
+  }
+  .inst-hint {
+    top: auto;
+    bottom: 4.2rem;
+  }
 }
 
 /* ------------------------------------------------------------ diagnostics */

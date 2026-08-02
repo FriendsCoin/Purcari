@@ -31,6 +31,7 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         indoor: path.resolve(__dirname, 'indoor.html'),
         outdoor: path.resolve(__dirname, 'outdoor.html'),
+        pocket: path.resolve(__dirname, 'pocket.html'),
       },
       output: {
         manualChunks: {

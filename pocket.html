@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="description" content="Terroir vivant — a year of wildlife at Château Purcari" />
+    <meta name="theme-color" content="#05040A" />
+    <!-- Kiosk: keep the panel awake and hide iOS/Android browser chrome. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Terroir vivant · Château Purcari</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #05040a;
+        overscroll-behavior: none;
+      }
+      #root {
+        height: 100%;
+      }
+      /* Shown until React mounts — a black screen on a wall reads as a fault. */
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #c9a227;
+        font-family: 'Montserrat', system-ui, sans-serif;
+        font-size: 0.66rem;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="boot">Château Purcari</div></div>
+    <script type="module" src="/src/installation/pocket/main.tsx"></script>
+  </body>
+</html>

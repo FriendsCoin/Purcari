@@ -38,6 +38,8 @@ interface Chapter {
   dwell: number;
   camera: [number, number, number];
   lookAt: [number, number, number];
+  /** Width ÷ height of the subject, so narrow viewports pull back only when needed. */
+  subjectAspect: number;
 }
 
 const CHAPTERS: Chapter[] = [
@@ -51,6 +53,7 @@ const CHAPTERS: Chapter[] = [
     // frames it nearly plan-view with north kept up.
     camera: [0, 15, 13],
     lookAt: [0, 0.4, 0],
+    subjectAspect: 0.5,
   },
   {
     id: 'year',
@@ -60,6 +63,7 @@ const CHAPTERS: Chapter[] = [
     dwell: 34,
     camera: [0, 11.5, 9],
     lookAt: [0, 0, 0],
+    subjectAspect: 1.0,
   },
   {
     id: 'choir',
@@ -69,6 +73,7 @@ const CHAPTERS: Chapter[] = [
     dwell: 40,
     camera: [0, 2.5, 17],
     lookAt: [0, 0, 0],
+    subjectAspect: 1.7,
   },
 ];
 
@@ -249,7 +254,12 @@ export default function IndoorApp() {
           bloomRadius={0.75}
           bloomThreshold={0.12}
         >
-          <CameraRig position={chapter.camera} lookAt={chapter.lookAt} speed={0.5} />
+          <CameraRig
+            position={chapter.camera}
+            lookAt={chapter.lookAt}
+            subjectAspect={chapter.subjectAspect}
+            speed={0.5}
+          />
 
           {chapter.id === 'estate' && (
             <Constellation
@@ -539,12 +549,17 @@ export default function IndoorApp() {
             <p className="inst-figure">{data.meta.totalSpecies}</p>
             <p className="inst-mono">SPECIES</p>
             <div className="inst-rule" />
-            <p className="inst-mono" style={{ lineHeight: 2 }}>
-              {formatNumber(data.meta.totalDetections)} DETECTIONS
-              <br />
-              {data.meta.stations} STATIONS · {data.meta.surveyDays} DAYS
-              <br />
-              SHANNON H′ {data.meta.shannon.toFixed(2)}
+            {/*
+              One item per line on the kiosk, one wrapping row on a phone —
+              driven by flex direction rather than <br>, so collapsing the block
+              never runs the values together.
+            */}
+            <p className="inst-mono inst-statline">
+              <span>{formatNumber(data.meta.totalDetections)} DETECTIONS</span>
+              <span>
+                {data.meta.stations} STATIONS · {data.meta.surveyDays} DAYS
+              </span>
+              <span>SHANNON H′ {data.meta.shannon.toFixed(2)}</span>
             </p>
           </div>
         )}

@@ -53,3 +53,7 @@ lerna-debug.log*
 *.tmp
 *.temp
 .cache
+
+# Single-file preview builds
+dist-single/
+.single-build/

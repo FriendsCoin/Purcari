@@ -126,6 +126,53 @@ Keyboard, both pieces: `F` fullscreen · `D` toggle diagnostics (outdoor) ·
 
 ---
 
+## 2a. Viewing it on a phone
+
+Both pieces are laid out for a handset as well as a kiosk. A phone is not a
+small kiosk, so the four corner blocks of the wall layout collapse into a
+vertical stack: title band at the top, artwork through the middle, controls in
+the thumb zone, detail panels as bottom sheets. The camera also pulls back only
+when the *subject* is wider than the viewport can cover, so the tall estate map
+fills a portrait screen instead of retreating from it.
+
+**Presence works properly on a phone** — a handset has exactly the camera and
+microphone the piece wants. Hold it, stand still, and the fauna returns.
+
+Three ways to get it onto a device, easiest first.
+
+**1. The single-file build.** Produces one self-contained `.html` with the code,
+styles and survey data inlined — no server, no network:
+
+```bash
+npx vite build
+node scripts/build-single-file.mjs pocket dist-single/terroir-vivant.html
+```
+
+`pocket` bundles both pieces behind a chooser; `indoor` and `outdoor` build each
+one alone. Open the file directly, mail it to yourself, or drop it in any static
+host. Roughly 1.2 MB.
+
+Note that browsers only grant camera and microphone access over **HTTPS or
+`localhost`**. Opened from `file://` the indoor piece is fully functional and
+the outdoor piece falls back to its simulation, which is why the outdoor entry
+also accepts `?simulate=1`.
+
+**2. Over the local network**, with the phone on the same Wi-Fi:
+
+```bash
+npx vite preview --host
+```
+
+Vite prints a `http://192.168.x.x:4173/` address; open `/pocket.html` there.
+This is plain HTTP, so sensors still will not be granted — use `--host` with a
+tunnel, or a certificate, if you need to demo the live sensor behaviour.
+
+**3. Any static host.** `npx vite build` emits `dist/` with all four entries
+(`index`, `indoor`, `outdoor`, `pocket`). Serve it over HTTPS and the sensors
+work as they do on the installed kiosk.
+
+---
+
 ## 3. Hardware
 
 ### Indoor touchscreen

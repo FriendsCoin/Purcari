@@ -152,7 +152,17 @@ export default function OutdoorApp() {
           grain={0.035}
           vignette={1.25}
         >
-          <CameraRig position={[0, 4.2, 13]} lookAt={[0, 1.6, 0]} speed={0.4} />
+          {/*
+            Low subject aspect on purpose: the field surrounds the viewer, so on
+            a narrow screen it should stay close and dense and let the sides
+            crop, rather than retreating until it reads as a distant band.
+          */}
+          <CameraRig
+            position={[0, 4.2, 13]}
+            lookAt={[0, 1.6, 0]}
+            subjectAspect={0.55}
+            speed={0.4}
+          />
           <PresenceField data={data} sensors={bus.state} onPresenceChange={handlePresence} />
         </Stage>
       )}
@@ -174,10 +184,13 @@ export default function OutdoorApp() {
 
         <div className="inst-corner inst-corner--tr inst-fade">
           <p className="inst-label">Estate time</p>
-          <p className="inst-mono" style={{ fontSize: '1.5rem', color: PALETTE.candle }}>
+          <p
+            className="inst-mono"
+            style={{ fontSize: '1.5rem', color: PALETTE.candle, margin: 0 }}
+          >
             {formatClock(bus.readout.clockHour)}
           </p>
-          <p className="inst-mono" style={{ marginTop: '0.6rem' }}>
+          <p className="inst-mono" style={{ margin: '0.35rem 0 0' }}>
             {bus.simulated ? 'demonstration cycle' : 'live'}
           </p>
         </div>

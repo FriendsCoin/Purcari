@@ -210,18 +210,46 @@ export function CameraRig({
   position,
   lookAt = [0, 0, 0],
   speed = 0.55,
+  /**
+   * Width ÷ height of the thing that must stay in frame — the subject, not the
+   * screen. A perspective camera's fov is vertical, so a portrait viewport
+   * shows less horizontally; the camera only needs to pull back when the
+   * subject is wider than the viewport can cover.
+   *
+   * Comparing against the viewport alone was wrong in the obvious case: the
+   * estate is a tall NNE–SSW lozenge that portrait suits perfectly, and it was
+   * being pushed to 2.4x distance for no reason. With the subject's own aspect
+   * the estate (~0.5) needs no pull on a phone, while the guild rosette (~1.7)
+   * still gets the room it needs.
+   */
+  subjectAspect = 1,
 }: {
   position: [number, number, number];
   lookAt?: [number, number, number];
   speed?: number;
+  subjectAspect?: number;
 }) {
+  const { size } = useThree();
   const target = useRef(new THREE.Vector3(...lookAt));
   const desired = useRef(new THREE.Vector3(...position));
+  const base = useRef(new THREE.Vector3(...position));
 
   useEffect(() => {
-    desired.current.set(...position);
+    base.current.set(...position);
     target.current.set(...lookAt);
   }, [position, lookAt]);
+
+  useEffect(() => {
+    const viewport = size.width / Math.max(1, size.height);
+    const pull = Math.max(1, subjectAspect / Math.max(0.3, viewport));
+    // Scale the offset from the look-at point, not the raw position, so the
+    // camera pulls straight back along its own axis and the angle is preserved.
+    desired.current
+      .copy(base.current)
+      .sub(target.current)
+      .multiplyScalar(Math.min(pull, 2.2))
+      .add(target.current);
+  }, [size.width, size.height, subjectAspect, position, lookAt]);
 
   useFrame((state, delta) => {
     const k = Math.min(1, delta * speed);

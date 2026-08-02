@@ -2,12 +2,24 @@ import type { InstallationData, Site, Species } from './types';
 
 let cache: Promise<InstallationData> | null = null;
 
+declare global {
+  interface Window {
+    /** Present only in the single-file preview build, which inlines the bundle. */
+    __PURCARI_DATA__?: InstallationData;
+  }
+}
+
 export function loadInstallationData(): Promise<InstallationData> {
   if (!cache) {
-    cache = fetch(`${import.meta.env.BASE_URL}data/installation.json`).then((res) => {
-      if (!res.ok) throw new Error(`installation.json ${res.status}`);
-      return res.json() as Promise<InstallationData>;
-    });
+    // The single-file build inlines the survey because its host blocks every
+    // external request; the served kiosk build fetches it as a normal asset.
+    const inlined = typeof window !== 'undefined' ? window.__PURCARI_DATA__ : undefined;
+    cache = inlined
+      ? Promise.resolve(inlined)
+      : fetch(`${import.meta.env.BASE_URL}data/installation.json`).then((res) => {
+          if (!res.ok) throw new Error(`installation.json ${res.status}`);
+          return res.json() as Promise<InstallationData>;
+        });
   }
   return cache;
 }

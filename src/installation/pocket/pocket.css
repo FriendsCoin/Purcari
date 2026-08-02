@@ -1,0 +1,197 @@
+/*
+ * The pocket edition's chooser. Uses the installation's own tokens — this is
+ * the same piece on a smaller surface, not a different design.
+ *
+ * Unlike the two installations, this screen scrolls: it is a page you read
+ * before choosing, not a wall you stand in front of.
+ */
+
+.pocket {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(36, 16, 38, 0.85), transparent 70%),
+    var(--void);
+  color: var(--bone);
+  font-family: var(--body);
+  padding: max(2.2rem, env(safe-area-inset-top)) 1.3rem
+    calc(2.5rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 1.9rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pocket-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.pocket .inst-title {
+  font-size: clamp(2.8rem, 15vw, 5rem);
+  margin: 0;
+}
+
+.pocket .inst-lede {
+  max-width: 32ch;
+  font-size: 1.02rem;
+}
+
+/* --------------------------------------------------------------- the facts */
+
+.pocket-facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.7rem;
+  margin: 0;
+  padding: 1rem 0;
+  border-top: 1px solid rgba(201, 162, 39, 0.2);
+  border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+}
+
+.pocket-facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.pocket-facts dt {
+  font-size: 0.54rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.pocket-facts dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.15rem, 5vw, 1.7rem);
+  color: var(--candle);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------- the choices */
+
+.pocket-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pocket-card {
+  appearance: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.4rem 1.3rem 1.5rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  background: linear-gradient(158deg, rgba(21, 11, 24, 0.96), rgba(11, 8, 18, 0.92));
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  transition: border-color 400ms ease, transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pocket-card:hover,
+.pocket-card:focus-visible {
+  border-color: var(--gold);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.pocket-card:active {
+  transform: translateY(0);
+}
+
+.pocket-card-eyebrow {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--foil);
+}
+
+.pocket-card-title {
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 300;
+  line-height: 1.05;
+}
+
+.pocket-card-body {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--parchment);
+  font-weight: 300;
+}
+
+.pocket-card-note {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--ash);
+  margin-top: 0.2rem;
+}
+
+/* ---------------------------------------------------------------- the foot */
+
+.pocket-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(201, 162, 39, 0.14);
+}
+
+.pocket-foot .inst-mono {
+  font-size: 0.63rem;
+  line-height: 1.6;
+  max-width: 46ch;
+}
+
+/* -------------------------------------------------------------- back button */
+
+.pocket-back {
+  position: fixed;
+  top: max(0.6rem, env(safe-area-inset-top));
+  left: 0.6rem;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  appearance: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--foil);
+  background: rgba(5, 4, 10, 0.62);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.pocket-back:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* The outdoor piece puts its count top-left, so the back button steps aside. */
+.inst-outdoor ~ .pocket-back {
+  top: auto;
+  bottom: max(0.8rem, env(safe-area-inset-bottom));
+  left: auto;
+  right: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pocket-card {
+    transition: none;
+  }
+}
