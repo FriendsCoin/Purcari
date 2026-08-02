@@ -190,13 +190,30 @@ overclaim.
   exactly — H14 most nocturnal, H4 and HC least — but runs lower in absolute
   terms, because the report layers a nominal 07:00–19:00 window on top of
   twilight. Figures shown on screen are ours, computed as described.
-- **The sounds are synthesised, not recordings.** The survey ships detection
-  metadata only; no audio was exported with it. Each voice is generated from
-  that species' own numbers — guild sets timbre, rarity sets register, peak hour
-  sets phrasing, night ratio sets reverb. This is structurally truthful and must
-  be labelled as sonification, not as field recording. `SpeciesVoice.play` in
-  `core/audio.ts` is the single seam to swap for real audio if BirdNET segments
-  are supplied later.
+- **The sounds are synthesised, not recordings, and the wall label must say so.**
+  The survey ships detection metadata only; no audio was exported with it. Each
+  voice is generated from that species' own numbers — guild sets the vocal
+  apparatus and register, rarity raises the pitch within that register, peak
+  hour sets the phrasing, night ratio sets how much room the voice sits in, and
+  the scientific name seeds a hash so an animal always sounds like itself.
+
+  This is a choice, not a shortfall. An AI-generated imitation of a real tawny
+  owl, played beside *"Strix aluco, 716 detections"*, would be read as a field
+  recording — a fabrication in a scientific frame. A voice audibly built out of
+  the data is honest, and says the same thing the rest of the piece says.
+
+  Suggested wording: *"No recordings were made. Each voice is synthesised from
+  that species' own measurements."*
+
+  `SoundField.play` in `core/audio.ts` is the single seam to swap for buffer
+  playback if real BirdNET segments arrive; scheduling, polyphony,
+  spatialisation and the chorus all stay as they are.
+
+  **Note:** `data.geojson` in this repository references **17,222 `.wav` files**
+  (`SM218/….wav`, labelled by species) and camera-trap stills from `ct45`,
+  `ct47`, `ct48`. The files themselves are not in the repository. If that media
+  export can be obtained, it replaces the synthesis with real audio of real
+  animals from this estate — by far the largest available upgrade to the piece.
 - **The terrain is an evocation, not a DEM.** No elevation model ships with the
   survey. The ground in "The Estate" is layered noise biased along the Dniester
   valley axis, washed with the estate's three landscape units (Podiș, Coline,
@@ -257,3 +274,26 @@ Most adjustments are constants at the top of a single file.
 | Longer attract dwell | `dwell` per chapter in `IndoorApp.tsx` |
 | Idle before attract resumes | `IDLE_RESUME_MS` in `IndoorApp.tsx` |
 | Mute | `soundField.setVolume(0)`, or simply do not connect a speaker |
+| Chorus too busy / too sparse | polyphony cap in `core/audio.ts` (`maxPolyphony`), and the density argument passed to `Chorus.update` in each app |
+| A species sounds wrong | its register and timbre come from its guild — see `GUILD_REGISTER` and `GUILD_TIMBRE` in `core/audio.ts` |
+
+### Auditioning the voices
+
+`/audio-check.html` on the **dev server only** (`npm run dev`) renders every
+guild's voice offline and reports peak, RMS, length and spectral centroid, so
+the synthesis can be checked without listening to 213 phrases. Click any row to
+hear it. It is not one of the Vite build entries, so it never ships to a kiosk.
+
+What good looks like, and what the current build measures:
+
+- no silent voices, no clipped voices
+- spectral centroid spread **4,825 Hz** — doves and owls near 500–900 Hz,
+  warblers and finches above 4,700 Hz, which is the right ecological ordering
+- per-voice peaks within about 2.6× of each other, so no guild disappears under
+  a chorus
+
+Re-run it after any change to the synthesis. It has already caught two real
+faults: every voice rendering silent (the rate-limiter rejected the first voice
+on a fresh context, where `currentTime` is 0), and noise-based voices — rook,
+pheasant, woodpecker, wood mouse — coming out five times quieter than the tonal
+ones because a narrow bandpass discards most of the noise energy.

@@ -8,7 +8,7 @@ import {
   TYPOLOGY_LABELS,
   PALETTE,
 } from '../core/palette';
-import { soundField } from '../core/audio';
+import { soundField, Chorus } from '../core/audio';
 import { Stage, CameraRig } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
@@ -176,6 +176,26 @@ export default function IndoorApp() {
     }
     void document.documentElement.requestFullscreen?.().catch(() => undefined);
   }, [data]);
+
+  /**
+   * A sparse ambient chorus of whichever species are genuinely active at the
+   * château's real local hour — so the room sounds like dawn at dawn and like
+   * an owl-only night after closing. Deliberately thin: this plays in a tasting
+   * room, not a cinema.
+   */
+  const chorus = useRef(new Chorus(soundField));
+  useEffect(() => {
+    if (!started || !data) return;
+    const tick = window.setInterval(() => {
+      if (!soundField.ready) return;
+      const now = new Date();
+      const hour = now.getHours() + now.getMinutes() / 60;
+      // The Choir chapter earns a fuller soundscape; the others stay in the background.
+      const density = CHAPTERS[chapterIndex].id === 'choir' ? 0.45 : 0.22;
+      chorus.current.update(data.species, hour, density);
+    }, 400);
+    return () => window.clearInterval(tick);
+  }, [started, data, chapterIndex]);
 
   const site = useMemo(
     () => (data && selectedSite ? data.sites.find((s) => s.id === selectedSite) ?? null : null),

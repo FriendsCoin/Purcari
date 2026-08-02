@@ -5,7 +5,7 @@ import type { InstallationData, SensorState, Species } from '../core/types';
 import { activityAtHour, withWariness } from '../core/data';
 import { GUILD_COLORS, PALETTE, toRGB } from '../core/palette';
 import { SIMPLEX_3D, DITHER, TONEMAP } from './chunks';
-import { soundField } from '../core/audio';
+import { soundField, Chorus } from '../core/audio';
 
 /**
  * "Presence" — the outdoor chapter, and the one interaction the whole piece is
@@ -249,6 +249,10 @@ export function PresenceField({ data, sensors, onPresenceChange, audio = true }:
     away: new THREE.Vector3(),
   });
 
+  /** Keeps the soundscape running between arrivals, not only on each arrival. */
+  const chorus = useRef(new Chorus(soundField));
+  const presentSpecies = useRef<Species[]>([]);
+
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const t = state.clock.elapsedTime;
@@ -267,6 +271,8 @@ export function PresenceField({ data, sensors, onPresenceChange, audio = true }:
     let presentCount = 0;
     let awakeCount = 0;
     let newest: Species | null = null;
+    const roll = presentSpecies.current;
+    roll.length = 0;
 
     for (let i = 0; i < roster.length; i++) {
       const { species, wariness } = roster[i];
@@ -289,6 +295,7 @@ export function PresenceField({ data, sensors, onPresenceChange, audio = true }:
 
       if (next > 0.25) {
         presentCount++;
+        roll.push(species);
         if (!speciesAnnounced.current[i]) {
           speciesAnnounced.current[i] = 1;
           newest = species;
@@ -359,6 +366,17 @@ export function PresenceField({ data, sensors, onPresenceChange, audio = true }:
 
     positionAttr.needsUpdate = true;
     presenceAttr.needsUpdate = true;
+
+    /* ---- keep the chorus alive ---- */
+    if (audio) {
+      // Density follows how much of the awake community is actually here, so
+      // the soundscape thins out under disturbance and fills as they return.
+      const fraction = awakeCount > 0 ? presentCount / awakeCount : 0;
+      chorus.current.update(roll, s.clockHour, fraction);
+      // The bed swells with calm and the wind rises with disturbance.
+      soundField.setDrone(0.35 + calm * 0.65, 3);
+      soundField.setWind(0.2 + s.disturbance * 0.8, 2);
+    }
 
     /* ---- report to the UI, cheaply ---- */
     if (t - lastReport.current > 0.25) {
