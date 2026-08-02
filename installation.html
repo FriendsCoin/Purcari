@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Kiosk viewport: no user zoom, and viewport-fit=cover so the canvas reaches
+      the bezel on panels with rounded corners or a notch.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#07050a" />
+    <meta
+      name="description"
+      content="Le Chœur — installation interactive sur la biodiversité du Château Purcari"
+    />
+    <meta name="robots" content="noindex" />
+
+    <!-- Wakes as a fullscreen app when the panel adds it to a home screen. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <title>Le Chœur — Château Purcari</title>
+
+    <style>
+      /* Painted before the bundle parses, so the panel never flashes white. */
+      html,
+      body {
+        margin: 0;
+        background: #07050a;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="installation-root"></div>
+    <noscript>
+      <p style="color: #f5e6d3; font-family: serif; padding: 3rem">
+        Cette installation nécessite JavaScript et WebGL.
+      </p>
+    </noscript>
+    <script type="module" src="/src/installation/main.tsx"></script>
+  </body>
+</html>

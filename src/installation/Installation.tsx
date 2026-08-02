@@ -1,0 +1,202 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Engine } from './engine/Engine';
+import type { ChapterId, Readout as ReadoutData } from './engine/Scene';
+import { GUILD_COLORS, GUILD_ORDER, guildLabel } from './engine/palette';
+import { ChorusScene } from './scenes/ChorusScene';
+import { CircadianScene } from './scenes/CircadianScene';
+import { FluxScene } from './scenes/FluxScene';
+import { SpeciesScene } from './scenes/SpeciesScene';
+import { TerroirScene } from './scenes/TerroirScene';
+import { atlas } from './data/atlas';
+import { ChapterNav } from './ui/ChapterNav';
+import { Diagnostics } from './ui/Diagnostics';
+import { Readout } from './ui/Readout';
+
+/** Taps in the top-left corner needed to open the commissioning panel. */
+const SERVICE_TAPS = 4;
+const SERVICE_WINDOW = 2500;
+
+const EMPTY_READOUT: ReadoutData = { eyebrow: '', title: '' };
+
+/**
+ * The installation shell.
+ *
+ * React owns the typography and nothing else. The canvas, the frame loop and all
+ * interaction live in the engine; this component subscribes to one readout
+ * callback and re-renders only when the text actually changes, so the DOM is
+ * never in the way of the 60 fps budget.
+ */
+export function Installation(): JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const markerRef = useRef<HTMLDivElement>(null);
+  const hintRef = useRef<HTMLParagraphElement>(null);
+  const engineRef = useRef<Engine | null>(null);
+  const lastReadout = useRef<ReadoutData>(EMPTY_READOUT);
+
+  const [readout, setReadout] = useState<ReadoutData>(EMPTY_READOUT);
+  const [chapter, setChapter] = useState<ChapterId>('chorus');
+  const [booted, setBooted] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [engine, setEngine] = useState<Engine | null>(null);
+
+  const serviceTaps = useRef<number[]>([]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+
+    const instance = new Engine({
+      canvas,
+      onReadout: next => {
+        // Scenes hand back a stable object while their content is unchanged, so
+        // reference equality is enough to keep React out of the frame loop.
+        if (next !== lastReadout.current) {
+          lastReadout.current = next;
+          setReadout(next);
+        }
+        // The marker tracks the camera every frame; it is written straight to the
+        // DOM rather than through state for the same reason.
+        positionMarker(markerRef.current, next.marker);
+      },
+      onChapterChange: setChapter,
+    });
+
+    instance.register(new ChorusScene());
+    instance.register(new TerroirScene());
+    instance.register(new CircadianScene());
+    instance.register(new SpeciesScene());
+    instance.register(new FluxScene());
+    instance.setHome('chorus');
+    instance.goTo('chorus', true);
+    instance.start();
+
+    engineRef.current = instance;
+    setEngine(instance);
+    setBooted(true);
+
+    // The idle hint is driven off the pointer's own idle clock rather than a
+    // React timer, so it cannot drift out of sync with the attract behaviour.
+    let raf = 0;
+    const pollIdle = (): void => {
+      const hint = hintRef.current;
+      if (hint) {
+        const idle = instance.pointer.idleTime > 8;
+        hint.classList.toggle('hint--visible', idle);
+      }
+      raf = requestAnimationFrame(pollIdle);
+    };
+    raf = requestAnimationFrame(pollIdle);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      instance.dispose();
+      engineRef.current = null;
+    };
+  }, []);
+
+  const handleSelect = useCallback((id: ChapterId) => {
+    engineRef.current?.goTo(id);
+  }, []);
+
+  /** Four taps in the corner within a few seconds opens the service panel. */
+  const handleServiceTap = useCallback(() => {
+    const now = performance.now();
+    serviceTaps.current = [...serviceTaps.current, now].filter(t => now - t < SERVICE_WINDOW);
+    if (serviceTaps.current.length >= SERVICE_TAPS) {
+      serviceTaps.current = [];
+      setShowDiagnostics(true);
+    }
+  }, []);
+
+  useFullscreenOnFirstTouch();
+
+  return (
+    <div className="stage">
+      <canvas ref={canvasRef} className="stage__canvas" />
+
+      <div className={booted ? 'splash splash--done' : 'splash'} aria-hidden={booted}>
+        <p className="splash__mark">Purcari</p>
+      </div>
+
+      <div className="overlay">
+        <header className="masthead">
+          <div>
+            <p className="masthead__mark">Château Purcari</p>
+            <p className="masthead__sub">Observatoire de la biodiversité</p>
+          </div>
+          <div className="masthead__meta">
+            <div>31 juillet — 16 août 2025</div>
+            <div>46.52° N · 29.87° E</div>
+          </div>
+        </header>
+
+        <div className="stagebody">
+          <Readout data={readout} />
+          <ChapterNav active={chapter} onSelect={handleSelect} />
+        </div>
+
+        <footer className="footer">
+          <div className="footer__legend">
+            {GUILD_ORDER.filter(id => id !== 'unknown').map(id => (
+              <span className="legend__item" key={id} style={{ color: GUILD_COLORS[id] }}>
+                <span className="legend__swatch" aria-hidden="true" />
+                <span>{guildLabel(id)}</span>
+              </span>
+            ))}
+          </div>
+          <div>
+            {atlas.meta.total.toLocaleString('fr-FR')} détections · Every1Counts &amp; BirdNET
+          </div>
+        </footer>
+      </div>
+
+      <p ref={hintRef} className="hint">
+        Touchez pour explorer
+      </p>
+
+      <div ref={markerRef} className="marker" aria-hidden="true">
+        <span className="marker__ring" />
+        <span className="marker__dot" />
+      </div>
+
+      <div
+        className="service-corner"
+        onPointerDown={handleServiceTap}
+        role="presentation"
+        aria-hidden="true"
+      />
+
+      {showDiagnostics && <Diagnostics engine={engine} onClose={() => setShowDiagnostics(false)} />}
+    </div>
+  );
+}
+
+function positionMarker(element: HTMLDivElement | null, marker?: { x: number; y: number }): void {
+  if (!element) return;
+  if (!marker) {
+    element.classList.remove('marker--visible');
+    return;
+  }
+  element.style.transform = `translate(${marker.x * window.innerWidth}px, ${marker.y * window.innerHeight}px)`;
+  element.classList.add('marker--visible');
+}
+
+/**
+ * Wall panels are usually launched in a kiosk shell already, but when this runs
+ * in a plain browser the first touch should still fill the screen. Browsers only
+ * grant fullscreen from a user gesture, so it is requested once and then the
+ * listener retires either way.
+ */
+function useFullscreenOnFirstTouch(): void {
+  useEffect(() => {
+    const request = (): void => {
+      window.removeEventListener('pointerdown', request);
+      if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+      void document.documentElement.requestFullscreen().catch(() => {
+        // Denied by policy or already handled by the kiosk shell — either is fine.
+      });
+    };
+    window.addEventListener('pointerdown', request, { once: true });
+    return () => window.removeEventListener('pointerdown', request);
+  }, []);
+}

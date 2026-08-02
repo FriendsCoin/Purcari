@@ -24,11 +24,19 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
+      // Two entry points: the analytics dashboard, and the touchscreen
+      // installation that runs on the panel in the château. They share nothing
+      // but the repository, so the kiosk bundle never carries Leaflet or Recharts.
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        installation: path.resolve(__dirname, 'installation.html'),
+      },
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
           'map-vendor': ['leaflet', 'react-leaflet'],
           'ui-vendor': ['lucide-react'],
+          'three-vendor': ['three'],
         },
       },
     },

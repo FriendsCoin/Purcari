@@ -5,6 +5,31 @@ All notable changes to the Purcari Biodiversity Dashboard will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Le Chœur — touchscreen installation
+- New standalone entry point (`installation.html`) for the wall-mounted panel in
+  the château, built on raw Three.js with hand-written GLSL and a custom
+  post-processing chain. Shares no code with the dashboard bundle.
+- Five chapters driven by the real survey: an attract state whose particle ring
+  is ordered by time of day, the five recording stations on their true
+  coordinates, a 24-hour dial where the spikes are the hourly histogram, a
+  121-species constellation laid out by circadian rhythm, and the seventeen-day
+  arc of the recording effort.
+- Multi-touch interaction throughout — drag, flick with inertia, tap to select,
+  up to six simultaneous touches deforming the particle fields.
+- Kiosk behaviour: idle return to the attract chapter, adaptive render scale,
+  fullscreen on first touch, and a four-tap service corner exposing frame rate
+  and render statistics for commissioning.
+- `scripts/build-installation-atlas.mjs` bakes the 3.4 MB GeoJSON export into a
+  51 KB atlas so the panel draws its first frame immediately (`npm run atlas`).
+- Documentation in `docs/INSTALLATION.md`.
+
+### Changed
+- Vite now builds two entry points; Three.js is split into its own vendor chunk.
+
 ## [2.0.0] - 2025-11-09
 
 ### Added

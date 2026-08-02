@@ -7,6 +7,14 @@
 
 An interactive data visualization dashboard for analyzing biodiversity monitoring data at the Purcari Winery in Moldova. This application processes wildlife observation data from camera traps and BirdNET audio recordings, providing insights into species diversity, temporal patterns, and ecological interactions.
 
+The repository holds two front ends built from the same survey:
+
+- **The dashboard** (`/`) — analysis, maps, hypothesis testing, exports.
+- **Le Chœur** (`/installation.html`) — a media-art installation for the
+  touchscreen in the château. Five WebGL chapters driven by the real detections,
+  built on Three.js with hand-written GLSL. See
+  [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
 ## Features
 
 - **Interactive Map Visualization** - Leaflet-based mapping with hotspot markers and heatmaps

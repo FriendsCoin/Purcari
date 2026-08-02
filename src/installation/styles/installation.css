@@ -1,0 +1,522 @@
+/*
+ * Kiosk chrome for the Purcari installation.
+ *
+ * Deliberately not Tailwind: this bundle is a separate entry point that should
+ * boot on a wall panel with as little in front of the canvas as possible, and
+ * the whole overlay is under 200 lines of rules.
+ */
+
+:root {
+  --void: #07050a;
+  --bone: #f5e6d3;
+  --gold: #d4af37;
+  --mist: #7d7a86;
+  --accent: var(--gold);
+
+  /* A high-contrast didone reads as a wine label; the fallbacks keep the same
+     proportions so the layout does not reflow on a machine without one. */
+  --display: 'Didot', 'Bodoni MT', 'Playfair Display', 'Hoefler Text', ui-serif, Georgia,
+    'Times New Roman', serif;
+  --label: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+
+  --edge: clamp(1.5rem, 3.2vw, 3.5rem);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--bone);
+  font-family: var(--label);
+  /* A wall panel has no keyboard, no cursor and no scroll — every browser
+     affordance that assumes otherwise is turned off here. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#installation-root {
+  position: fixed;
+  inset: 0;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+}
+
+.stage__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The overlay never eats a touch unless a child opts back in. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: var(--edge);
+  gap: 1rem;
+}
+
+.overlay--hidden {
+  opacity: 0;
+}
+
+.overlay,
+.overlay * {
+  transition: opacity 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ------------------------------------------------------------------ header -- */
+
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+.masthead__mark {
+  font-family: var(--display);
+  font-size: clamp(0.95rem, 1.4vw, 1.35rem);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--bone);
+  opacity: 0.92;
+}
+
+.masthead__sub,
+.masthead__meta {
+  margin-top: 0.5rem;
+  font-size: clamp(0.55rem, 0.72vw, 0.72rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--mist);
+}
+
+.masthead__meta {
+  margin-top: 0;
+  text-align: right;
+  line-height: 1.9;
+}
+
+/* -------------------------------------------------------------------- body -- */
+
+.stagebody {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  min-height: 0;
+}
+
+.readout {
+  max-width: min(46ch, 52vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.readout__eyebrow {
+  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.readout__title {
+  font-family: var(--display);
+  /* Optically tight at display size; the fallback serifs need the negative
+     tracking as much as a real didone does. */
+  font-size: clamp(2.4rem, 6.4vw, 5.6rem);
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+  margin: 0;
+  color: var(--bone);
+  text-wrap: balance;
+}
+
+.readout__body {
+  font-size: clamp(0.7rem, 0.95vw, 0.92rem);
+  line-height: 1.75;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--bone) 66%, transparent);
+  margin: 0;
+  max-width: 42ch;
+}
+
+.readout__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 clamp(1.4rem, 3vw, 2.8rem);
+  margin: 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid color-mix(in srgb, var(--bone) 14%, transparent);
+}
+
+.readout__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.7rem;
+}
+
+.readout__stat dt {
+  font-size: clamp(0.5rem, 0.62vw, 0.62rem);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--mist);
+}
+
+.readout__stat dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.05rem, 1.9vw, 1.7rem);
+  letter-spacing: 0.01em;
+  color: var(--bone);
+}
+
+/* ---------------------------------------------------------------- sparkline -- */
+
+.spark {
+  display: block;
+  width: clamp(180px, 22vw, 320px);
+  height: clamp(34px, 4.4vw, 54px);
+  overflow: visible;
+}
+
+.spark__bar {
+  fill: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.spark__bar--muted {
+  fill: color-mix(in srgb, var(--bone) 18%, transparent);
+}
+
+.spark__axis {
+  stroke: color-mix(in srgb, var(--bone) 16%, transparent);
+  stroke-width: 0.5;
+}
+
+/* ---------------------------------------------------------------- chapters -- */
+
+.chapters {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.chapter {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.9rem;
+  /* Sized for a fingertip on a wall panel, not a mouse. */
+  padding: 0.85rem 0 0.85rem 3rem;
+  min-height: 3rem;
+  text-align: right;
+  opacity: 0.4;
+  transition: opacity 420ms ease;
+}
+
+.chapter--active {
+  opacity: 1;
+}
+
+.chapter__numeral {
+  font-family: var(--display);
+  font-size: clamp(0.7rem, 0.9vw, 0.88rem);
+  letter-spacing: 0.1em;
+  color: var(--mist);
+  min-width: 2.2ch;
+  text-align: right;
+}
+
+.chapter--active .chapter__numeral {
+  color: var(--gold);
+}
+
+.chapter__name {
+  font-family: var(--display);
+  font-size: clamp(1.05rem, 1.8vw, 1.6rem);
+  letter-spacing: 0.03em;
+}
+
+.chapter__rule {
+  display: block;
+  width: clamp(28px, 4vw, 56px);
+  height: 1px;
+  background: currentColor;
+  opacity: 0.35;
+  transform: scaleX(0.3);
+  transform-origin: right;
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chapter--active .chapter__rule {
+  transform: scaleX(1);
+  opacity: 0.9;
+}
+
+/* ------------------------------------------------------------------ footer -- */
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 2rem;
+  font-size: clamp(0.5rem, 0.64vw, 0.64rem);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--mist);
+}
+
+.footer__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  align-items: center;
+}
+
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend__swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+/* -------------------------------------------------------------------- hint -- */
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge) * 2.4);
+  transform: translateX(-50%);
+  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--bone) 55%, transparent);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.hint--visible {
+  opacity: 1;
+  animation: hint-breathe 4.5s ease-in-out infinite;
+}
+
+@keyframes hint-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* ------------------------------------------------------------------ marker -- */
+
+.marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.marker--visible {
+  opacity: 1;
+}
+
+.marker__ring {
+  position: absolute;
+  width: 62px;
+  height: 62px;
+  margin: -31px 0 0 -31px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 50%;
+  animation: marker-pulse 3.2s ease-out infinite;
+}
+
+@keyframes marker-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+.marker__dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 14px var(--accent);
+}
+
+/* ------------------------------------------------------------------ splash -- */
+
+.splash {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--void);
+  z-index: 10;
+  transition: opacity 1200ms ease;
+}
+
+.splash--done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash__mark {
+  font-family: var(--display);
+  font-size: clamp(1rem, 1.6vw, 1.5rem);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------- diagnostics -- */
+
+.diagnostics {
+  position: absolute;
+  top: var(--edge);
+  left: var(--edge);
+  z-index: 20;
+  pointer-events: auto;
+  padding: 1rem 1.4rem;
+  background: rgba(7, 5, 10, 0.92);
+  border: 1px solid color-mix(in srgb, var(--bone) 18%, transparent);
+  font-size: 0.68rem;
+  line-height: 1.9;
+  letter-spacing: 0.12em;
+  color: var(--bone);
+  min-width: 20ch;
+}
+
+.diagnostics dt {
+  color: var(--mist);
+  text-transform: uppercase;
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+}
+
+.diagnostics dd {
+  margin: 0 0 0.6rem;
+}
+
+.diagnostics__hint {
+  margin: 0.4rem 0 0;
+  color: var(--mist);
+  font-size: 0.55rem;
+  letter-spacing: 0.18em;
+}
+
+/* The service corner: four taps here open diagnostics during commissioning. */
+.service-corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 84px;
+  height: 84px;
+  pointer-events: auto;
+  z-index: 15;
+}
+
+/* ------------------------------------------------------------------ narrow -- */
+
+/* Portrait panels: the chapter list moves under the readout so neither column
+   has to shrink below a comfortable touch target. */
+@media (max-aspect-ratio: 8/9) {
+  .stagebody {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    gap: 2.5rem;
+  }
+
+  .readout {
+    max-width: none;
+  }
+
+  .chapters {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0 1.6rem;
+  }
+
+  .chapter {
+    padding: 0.85rem 0;
+    gap: 0.55rem;
+  }
+
+  .chapter__rule {
+    display: none;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.9rem;
+  }
+
+  /* On a tall panel the bottom third is all readout and chapter list, so the
+     hint moves up into the empty space under the masthead instead of landing on
+     top of the navigation. */
+  .hint {
+    top: calc(var(--edge) * 4.5);
+    bottom: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint--visible,
+  .marker__ring {
+    animation: none;
+  }
+}

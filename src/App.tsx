@@ -131,7 +131,13 @@ function App() {
           </div>
 
           <div className="mt-12 text-center">
-            <p className="text-gray-400 text-sm">
+            <a
+              href="/installation.html"
+              className="inline-block text-purcari-accent hover:text-white transition-colors tracking-[0.3em] text-xs uppercase"
+            >
+              Le Chœur — installation tactile
+            </a>
+            <p className="text-gray-400 text-sm mt-4">
               Version 2.0.0 | Built with React + TypeScript + Vite
             </p>
           </div>
