@@ -139,7 +139,29 @@ export function Choir({
   const hourRef = useRef(hour);
   const { camera, size } = useThree();
 
-  const guilds = useMemo(() => Object.keys(data.guilds), [data.guilds]);
+  /**
+   * Ring order for the guild rosette.
+   *
+   * `data.guilds` arrives sorted by abundance, which would seat the 88-species
+   * songbird cluster next to the other big groups and leave the far side nearly
+   * empty. Dealing the size-sorted guilds alternately to opposite sides of the
+   * ring keeps the figure balanced without touching any species' membership.
+   */
+  const guilds = useMemo(() => {
+    const bySize = Object.keys(data.guilds).sort(
+      (a, b) => data.guilds[b].species - data.guilds[a].species,
+    );
+    const n = bySize.length;
+    const half = Math.floor(n / 2);
+    const ring: string[] = new Array(n);
+    bySize.forEach((guild, i) => {
+      // Even ranks fill the near half, odd ranks the far half, so the two
+      // largest guilds land diametrically opposite each other.
+      const slot = i % 2 === 0 ? i / 2 : half + (i - 1) / 2;
+      ring[slot % n] = guild;
+    });
+    return ring;
+  }, [data.guilds]);
 
   /**
    * Positions are deterministic per species — the same animal always occupies

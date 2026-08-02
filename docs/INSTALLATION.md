@@ -17,6 +17,37 @@ refresh updates both pieces at once.
 
 ---
 
+## 0. What it looks like
+
+Captured from the running build at 1920×1080.
+
+**The Estate** — the twelve stations over the estate's landform, coloured by the
+survey's combined typology. Green is the rich stable core, red the poor edges.
+
+![The Estate](stills/estate.jpg)
+
+The same land, re-read by birds alone. Stations that were poor become rich and
+the reverse — the disagreement is the chapter's argument.
+
+![The Estate, bird lens](stills/estate-birds-lens.jpg)
+
+**The Year** — twelve months around, twenty-four hours outward. The gold ribbon
+is sunrise, the blue is sunset, and the warm band hugging the gold is the dawn
+chorus.
+
+![The Year](stills/year.jpg)
+
+**The Choir** — all 213 species, sorted into ecological guilds.
+
+![The Choir](stills/choir-guilds.jpg)
+
+**Presence** — the outdoor piece mid-arc, the field scattered and the count low
+while the space is disturbed.
+
+![Presence](stills/presence-outdoor.jpg)
+
+---
+
 ## 1. The work
 
 ### Terroir vivant (indoor)

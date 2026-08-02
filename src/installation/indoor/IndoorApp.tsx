@@ -311,8 +311,38 @@ export default function IndoorApp() {
           </div>
         )}
 
-        {chapter.id === 'choir' && (
+        {chapter.id === 'choir' && data && (
           <div className="inst-corner inst-corner--bl">
+            {/* The rosette is unreadable without naming the clusters. */}
+            {clusterGuilds && (
+              <div
+                className="inst-rise"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: '0.1rem 1.4rem',
+                  marginBottom: '1rem',
+                  maxWidth: 380,
+                }}
+              >
+                {Object.entries(data.guilds)
+                  .sort((a, b) => b[1].species - a[1].species)
+                  .map(([guild, totals]) => (
+                    <div className="inst-species-line" key={guild}>
+                      <i
+                        className="inst-swatch"
+                        style={{ color: GUILD_COLORS[guild] ?? PALETTE.foil }}
+                      />
+                      <span style={{ fontSize: '0.78rem' }}>
+                        {GUILD_LABELS[guild] ?? guild}
+                      </span>
+                      <span className="inst-mono" style={{ marginLeft: 'auto' }}>
+                        {totals.species}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
             <button
               className="inst-nav-item"
               data-active={clusterGuilds}
@@ -320,7 +350,7 @@ export default function IndoorApp() {
                 touch();
                 setClusterGuilds((v) => !v);
               }}
-              style={{ minHeight: 56 }}
+              style={{ minHeight: 56, paddingLeft: 0 }}
             >
               {clusterGuilds ? 'Merge the swarm' : 'Sort by guild'}
             </button>
