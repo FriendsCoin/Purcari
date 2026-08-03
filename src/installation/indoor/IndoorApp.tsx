@@ -10,7 +10,7 @@ import {
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
 import { useChapterTransition } from '../core/useChapterTransition';
-import { Stage, CameraRig } from '../gl/Stage';
+import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
@@ -39,6 +39,13 @@ interface RefugeMark {
   self: boolean;
   value: number;
 }
+
+/** The three questions the Refuge row can answer. */
+const REFUGE_READINGS = [
+  { label: 'Mammals', mode: 'land' as const, metric: 0 },
+  { label: 'Birds', mode: 'land' as const, metric: 1 },
+  { label: 'Ecosystem', mode: 'ecosystem' as const, metric: 0 },
+];
 
 /**
  * Approximate advance of one character of the caption face — 0.6rem monospace
@@ -140,6 +147,12 @@ export default function IndoorApp() {
   const [clusterGuilds, setClusterGuilds] = useState(false);
   const [flagshipOnly, setFlagshipOnly] = useState(false);
   const [refugeMetric, setRefugeMetric] = useState(0);
+  /**
+   * Which question the Refuge row answers. The first two compare this estate
+   * with the land around it; the third turns the row into the three pillars the
+   * estate's own ecosystem score stands on.
+   */
+  const [refugeMode, setRefugeMode] = useState<'land' | 'ecosystem'>('land');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
   /**
@@ -357,6 +370,7 @@ export default function IndoorApp() {
             data={data}
             reveal={reveal}
             metric={refugeMetric}
+            mode={refugeMode}
             selected={refugeSelected}
             onSelect={
               interactive
@@ -412,7 +426,13 @@ export default function IndoorApp() {
             position={chapter.camera}
             lookAt={chapter.lookAt}
             subjectAspect={chapter.subjectAspect}
-            speed={0.5}
+            /*
+              Fast enough that the camera lands with the dissolve rather than
+              still gliding a second after the new chapter is fully lit — which
+              was what made the old transition read as a cut followed by a drift.
+            */
+            speed={1.15}
+            dissolve={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
           />
 
           {/*
@@ -420,9 +440,14 @@ export default function IndoorApp() {
             rendering at a falling `reveal` but stops accepting touches, so a
             fading scene cannot steal a tap meant for the arriving one.
           */}
-          {renderScene(transition.current, transition.reveal, true)}
-          {transition.previous !== null &&
-            renderScene(transition.previous, transition.fade, false)}
+          <ChapterFrame reveal={transition.reveal}>
+            {renderScene(transition.current, transition.reveal, true)}
+          </ChapterFrame>
+          {transition.previous !== null && (
+            <ChapterFrame reveal={transition.fade} leaving>
+              {renderScene(transition.previous, transition.fade, false)}
+            </ChapterFrame>
+          )}
         </Stage>
       )}
 
@@ -620,17 +645,20 @@ export default function IndoorApp() {
               Compare by
             </p>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              {[
-                { v: 0, label: 'Mammals', caption: 'Shannon diversity, camera traps' },
-                { v: 1, label: 'Birds', caption: 'Species heard per site' },
-              ].map((entry) => (
+              {REFUGE_READINGS.map((entry) => (
                 <button
                   key={entry.label}
                   className="inst-nav-item"
-                  data-active={refugeMetric === entry.v}
+                  data-active={
+                    entry.mode === 'ecosystem'
+                      ? refugeMode === 'ecosystem'
+                      : refugeMode === 'land' && refugeMetric === entry.metric
+                  }
                   onClick={() => {
                     touch();
-                    setRefugeMetric(entry.v);
+                    setRefugeMode(entry.mode);
+                    if (entry.mode === 'land') setRefugeMetric(entry.metric);
+                    setRefugeSelected(null);
                   }}
                   style={{ minHeight: 56, padding: '0.9rem 1.1rem' }}
                 >
@@ -639,23 +667,53 @@ export default function IndoorApp() {
               ))}
             </div>
             <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
-              {(refugeMetric === 0
-                ? 'SHANNON DIVERSITY, CAMERA TRAPS'
-                : 'BIRD SPECIES HEARD PER SITE'
+              {(refugeMode === 'ecosystem'
+                ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
+                : refugeMetric === 0
+                  ? 'SHANNON DIVERSITY, CAMERA TRAPS'
+                  : 'BIRD SPECIES HEARD PER SITE'
               ).toUpperCase()}
             </p>
 
-            {/* The tension the whole survey leaves unresolved. */}
             <div className="inst-rule" style={{ maxWidth: 380 }} />
-            <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
-              {data.narrative.protection.protConn.toFixed(1)}%
-            </p>
-            <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem' }}>
-              {data.narrative.protection.text}
-            </p>
-            <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
-              {data.narrative.protection.policy.toUpperCase()}
-            </p>
+
+            {refugeMode === 'ecosystem' ? (
+              /*
+                What the pillars hold up. The overall score is not an average of
+                the three — it is published as its own figure — so it is given as
+                the datum the row is read against, exactly as the scene draws it.
+              */
+              <>
+                <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+                  {data.narrative.ecosystemScore.overall.toFixed(1)}
+                  <span style={{ fontSize: '1rem', opacity: 0.6 }}> / 100</span>
+                </p>
+                <p className="inst-mono">
+                  ECOSYSTEM SCORE · {data.narrative.protection.protConn.toFixed(1)}% PROTECTED
+                </p>
+                <p
+                  className="inst-body"
+                  style={{ maxWidth: '38ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
+                >
+                  A strong ecosystem, and strong because it is joined up:
+                  connectivity {data.narrative.ecosystemScore.connectivity.toFixed(1)} against
+                  intrinsic quality {data.narrative.ecosystemScore.intrinsic.toFixed(1)}.
+                </p>
+              </>
+            ) : (
+              /* The tension the whole survey leaves unresolved. */
+              <>
+                <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+                  {data.narrative.protection.protConn.toFixed(1)}%
+                </p>
+                <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem' }}>
+                  {data.narrative.protection.text}
+                </p>
+                <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
+                  {data.narrative.protection.policy.toUpperCase()}
+                </p>
+              </>
+            )}
           </div>
         )}
 

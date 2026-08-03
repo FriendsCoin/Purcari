@@ -55,6 +55,24 @@ const BASE_Y = -1.85;
 const HERO_RING_INNER = 0.46;
 const HERO_RING_OUTER = 0.92;
 
+/**
+ * Spacing of the three ecosystem pillars. Wider than the land-use row: three
+ * readings deserve the air that seven cannot have.
+ */
+const PILLAR_GAP = 3.4;
+
+/** Flutes cut into each shaft — the count that reads as a column and not a pipe. */
+const SHAFT_FLUTES = 9.0;
+const SHAFT_SIDES = 20;
+/**
+ * Rings up the shaft. Two would be enough to draw a tube and is what the first
+ * version had — but then every profile term in the vertex shader is only ever
+ * evaluated at the two ends, the radius interpolates straight between them, and
+ * a column with a plinth and a capital renders as a lampshade. The profile needs
+ * somewhere to be carved.
+ */
+const SHAFT_RINGS = 14;
+
 /** Samples along each chord of the skyline. */
 const SKYLINE_STEPS = 20;
 /** Half-width of the tick drawn across each column's head. */
@@ -183,6 +201,51 @@ function buildColumns(data: InstallationData): ColumnLayout[] {
   });
 }
 
+/**
+ * The three readings the estate's ecosystem score is built from.
+ *
+ * This is the one place in the piece where the columns are not a comparison
+ * between places but a statement about *this* place: how strong its ecosystem
+ * is, and which leg of it is doing the work. Connectivity stands at 78.4 and
+ * intrinsic quality at 34.6 — the estate is strong because it is joined to the
+ * landscape around it, not because any single hectare of it is pristine. Three
+ * pillars, and the overall score is the line they are measured against.
+ */
+interface PillarLayout {
+  key: string;
+  label: string;
+  x: number;
+  /** 0..100, as the score is published. */
+  value: number;
+}
+
+function buildPillars(data: InstallationData): PillarLayout[] {
+  const score = data.narrative.ecosystemScore;
+  const entries = [
+    { key: 'intrinsic', label: 'Intrinsic quality', value: score.intrinsic },
+    { key: 'landscape', label: 'Landscape', value: score.landscape },
+    { key: 'connectivity', label: 'Connectivity', value: score.connectivity },
+  ];
+  const span = (entries.length - 1) * PILLAR_GAP;
+  return entries.map((entry, i) => ({ ...entry, x: i * PILLAR_GAP - span / 2 }));
+}
+
+/**
+ * What colour a slot takes in the ecosystem reading.
+ *
+ * Gold above the overall score, cold below it — so the weak leg of a strong
+ * ecosystem is visible without a legend. Slots with no pillar behind them never
+ * show in that reading and take the cold value they will never be seen in.
+ */
+function pillarColor(pillar: PillarLayout | undefined, overall: number): THREE.Color {
+  if (!pillar) return hexColor(PALETTE.ash);
+  // Cool, but not so deep it stops being legible — the weak leg of the score
+  // still has to be readable, or "below the datum" turns into "not there".
+  return pillar.value >= overall
+    ? hexColor(PALETTE.foil)
+    : hexColor(PALETTE.dusk).lerp(hexColor(PALETTE.parchment), 0.4);
+}
+
 /* --------------------------------------------------------------- geometries */
 
 /**
@@ -191,7 +254,11 @@ function buildColumns(data: InstallationData): ColumnLayout[] {
  * the height along it are attributes the vertex shader resolves per frame, which
  * is what lets height and density change without touching the buffer.
  */
-function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
+function buildMoteGeometry(
+  columns: ColumnLayout[],
+  pillars: PillarLayout[],
+  overall: number
+): THREE.BufferGeometry {
   const count = columns.length * MOTES_PER_COLUMN;
   const positions = new Float32Array(count * 3);
   const offsets = new Float32Array(count * 2);
@@ -202,10 +269,12 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   const speeds = new Float32Array(count);
   const scales = new Float32Array(count);
   const colors = new Float32Array(count * 3);
+  const ecoColors = new Float32Array(count * 3);
   const heroes = new Float32Array(count);
 
   let k = 0;
   columns.forEach((column, ci) => {
+    const eco = pillarColor(pillars[ci], overall);
     const radius = column.self ? COLUMN_RADIUS * 1.15 : COLUMN_RADIUS;
     for (let m = 0; m < MOTES_PER_COLUMN; m++) {
       const salt = m * 8;
@@ -233,6 +302,9 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
       colors[k * 3] = column.color.r;
       colors[k * 3 + 1] = column.color.g;
       colors[k * 3 + 2] = column.color.b;
+      ecoColors[k * 3] = eco.r;
+      ecoColors[k * 3 + 1] = eco.g;
+      ecoColors[k * 3 + 2] = eco.b;
       heroes[k] = column.self ? 1 : 0;
       k++;
     }
@@ -248,6 +320,7 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   geometry.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1));
   geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
   geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('aEcoColor', new THREE.BufferAttribute(ecoColors, 3));
   geometry.setAttribute('aHero', new THREE.BufferAttribute(heroes, 1));
 
   // Every mote's stored position sits on the baseline; the rise happens in the
@@ -335,17 +408,24 @@ function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
  * seven glows floating in a void: the cores now stand on something and cast onto
  * it, which is the whole cellar metaphor the chapter is built on.
  */
-function buildPoolGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
+function buildPoolGeometry(
+  columns: ColumnLayout[],
+  pillars: PillarLayout[],
+  overall: number
+): THREE.BufferGeometry {
   const positions: number[] = [];
   const radial: number[] = [];
   const columnIndex: number[] = [];
   const colors: number[] = [];
+  const ecoColors: number[] = [];
 
   const vertex = (column: ColumnLayout, ci: number, rx: number, rz: number) => {
     positions.push(column.x, 0, 0);
     radial.push(rx, rz);
     columnIndex.push(ci);
     colors.push(column.color.r, column.color.g, column.color.b);
+    const eco = pillarColor(pillars[ci], overall);
+    ecoColors.push(eco.r, eco.g, eco.b);
   };
 
   columns.forEach((column, ci) => {
@@ -368,6 +448,79 @@ function buildPoolGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   geometry.setAttribute('aColumn', new THREE.Float32BufferAttribute(columnIndex, 1));
   geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeBoundingSphere();
+  return geometry;
+}
+
+/**
+ * The shaft: a fluted, tapering shell of light around each plume, with a plinth
+ * at its foot and a flared capital at its head.
+ *
+ * The plumes alone read as smoke. The whole argument of the chapter is that this
+ * estate *holds something up* — and a column that holds something up has a
+ * silhouette: it stands on a base, it narrows as it rises, it ends in a capital.
+ * The capital sits exactly at the reading, so the architecture is the number.
+ *
+ * One buffer for all eight slots; the height, the position and the taper are all
+ * resolved in the vertex shader from the same uniform arrays the motes read, so
+ * the shafts can never disagree with the light inside them.
+ */
+function buildShaftGeometry(
+  columns: ColumnLayout[],
+  pillars: PillarLayout[],
+  overall: number
+): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const radial: number[] = [];
+  const angles: number[] = [];
+  const ups: number[] = [];
+  const columnIndex: number[] = [];
+  const colors: number[] = [];
+  const ecoColors: number[] = [];
+
+  const vertex = (ci: number, side: number, up: number) => {
+    const angle = (side / SHAFT_SIDES) * Math.PI * 2;
+    positions.push(0, 0, 0);
+    radial.push(Math.cos(angle), Math.sin(angle));
+    angles.push(side / SHAFT_SIDES);
+    ups.push(up);
+    columnIndex.push(ci);
+    // The stone carries the same colour as the light inside it, so the row's
+    // drain toward ash survives in the architecture as well as in the plumes.
+    const column = columns[ci];
+    colors.push(column.color.r, column.color.g, column.color.b);
+    const eco = pillarColor(pillars[ci], overall);
+    ecoColors.push(eco.r, eco.g, eco.b);
+  };
+
+  for (let ci = 0; ci < columns.length; ci++) {
+    for (let s = 0; s < SHAFT_SIDES; s++) {
+      for (let r = 0; r < SHAFT_RINGS; r++) {
+        const lo = r / SHAFT_RINGS;
+        const hi = (r + 1) / SHAFT_RINGS;
+        vertex(ci, s, lo);
+        vertex(ci, s + 1, lo);
+        vertex(ci, s + 1, hi);
+        vertex(ci, s, lo);
+        vertex(ci, s + 1, hi);
+        vertex(ci, s, hi);
+      }
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aRadial', new THREE.Float32BufferAttribute(radial, 2));
+  geometry.setAttribute('aAngle', new THREE.Float32BufferAttribute(angles, 1));
+  geometry.setAttribute('aUp', new THREE.Float32BufferAttribute(ups, 1));
+  geometry.setAttribute('aColumn', new THREE.Float32BufferAttribute(columnIndex, 1));
+  geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('aEcoColor', new THREE.Float32BufferAttribute(ecoColors, 3));
+  // Built flat at the origin and raised in the shader, so an automatic bound
+  // would be a point and the whole row would cull itself.
+  geometry.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
+    MAX_COLUMNS * COLUMN_GAP + MAX_HEIGHT
+  );
   return geometry;
 }
 
@@ -438,6 +591,7 @@ attribute float aSeed;
 attribute float aSpeed;
 attribute float aScale;    // world units
 attribute vec3 aColor;
+attribute vec3 aEcoColor;
 attribute float aHero;
 
 uniform float uTime;
@@ -446,6 +600,9 @@ uniform float uFocus;      // 0 = nothing selected, 1 = something is
 uniform float uCount;
 uniform float uRise;       // column heights per second
 uniform float uSway;
+uniform float uEco;        // 0 = the land-use row, 1 = the three ecosystem pillars
+uniform float uMorph;      // sin(uEco·π): peaks halfway through the change
+uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
@@ -492,7 +649,7 @@ void main(){
     snoise(vec3(aOffset.y * 1.4, y * 0.45, t + 13.0))
   );
   vec3 p = vec3(
-    position.x + aOffset.x * taper + wander.x * uSway,
+    uX[idx] + aOffset.x * taper + wander.x * uSway,
     y,
     position.z + aOffset.y * taper + wander.y * uSway
   );
@@ -503,12 +660,18 @@ void main(){
   gl_PointSize = size * (300.0 / -mv.z);
   gl_Position = projectionMatrix * mv;
 
-  vColor = aColor;
+  vColor = mix(aColor, aEcoColor, uEco);
   vHero = aHero;
   // The estate burns brighter than its neighbours before any selection happens;
   // a selection then lifts one column and drops the rest well below it.
   vGlow = mix(0.52, 1.0, aHero) * mix(1.0, mix(0.26, 1.55, sel), uFocus);
-  vAlpha = alive * ends * presence * rv;
+  // The row dims almost to nothing halfway through the change of reading and
+  // comes back. Sliding seven land uses into three ecosystem pillars at full
+  // brightness would look like the same seven objects rearranging — it would
+  // read as an equivalence between "vineyard" and "connectivity", which is not
+  // a claim the survey makes. Dissolving and re-forming says what it is: a
+  // different question being asked of the same estate.
+  vAlpha = alive * ends * presence * rv * (1.0 - uMorph * 0.72);
 }
 `;
 
@@ -548,6 +711,10 @@ uniform float uTime;
 uniform float uReveal;
 uniform float uFocus;
 uniform float uCount;
+uniform float uEco;
+uniform float uMorph;
+uniform float uOverall;   // the overall ecosystem score, in world height
+uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
 uniform float uSelect[MAX_COLUMNS];
@@ -560,23 +727,28 @@ void main(){
   int ia = int(aColumnA + 0.5);
   int ib = int(aColumnB + 0.5);
 
-  float y = mix(uHeight[ia], uHeight[ib], aBlend);
-  float presence = min(uPresence[ia], uPresence[ib]);
-  float sel = max(uSelect[ia], uSelect[ib]);
+  // In the land-use reading the thread joins the heads and *is* the profile. In
+  // the ecosystem reading it flattens to the overall score and becomes the datum
+  // the three pillars are read against — connectivity standing above it, the
+  // intrinsic reading well below.
+  float y = mix(mix(uHeight[ia], uHeight[ib], aBlend), uOverall, uEco);
+  float presence = mix(min(uPresence[ia], uPresence[ib]), 1.0, uEco);
+  float sel = max(uSelect[ia], uSelect[ib]) * (1.0 - uEco);
 
   // Same left-to-right lag as the motes, so the thread arrives with its columns.
   float order = mix(aColumnA, aColumnB, aBlend) / max(uCount - 1.0, 1.0);
   float rv = clamp(uReveal * 1.3 - order * 0.3, 0.0, 1.0);
   rv = rv * rv * (3.0 - 2.0 * rv);
 
-  vec3 p = vec3(position.x, y * rv, position.z);
+  vec3 p = vec3(mix(uX[ia], uX[ib], aBlend), y * rv, position.z);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 
   vRun = order;
-  vColor = aColor;
   // A land use missing from the current survey drops out of the thread rather
   // than dragging it to the floor: the segment fades, it does not lie.
-  vAlpha = presence * rv * (0.46 + sel * 0.60) * mix(1.0, mix(0.45, 1.35, sel), uFocus);
+  vColor = mix(aColor, vec3(1.0, 0.93, 0.78), uEco);
+  vAlpha = presence * rv * (0.46 + sel * 0.60) * mix(1.0, mix(0.45, 1.35, sel), uFocus)
+         * (1.0 - uMorph * 0.6);
 }
 `;
 
@@ -603,11 +775,15 @@ const POOL_VERT = /* glsl */ `
 attribute vec2 aRadial;
 attribute float aColumn;
 attribute vec3 aColor;
+attribute vec3 aEcoColor;
 
 uniform float uTime;
 uniform float uReveal;
 uniform float uFocus;
 uniform float uCount;
+uniform float uEco;
+uniform float uMorph;
+uniform float uX[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
 uniform float uSelect[MAX_COLUMNS];
@@ -629,13 +805,13 @@ void main(){
 
   // The pool widens with the column's density, and breathes very slightly.
   float scale = (0.45 + fill * 0.85) * (1.0 + sin(uTime * 0.35 + aColumn) * 0.03 + sel * 0.10);
-  vec3 p = vec3(position.x + aRadial.x * scale, 0.004, position.z + aRadial.y * scale);
+  vec3 p = vec3(uX[idx] + aRadial.x * scale, 0.004, position.z + aRadial.y * scale);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 
-  vColor = aColor;
+  vColor = mix(aColor, aEcoColor, uEco);
   vRadial = aRadial;
   vSelect = sel;
-  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus);
+  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus) * (1.0 - uMorph * 0.6);
 }
 `;
 
@@ -660,6 +836,108 @@ void main(){
   float glow = body * ripple * vAlpha * 0.46;
   if (glow <= 0.002) discard;
   gl_FragColor = vec4(dither(aces(vColor * glow), gl_FragCoord.xy), glow);
+}
+`;
+
+const SHAFT_VERT = /* glsl */ `
+#define MAX_COLUMNS ${MAX_COLUMNS}
+
+attribute vec2 aRadial;
+attribute float aAngle;
+attribute float aUp;
+attribute float aColumn;
+attribute vec3 aColor;
+attribute vec3 aEcoColor;
+
+uniform float uTime;
+uniform float uReveal;
+uniform float uFocus;
+uniform float uCount;
+uniform float uEco;
+uniform float uMorph;
+uniform float uX[MAX_COLUMNS];
+uniform float uHeight[MAX_COLUMNS];
+uniform float uFill[MAX_COLUMNS];
+uniform float uPresence[MAX_COLUMNS];
+uniform float uSelect[MAX_COLUMNS];
+
+varying float vAngle;
+varying float vUp;
+varying float vAlpha;
+varying float vSelect;
+varying float vPhase;
+varying vec3  vColor;
+
+void main(){
+  int idx = int(aColumn + 0.5);
+  float height = uHeight[idx];
+  float presence = uPresence[idx];
+  float sel = uSelect[idx];
+
+  float order = aColumn / max(uCount - 1.0, 1.0);
+  float rv = clamp(uReveal * 1.3 - order * 0.3, 0.0, 1.0);
+  rv = rv * rv * (3.0 - 2.0 * rv);
+
+  // The silhouette that makes it a column rather than a tube: a foot that
+  // spreads, a shaft that is very nearly parallel — with the faint outward swell
+  // a real column is given so it does not look pinched — and a capital that
+  // flares once, sharply, exactly at the reading.
+  float plinth  = 1.0 + 0.30 * (1.0 - smoothstep(0.0, 0.06, aUp));
+  float shaft   = 1.0 - 0.09 * aUp + 0.045 * sin(aUp * 3.14159265);
+  float capital = 1.0 + 0.28 * smoothstep(0.88, 0.955, aUp)
+                       * (1.0 - smoothstep(0.985, 1.0, aUp));
+  float radius  = 0.32 * 1.45 * plinth * shaft * capital * (1.0 + uEco * 0.55);
+
+  vec3 p = vec3(uX[idx] + aRadial.x * radius, aUp * height * rv, aRadial.y * radius);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+
+  vAngle = aAngle;
+  vUp = aUp;
+  vSelect = sel;
+  vColor = mix(aColor, aEcoColor, uEco);
+  // Per-column phase, so the light climbing the shafts runs down the row as a
+  // procession instead of every column pulsing as one organism.
+  vPhase = fract(uTime * 0.085 + aColumn * 0.37);
+  vAlpha = presence * rv * (0.55 + uFill[idx] * 0.45)
+         * mix(1.0, mix(0.35, 1.5, sel), uFocus)
+         * (1.0 - uMorph * 0.72);
+}
+`;
+
+const SHAFT_FRAG = /* glsl */ `
+${TONEMAP}
+${DITHER}
+
+varying float vAngle;
+varying float vUp;
+varying float vAlpha;
+varying float vSelect;
+varying float vPhase;
+varying vec3  vColor;
+
+void main(){
+  // Flutes: the shaft is carved, not smooth. A cosine rather than a hard edge,
+  // because at this scale a stepped groove aliases into a moiré.
+  float flute = 0.5 + 0.5 * cos(vAngle * 6.2831853 * ${SHAFT_FLUTES.toFixed(1)});
+  float carve = 0.30 + 0.70 * pow(flute, 1.6);
+
+  // The stone thins as it rises, so the plume inside reads through the top.
+  float body = (1.0 - smoothstep(0.30, 1.04, vUp)) * 0.62 + 0.20;
+
+  // Plinth and capital: the two bands that make the silhouette legible even
+  // when the shaft itself is nearly transparent. Both are narrow — a wide band
+  // stops reading as an edge and starts reading as a lamp.
+  float plinth = exp(-vUp * 46.0) * 1.0;
+  float capital = exp(-pow((vUp - 0.925) * 26.0, 2.0)) * 0.95;
+
+  // A light climbing the shaft — the one moving thing on the stone.
+  float climb = exp(-pow((vUp - vPhase) * 7.0, 2.0)) * 0.5;
+
+  float glow = (body * carve + plinth + capital + climb * carve) * vAlpha * 0.36;
+  glow *= 1.0 + vSelect * 0.9;
+  if (glow <= 0.002) discard;
+
+  gl_FragColor = vec4(dither(aces(vColor * glow), gl_FragCoord.xy), clamp(glow, 0.0, 1.0));
 }
 `;
 
@@ -744,6 +1022,13 @@ type MoteUniforms = {
   uCount: Uniform<number>;
   uRise: Uniform<number>;
   uSway: Uniform<number>;
+  /** 0 = the land-use row, 1 = the three ecosystem pillars. */
+  uEco: Uniform<number>;
+  /** sin(uEco·π) — peaks halfway through the change, so the row can dissolve. */
+  uMorph: Uniform<number>;
+  /** The overall ecosystem score, already in world height. */
+  uOverall: Uniform<number>;
+  uX: Uniform<number[]>;
   uHeight: Uniform<number[]>;
   uFill: Uniform<number[]>;
   uPresence: Uniform<number[]>;
@@ -786,6 +1071,10 @@ function createMoteMaterial(): Shaded<MoteUniforms> {
     // One full pass up a column takes roughly twenty seconds at the slowest.
     uRise: { value: 0.055 },
     uSway: { value: 0.085 },
+    uEco: { value: 0 },
+    uMorph: { value: 0 },
+    uOverall: { value: 0 },
+    uX: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uHeight: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uFill: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uPresence: { value: new Array<number>(MAX_COLUMNS).fill(0) },
@@ -881,6 +1170,12 @@ export interface RefugeProps {
   reveal?: number;
   /** 0 = camera/mammal Shannon comparison, 1 = bird richness comparison. Cross-fade between them. */
   metric?: number;
+  /**
+   * Which question the row answers. 'land' compares this estate with the land
+   * around it; 'ecosystem' turns the row into the three pillars the estate's own
+   * ecosystem score is built from, measured against that score as a datum.
+   */
+  mode?: 'land' | 'ecosystem';
   /** Which land use is selected, by `landUse` string, or null. */
   selected?: string | null;
   onSelect?: (landUse: string | null) => void;
@@ -897,6 +1192,7 @@ export function Refuge({
   data,
   reveal = 1,
   metric = 0,
+  mode = 'land',
   selected = null,
   onSelect,
   onLayout,
@@ -906,10 +1202,13 @@ export function Refuge({
   const revealRef = useRef(0);
   /** Seeded from the prop so the first frame is already the requested metric. */
   const metricRef = useRef(THREE.MathUtils.clamp(metric, 0, 1));
+  const ecoRef = useRef(mode === 'ecosystem' ? 1 : 0);
   const focusRef = useRef(0);
   const { camera, size } = useThree();
 
   const columns = useMemo(() => buildColumns(data), [data]);
+  const pillars = useMemo(() => buildPillars(data), [data]);
+  const overall = data.narrative.ecosystemScore.overall;
   const hero = useMemo(() => columns.find(column => column.self) ?? null, [columns]);
 
   /** protConn is a percentage; at 0.0% the sheet's fill has no height whatsoever. */
@@ -918,9 +1217,19 @@ export function Refuge({
     [data.narrative.protection.protConn]
   );
 
-  const moteGeometry = useMemo(() => buildMoteGeometry(columns), [columns]);
+  const moteGeometry = useMemo(
+    () => buildMoteGeometry(columns, pillars, overall),
+    [columns, pillars, overall]
+  );
+  const shaftGeometry = useMemo(
+    () => buildShaftGeometry(columns, pillars, overall),
+    [columns, pillars, overall]
+  );
   const skylineGeometry = useMemo(() => buildSkylineGeometry(columns), [columns]);
-  const poolGeometry = useMemo(() => buildPoolGeometry(columns), [columns]);
+  const poolGeometry = useMemo(
+    () => buildPoolGeometry(columns, pillars, overall),
+    [columns, pillars, overall]
+  );
   const baselineGeometry = useMemo(() => buildBaselineGeometry(columns), [columns]);
   const protectionGeometry = useMemo(() => buildProtectionGeometry(columns), [columns]);
   const ringGeometry = useMemo(
@@ -937,6 +1246,12 @@ export function Refuge({
   );
   const poolMaterial = useMemo(
     () => createSharedMaterial(motes.uniforms, POOL_VERT, POOL_FRAG, THREE.DoubleSide),
+    [motes]
+  );
+  const shaftMaterial = useMemo(
+    // Double-sided: the shell is open at both ends and additive, so the far wall
+    // showing through is what gives the shaft its depth.
+    () => createSharedMaterial(motes.uniforms, SHAFT_VERT, SHAFT_FRAG, THREE.DoubleSide),
     [motes]
   );
   const protection = useMemo(() => createProtectionMaterial(protectedHeight), [protectedHeight]);
@@ -958,6 +1273,7 @@ export function Refuge({
   useEffect(() => {
     const geometries = [
       moteGeometry,
+      shaftGeometry,
       skylineGeometry,
       poolGeometry,
       baselineGeometry,
@@ -967,6 +1283,7 @@ export function Refuge({
     ];
     const materials = [
       motes.material,
+      shaftMaterial,
       skylineMaterial,
       poolMaterial,
       protection.material,
@@ -980,6 +1297,7 @@ export function Refuge({
     };
   }, [
     moteGeometry,
+    shaftGeometry,
     skylineGeometry,
     poolGeometry,
     baselineGeometry,
@@ -987,6 +1305,7 @@ export function Refuge({
     ringGeometry,
     backdropGeometry,
     motes,
+    shaftMaterial,
     skylineMaterial,
     poolMaterial,
     protection,
@@ -1048,19 +1367,33 @@ export function Refuge({
       lastLayout.current = time;
       const group = groupRef.current;
       const foot = new THREE.Vector3();
-      const heights = motes.uniforms.uHeight.value;
-      const presence = motes.uniforms.uPresence.value;
+      const u = motes.uniforms;
+      const heights = u.uHeight.value;
+      const presence = u.uPresence.value;
+      const xs = u.uX.value;
+      const showEco = u.uEco.value > 0.5;
       onLayout(
         columns.map((column, i) => {
-          foot.set(column.x, 0, 0).applyMatrix4(group.matrixWorld).project(camera);
+          // The live uniform x, not the stored one: mid-morph the column is
+          // somewhere between its two homes and the caption has to be with it.
+          foot.set(xs[i], 0, 0).applyMatrix4(group.matrixWorld).project(camera);
+          const pillar = pillars[i];
           return {
-            landUse: column.landUse,
+            landUse: showEco && pillar ? pillar.label : column.landUse,
             x: (foot.x * 0.5 + 0.5) * size.width,
             y: (-foot.y * 0.5 + 0.5) * size.height,
-            self: column.self,
+            self: showEco ? Boolean(pillar && pillar.value >= overall) : column.self,
             // Fade the caption out with its column so absent land uses do not
-            // leave a label hanging over empty space.
-            value: presence[i] * heights[i],
+            // leave a label hanging over empty space — and drop it entirely
+            // through the change of reading, while the row is dissolved. In the
+            // ecosystem reading the slots with no pillar behind them are gone
+            // outright, not merely faint: an eased value never quite reaches
+            // zero and a land-use name lingering at 1% opacity beside the three
+            // pillars is a label for a column that is not there.
+            value:
+              showEco && !pillar
+                ? 0
+                : presence[i] * heights[i] * Math.pow(1 - u.uMorph.value, 2),
           };
         }),
       );
@@ -1073,11 +1406,15 @@ export function Refuge({
 
     revealRef.current = ease(revealRef.current, THREE.MathUtils.clamp(reveal, 0, 1), 2.6);
     metricRef.current = ease(metricRef.current, THREE.MathUtils.clamp(metric, 0, 1), 1.5);
+    // Slower than the metric cross-fade: this one is not a re-scaling of the same
+    // row but a change of question, and it needs the beat to read as one.
+    ecoRef.current = ease(ecoRef.current, mode === 'ecosystem' ? 1 : 0, 1.1);
     focusRef.current = ease(focusRef.current, selected === null ? 0 : 1, 4.5);
 
     const r = revealRef.current;
     const eased = r * r * (3 - 2 * r);
     const m = metricRef.current;
+    const eco = ecoRef.current;
 
     const u = motes.uniforms;
     for (let i = 0; i < columns.length; i++) {
@@ -1089,9 +1426,21 @@ export function Refuge({
       if (!cam || !bird) continue;
       // `m` is already eased, so the blended targets are smooth without a second
       // filter — and on the first frame they are exactly right, not zero.
-      u.uHeight.value[i] = cam.height * (1 - m) + bird.height * m;
-      u.uFill.value[i] = cam.fill * (1 - m) + bird.fill * m;
-      u.uPresence.value[i] = (column.camera ? 1 - m : 0) + (column.bird ? m : 0);
+      const landHeight = cam.height * (1 - m) + bird.height * m;
+      const landFill = cam.fill * (1 - m) + bird.fill * m;
+      const landPresence = (column.camera ? 1 - m : 0) + (column.bird ? m : 0);
+
+      // The ecosystem reading. Slots past the third have no pillar behind them,
+      // so they drift outward and fade rather than piling up at the row's edge.
+      const pillar = pillars[i];
+      const ecoHeight = pillar ? (pillar.value / 100) * MAX_HEIGHT : landHeight;
+      const ecoFill = pillar ? Math.min(1, pillar.value / 100) : landFill;
+      const ecoX = pillar ? pillar.x : column.x * 2.1;
+
+      u.uHeight.value[i] = landHeight * (1 - eco) + ecoHeight * eco;
+      u.uFill.value[i] = landFill * (1 - eco) + ecoFill * eco;
+      u.uX.value[i] = column.x * (1 - eco) + ecoX * eco;
+      u.uPresence.value[i] = landPresence * (1 - eco) + (pillar ? 1 : 0) * eco;
       // Selection is a prop change rather than a continuous control, so this one
       // gets its own ease. It never touches React state.
       u.uSelect.value[i] = ease(u.uSelect.value[i], column.landUse === selected ? 1 : 0, 5.5);
@@ -1101,11 +1450,16 @@ export function Refuge({
     u.uReveal.value = eased;
     u.uFocus.value = focusRef.current;
     u.uCount.value = columns.length;
+    u.uEco.value = eco;
+    u.uMorph.value = Math.sin(eco * Math.PI);
+    u.uOverall.value = (overall / 100) * MAX_HEIGHT;
 
     protection.uniforms.uTime.value = time;
     protection.uniforms.uReveal.value = eased;
     ring.uniforms.uTime.value = time;
-    ring.uniforms.uReveal.value = eased * (1 - focusRef.current * 0.35);
+    // The estate's ring marks *this estate among its neighbours*; in the
+    // ecosystem reading there are no neighbours on stage, so it goes.
+    ring.uniforms.uReveal.value = eased * (1 - focusRef.current * 0.35) * (1 - eco);
     baselineMaterial.opacity = eased * 0.9;
 
     const group = groupRef.current;
@@ -1144,6 +1498,8 @@ export function Refuge({
         />
       )}
 
+      {/* Under the plume: the stone is the container, the light is the reading. */}
+      <mesh geometry={shaftGeometry} material={shaftMaterial} renderOrder={2} />
       <points geometry={moteGeometry} material={motes.material} renderOrder={3} />
       <lineSegments geometry={skylineGeometry} material={skylineMaterial} renderOrder={4} />
     </group>
