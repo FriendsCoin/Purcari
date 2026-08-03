@@ -41,9 +41,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # `enablement` is deliberately not set: a workflow's GITHUB_TOKEN may
+      # deploy to an existing Pages site but cannot create one, so asking it to
+      # only turns a clear "Pages is off" into a confusing permissions error.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Require Pages to be switched on
+        if: steps.pages.outcome == 'failure'
+        run: |
+          echo "::error::GitHub Pages is not enabled for this repository."
+          {
+            echo "### Pages is not enabled yet"
+            echo ""
+            echo "Open <https://github.com/${{ github.repository }}/settings/pages>"
+            echo "and set **Source** to **GitHub Actions**, then re-run this workflow."
+            echo ""
+            echo "This is the one step that cannot be automated: the Pages REST API"
+            echo "is unreachable from the build sandbox, and this workflow's token"
+            echo "can deploy to an existing Pages site but not create one."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       # docs/ becomes the site root, so docs/live/index.html serves at /live/.
       - uses: actions/upload-pages-artifact@v3
