@@ -3,10 +3,13 @@ name: Deploy installation preview
 # Publishes docs/ to GitHub Pages, which is how the outdoor piece gets tested on
 # a real phone: browsers only grant camera and microphone access over HTTPS.
 #
-# `configure-pages` runs with `enablement: true` so the first run turns Pages on
-# by itself. That matters because the setting lives only in the web UI — the
-# GitHub iOS app has no Pages screen at all — and the Pages REST API is not
-# reachable from the build sandbox.
+# Pages must be switched on once by hand before this can run — set
+# Settings → Pages → Source to "GitHub Actions". The automated routes are all
+# closed: the Pages REST API is unreachable from the build sandbox, and the
+# workflow's own GITHUB_TOKEN may deploy to an existing Pages site but not
+# create one ("Resource not accessible by integration"), so `enablement: true`
+# below cannot bootstrap it either. It is kept only so the setting is restored
+# automatically if Pages is ever turned back off.
 
 on:
   push:

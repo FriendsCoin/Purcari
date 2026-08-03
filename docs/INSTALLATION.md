@@ -173,10 +173,22 @@ tunnel, or a certificate, if you need to demo the live sensor behaviour.
 self-contained file. It makes zero external requests, so it needs no base-URL
 configuration and serves correctly from any sub-path.
 
-To publish it, once:
+Pages has to be switched on once, in a browser. Open
 
-> **Settings → Pages → Build and deployment → Source: Deploy from a branch**
-> Branch: `claude/interactive-media-art-dashboard-ki7oz7` · Folder: `/docs` → **Save**
+```
+https://github.com/FriendsCoin/Purcari/settings/pages
+```
+
+and set **Source: GitHub Actions**. The workflow in
+`.github/workflows/pages.yml` does the rest on every push to `docs/`.
+
+On iOS this must be done in Safari — the GitHub mobile app has no Pages screen.
+If a github.com link opens the app instead, use its **⋯ → Open in browser**, or
+paste the URL into Safari directly.
+
+Neither the API nor the workflow can perform this first step: the Pages REST
+API is unreachable from the build sandbox, and a workflow's `GITHUB_TOKEN` can
+deploy to an existing Pages site but not create one.
 
 After a minute or two the site is live at:
 
