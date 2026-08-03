@@ -1,4 +1,4 @@
-import type { InstallationData, Site, Species } from './types';
+import type { InstallationData, LandscapeData, LandscapeDem, Site, Species } from './types';
 
 let cache: Promise<InstallationData> | null = null;
 
@@ -157,3 +157,51 @@ export const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+
+/* --------------------------------------------------------------- landscape */
+
+let landscapeCache: Promise<LandscapeData> | null = null;
+
+/**
+ * The real terrain and map geometry. Optional: every scene must still render if
+ * this fails, so callers treat a rejection as "fall back to the abstract
+ * ground" rather than as an error worth showing a visitor.
+ */
+export function loadLandscape(): Promise<LandscapeData> {
+  if (!landscapeCache) {
+    const inlined =
+      typeof window !== 'undefined'
+        ? (window as unknown as { __PURCARI_LANDSCAPE__?: LandscapeData }).__PURCARI_LANDSCAPE__
+        : undefined;
+    landscapeCache = inlined
+      ? Promise.resolve(inlined)
+      : fetch(`${import.meta.env.BASE_URL}data/landscape.json`).then((res) => {
+          if (!res.ok) throw new Error(`landscape.json ${res.status}`);
+          return res.json() as Promise<LandscapeData>;
+        });
+  }
+  return landscapeCache;
+}
+
+/** Bilinear sample of the elevation grid at a point in estate metres. */
+export function sampleElevation(dem: LandscapeDem, x: number, y: number): number {
+  const { grid, bbox, heights } = dem;
+  // The grid is stored in lat/lon; convert the metric point back to degrees.
+  const lat = 46.52 + y / 110540;
+  const lon = 29.872 + x / (111320 * Math.cos((46.52 * Math.PI) / 180));
+  const fx = ((lon - bbox.west) / (bbox.east - bbox.west)) * (grid - 1);
+  const fy = ((lat - bbox.south) / (bbox.north - bbox.south)) * (grid - 1);
+  const cx = Math.max(0, Math.min(grid - 1, fx));
+  const cy = Math.max(0, Math.min(grid - 1, fy));
+  const x0 = Math.floor(cx);
+  const y0 = Math.floor(cy);
+  const x1 = Math.min(grid - 1, x0 + 1);
+  const y1 = Math.min(grid - 1, y0 + 1);
+  const tx = cx - x0;
+  const ty = cy - y0;
+  const h00 = heights[y0 * grid + x0];
+  const h10 = heights[y0 * grid + x1];
+  const h01 = heights[y1 * grid + x0];
+  const h11 = heights[y1 * grid + x1];
+  return (h00 * (1 - tx) + h10 * tx) * (1 - ty) + (h01 * (1 - tx) + h11 * tx) * ty;
+}

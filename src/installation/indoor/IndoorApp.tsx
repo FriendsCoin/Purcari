@@ -9,6 +9,7 @@ import {
   PALETTE,
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
+import { useChapterTransition } from '../core/useChapterTransition';
 import { Stage, CameraRig } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
@@ -141,6 +142,7 @@ export default function IndoorApp() {
 
   const idleTimer = useRef<number | null>(null);
   const chapter = CHAPTERS[chapterIndex];
+  const transition = useChapterTransition<ChapterId>(chapter.id);
 
   useEffect(() => {
     loadInstallationData().then(setData).catch((e: Error) => setError(e.message));
@@ -270,6 +272,78 @@ export default function IndoorApp() {
     [touch],
   );
 
+
+  /** One chapter's 3D content at a given reveal. */
+  const renderScene = (id: ChapterId, reveal: number, interactive: boolean) => {
+    if (!data) return null;
+    switch (id) {
+      case 'estate':
+        return (
+          <Constellation
+            key="estate"
+            data={data}
+            reveal={reveal}
+            lens={lens}
+            hour={hour}
+            selectedSite={selectedSite}
+            onSelectSite={interactive ? handleSelectSite : undefined}
+          />
+        );
+      case 'year':
+        return (
+          <Chronogram
+            key="year"
+            data={data}
+            reveal={reveal}
+            modality="both"
+            focusMonth={focusMonth}
+            onSelectMonth={
+              interactive
+                ? (month) => {
+                    touch();
+                    setFocusMonth((current) => (current === month ? null : month));
+                  }
+                : undefined
+            }
+          />
+        );
+      case 'refuge':
+        return (
+          <Refuge
+            key="refuge"
+            data={data}
+            reveal={reveal}
+            metric={refugeMetric}
+            selected={refugeSelected}
+            onSelect={
+              interactive
+                ? (landUse) => {
+                    touch();
+                    setRefugeSelected(landUse);
+                  }
+                : undefined
+            }
+            onLayout={interactive ? setRefugeMarks : undefined}
+          />
+        );
+      case 'choir':
+        return (
+          <Choir
+            key="choir"
+            data={data}
+            reveal={reveal}
+            cluster={clusterGuilds ? 1 : 0}
+            hour={hour}
+            flagshipOnly={flagshipOnly}
+            selected={selectedSpecies}
+            onSelect={interactive ? handleSelectSpecies : undefined}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   if (error) {
     return (
       <div className="inst-root" style={{ display: 'grid', placeItems: 'center' }}>
@@ -289,6 +363,7 @@ export default function IndoorApp() {
           bloomStrength={0.95}
           bloomRadius={0.75}
           bloomThreshold={0.12}
+          swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
         >
           <CameraRig
             position={chapter.camera}
@@ -297,55 +372,14 @@ export default function IndoorApp() {
             speed={0.5}
           />
 
-          {chapter.id === 'estate' && (
-            <Constellation
-              data={data}
-              reveal={1}
-              lens={lens}
-              hour={hour}
-              selectedSite={selectedSite}
-              onSelectSite={handleSelectSite}
-            />
-          )}
-
-          {chapter.id === 'year' && (
-            <Chronogram
-              data={data}
-              reveal={1}
-              modality="both"
-              focusMonth={focusMonth}
-              onSelectMonth={(month) => {
-                touch();
-                setFocusMonth((current) => (current === month ? null : month));
-              }}
-            />
-          )}
-
-          {chapter.id === 'refuge' && (
-            <Refuge
-              data={data}
-              reveal={1}
-              metric={refugeMetric}
-              selected={refugeSelected}
-              onSelect={(landUse) => {
-                touch();
-                setRefugeSelected(landUse);
-              }}
-              onLayout={setRefugeMarks}
-            />
-          )}
-
-          {chapter.id === 'choir' && (
-            <Choir
-              data={data}
-              reveal={1}
-              cluster={clusterGuilds ? 1 : 0}
-              hour={hour}
-              flagshipOnly={flagshipOnly}
-              selected={selectedSpecies}
-              onSelect={handleSelectSpecies}
-            />
-          )}
+          {/*
+            Both chapters are on stage during a dissolve. The outgoing one keeps
+            rendering at a falling `reveal` but stops accepting touches, so a
+            fading scene cannot steal a tap meant for the arriving one.
+          */}
+          {renderScene(transition.current, transition.reveal, true)}
+          {transition.previous !== null &&
+            renderScene(transition.previous, transition.fade, false)}
         </Stage>
       )}
 

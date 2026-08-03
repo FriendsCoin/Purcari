@@ -200,3 +200,49 @@ export interface SensorState {
   /** Which sensor sources are actually live. */
   sources: { camera: boolean; microphone: boolean; serial: boolean };
 }
+
+/* --------------------------------------------------------------- landscape */
+
+/**
+ * The real ground, from public sources — emitted by
+ * `scripts/build_landscape_data.py`. Coordinates are metres east/north of the
+ * estate origin, quantised to whole metres.
+ *
+ * This replaces the earlier noise terrain. The estate is a real place and its
+ * relief is public data: roughly 170 m of it, from the Dniester floodplain up
+ * to the southern ridge.
+ */
+export interface LandscapeDem {
+  /** Samples per side of a square grid. */
+  grid: number;
+  bbox: { south: number; west: number; north: number; east: number };
+  min: number;
+  max: number;
+  /** Row-major, south to north, west to east. Metres above sea level. */
+  heights: number[];
+  source: string;
+}
+
+export interface LandscapeBuilding {
+  /** Footprint ring, [x, y] metres. */
+  p: [number, number][];
+  /** Footprint area in m², so the château and cellars can be told from sheds. */
+  a: number;
+}
+
+export interface LandscapeParcel {
+  p: [number, number][];
+  /** OSM landuse value: vineyard, forest, orchard, meadow, farmland. */
+  k: string;
+}
+
+export interface LandscapeData {
+  origin: { lat: number; lon: number };
+  dem: LandscapeDem;
+  buildings: LandscapeBuilding[];
+  parcels: LandscapeParcel[];
+  water: [number, number][][];
+  streams: [number, number][][];
+  tracks: [number, number][][];
+  attribution: string[];
+}

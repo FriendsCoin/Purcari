@@ -89,9 +89,18 @@ interface EffectsProps {
   bloomThreshold: number;
   grain: number;
   vignette: number;
+  /** Momentary lift through a chapter dissolve, 0..1. */
+  swell: number;
 }
 
-function Effects({ bloomStrength, bloomRadius, bloomThreshold, grain, vignette }: EffectsProps) {
+function Effects({
+  bloomStrength,
+  bloomRadius,
+  bloomThreshold,
+  grain,
+  vignette,
+  swell,
+}: EffectsProps) {
   const { gl, scene, camera, size } = useThree();
 
   const composer = useMemo(() => {
@@ -128,13 +137,17 @@ function Effects({ bloomStrength, bloomRadius, bloomThreshold, grain, vignette }
     const passes = composer.passes;
     for (const pass of passes) {
       if (pass instanceof UnrealBloomPass) {
-        pass.strength = bloomStrength;
-        pass.radius = bloomRadius;
-        pass.threshold = bloomThreshold;
+        // Bloom and threshold both move through a dissolve: light spreads and
+        // more of the frame qualifies as highlight, so the crossover reads as a
+        // breath of light rather than as two scenes briefly overlapping.
+        pass.strength = bloomStrength * (1 + swell * 0.85);
+        pass.radius = bloomRadius * (1 + swell * 0.3);
+        pass.threshold = bloomThreshold * (1 - swell * 0.5);
       } else if (pass instanceof ShaderPass && pass.uniforms.uTime) {
         pass.uniforms.uTime.value = state.clock.elapsedTime;
-        pass.uniforms.uGrain.value = grain;
-        pass.uniforms.uVignette.value = vignette;
+        // Grain thins as the frame brightens, the way film does.
+        pass.uniforms.uGrain.value = grain * (1 - swell * 0.5);
+        pass.uniforms.uVignette.value = vignette * (1 - swell * 0.25);
       }
     }
     composer.render(delta);
@@ -156,6 +169,8 @@ export interface StageProps {
   background?: string;
   /** Fog softens the far filaments so depth reads without shading. */
   fog?: [string, number, number];
+  /** 0..1 lift applied through a chapter dissolve. */
+  swell?: number;
   className?: string;
 }
 
@@ -170,6 +185,7 @@ export function Stage({
   vignette = 1.05,
   background = PALETTE.void,
   fog = [PALETTE.void, 14, 46],
+  swell = 0,
   className,
 }: StageProps) {
   return (
@@ -196,6 +212,7 @@ export function Stage({
         bloomThreshold={bloomThreshold}
         grain={grain}
         vignette={vignette}
+        swell={swell}
       />
     </Canvas>
   );
