@@ -69,10 +69,16 @@ const FilmShader = {
   `,
 };
 
-export function PostFX({ bloom = 0.55 }: { bloom?: number }) {
+interface PostProps {
+  bloom?: number;
+  /** Camera-flight progress; drives the mid-move exposure and glow lift. */
+  transition?: React.MutableRefObject<{ bell: number }>;
+}
+
+export function PostFX({ bloom = 0.55, transition }: PostProps) {
   const { gl, scene, camera, size } = useThree();
 
-  const { composer, film } = useMemo(() => {
+  const { composer, film, bloomPass } = useMemo(() => {
     const c = new EffectComposer(gl);
     c.addPass(new RenderPass(scene, camera));
 
@@ -85,7 +91,7 @@ export function PostFX({ bloom = 0.55 }: { bloom?: number }) {
     const filmPass = new ShaderPass(FilmShader);
     c.addPass(filmPass);
 
-    return { composer: c, film: filmPass };
+    return { composer: c, film: filmPass, bloomPass };
   }, [gl, scene, camera, bloom, size.width, size.height]);
 
   useEffect(() => {
@@ -99,6 +105,14 @@ export function PostFX({ bloom = 0.55 }: { bloom?: number }) {
 
   useFrame((_, delta) => {
     film.uniforms.uTime.value += delta;
+
+    // Mid-flight the frame opens up a little: more glow, a touch more exposure
+    // and a heavier lens. It reads as motion even on a still subject.
+    const bell = transition?.current.bell ?? 0;
+    bloomPass.strength = bloom + bell * 0.42;
+    gl.toneMappingExposure = 1.15 + bell * 0.16;
+    film.uniforms.uAberration.value = 0.0016 + bell * 0.0034;
+
     composer.render(delta);
   }, 1);
 

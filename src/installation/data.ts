@@ -7,6 +7,37 @@
  */
 
 import { useEffect, useState } from 'react';
+import { FALLBACK_BBOX, makeProjection, type GeoBox, type Projection, type TerrainGrid } from './projection';
+
+/** A polyline or ring straight from OpenStreetMap, in [lat, lng] pairs. */
+export interface GeoShape {
+  pts: Array<[number, number]>;
+  name?: string;
+  kind?: string;
+  levels?: number;
+}
+
+export interface Place {
+  lat: number;
+  lng: number;
+  name: string;
+  kind: string;
+}
+
+export interface Landscape {
+  bbox: GeoBox;
+  terrain: TerrainGrid | null;
+  buildings: GeoShape[];
+  vineyards: GeoShape[];
+  wood: GeoShape[];
+  scrub: GeoShape[];
+  farmland: GeoShape[];
+  water: GeoShape[];
+  rivers: GeoShape[];
+  roads: GeoShape[];
+  places: Place[];
+  chateau: Place | null;
+}
 
 export type SpeciesKind = 'bird' | 'mammal' | 'domestic' | 'unknown';
 
@@ -93,6 +124,9 @@ export interface Payload {
 /** Payload plus the derived views the render layer works from. */
 export interface Archive extends Payload {
   count: number;
+  /** Real basemap: DEM relief plus the OSM features around the estate. */
+  landscape: Landscape | null;
+  projection: Projection;
   /** Per-detection typed views. */
   sp: Uint16Array;
   st: Int8Array;
@@ -109,7 +143,7 @@ export interface Archive extends Payload {
   perSpecies: number[][];
 }
 
-function widen(p: Payload): Archive {
+function widen(p: Payload, landscape: Landscape | null): Archive {
   const n = p.detections.sp.length;
   const lat = Float32Array.from(p.detections.lat);
   const lng = Float32Array.from(p.detections.lng);
@@ -127,6 +161,8 @@ function widen(p: Payload): Archive {
   return {
     ...p,
     count: n,
+    landscape,
+    projection: makeProjection(landscape?.bbox ?? FALLBACK_BBOX, landscape?.terrain ?? null),
     sp: Uint16Array.from(p.detections.sp),
     st: Int8Array.from(p.detections.st),
     minute: Uint16Array.from(p.detections.min),
@@ -154,17 +190,26 @@ export function useArchive(): { archive: Archive | null; error: string | null } 
 
   useEffect(() => {
     let alive = true;
-    fetch(`${import.meta.env.BASE_URL}installation.json`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        return r.json();
-      })
-      .then((p: Payload) => {
-        if (alive) setArchive(widen(p));
+
+    const grab = async (file: string) => {
+      const r = await fetch(`${import.meta.env.BASE_URL}${file}`);
+      if (!r.ok) throw new Error(`${file}: ${r.status} ${r.statusText}`);
+      return r.json();
+    };
+
+    Promise.all([
+      grab('installation.json'),
+      // The basemap is a bonus, not a requirement — the piece still reads
+      // without it, so a missing landscape must not block the archive.
+      grab('landscape.json').catch(() => null),
+    ])
+      .then(([payload, landscape]: [Payload, Landscape | null]) => {
+        if (alive) setArchive(widen(payload, landscape));
       })
       .catch((e: Error) => {
         if (alive) setError(e.message);
       });
+
     return () => {
       alive = false;
     };

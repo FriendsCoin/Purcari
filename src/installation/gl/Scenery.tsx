@@ -1,6 +1,6 @@
 /**
- * Everything in the scene that is not a detection: the interpolated relief of
- * the estate, the 24 hour dial, the co-occurrence web and the station beacons.
+ * Stage dressing that is not a detection and not the basemap: the 24 hour dial,
+ * the co-occurrence web, the station beacons and the diversity plinths.
  *
  * Each piece knows which acts it belongs to and fades itself in and out, so the
  * stage dresses and undresses around the particle cloud without any of it being
@@ -21,9 +21,11 @@ import {
   Mesh,
   MeshBasicMaterial,
   RingGeometry,
+  ShaderMaterial,
 } from 'three';
 import type { Archive } from '../data';
-import { BLOOM_REACH, CHRONOS_RINGS, GROUND_SPAN, bloomSites, geoProjector, speciesNodes } from '../layouts';
+import type { FieldControls } from './ParticleField';
+import { BLOOM_REACH, CHRONOS_RINGS, bloomSites, geoProjector, speciesNodes } from '../layouts';
 import { PALETTE, ZONE_COLOR } from '../theme';
 
 /** Eases a material's opacity toward a target; returns the group ref to attach. */
@@ -39,9 +41,11 @@ function useFade(target: number, speed = 2.2) {
       const mat = (obj as Mesh).material as Material | Material[] | undefined;
       if (!mat) return;
       for (const m of Array.isArray(mat) ? mat : [mat]) {
-        if ('opacity' in m) {
-          (m as MeshBasicMaterial).opacity = (m.userData.baseOpacity ?? 1) * v;
-        }
+        const base = (m.userData.baseOpacity ?? 1) * v;
+        // Shader materials carry their own uOpacity; the built-ins use .opacity.
+        const uniforms = (m as ShaderMaterial).uniforms;
+        if (uniforms?.uOpacity) uniforms.uOpacity.value = base;
+        else if ('opacity' in m) (m as MeshBasicMaterial).opacity = base;
       }
     });
   });
@@ -56,87 +60,18 @@ function tagOpacity<T extends Material>(material: T, base: number): T {
 }
 
 // ---------------------------------------------------------------------------
-// Relief of the estate, inverse-distance interpolated from the ten station
-// altitudes. It is an interpolation, not a survey — enough to read the valley
-// the low stations sit in.
-// ---------------------------------------------------------------------------
-function Relief({ archive, active }: { archive: Archive; active: number }) {
-  const group = useFade(active);
-
-  const lines = useMemo(() => {
-    const geo = geoProjector(archive);
-    const pts = archive.stations.map((s) => {
-      const [x, z] = geo.project(s.lat, s.lng);
-      return { x, z, y: geo.elevation(s.alt) };
-    });
-
-    const RES = 44;
-    const spanX = GROUND_SPAN * 0.62;
-    const spanZ = GROUND_SPAN * 1.02;
-    const height = (x: number, z: number) => {
-      let num = 0;
-      let den = 0;
-      for (const p of pts) {
-        const d2 = (p.x - x) ** 2 + (p.z - z) ** 2 + 1.5;
-        const w = 1 / (d2 * d2);
-        num += p.y * w;
-        den += w;
-      }
-      return num / den;
-    };
-
-    const grid: number[][] = [];
-    for (let i = 0; i <= RES; i += 1) {
-      grid[i] = [];
-      for (let j = 0; j <= RES; j += 1) {
-        const x = -spanX / 2 + (spanX * i) / RES;
-        const z = -spanZ / 2 + (spanZ * j) / RES;
-        grid[i][j] = height(x, z);
-      }
-    }
-
-    const verts: number[] = [];
-    const push = (i: number, j: number) => {
-      verts.push(-spanX / 2 + (spanX * i) / RES, grid[i][j] - 0.6, -spanZ / 2 + (spanZ * j) / RES);
-    };
-    for (let i = 0; i <= RES; i += 1) {
-      for (let j = 0; j <= RES; j += 1) {
-        if (i < RES) {
-          push(i, j);
-          push(i + 1, j);
-        }
-        if (j < RES) {
-          push(i, j);
-          push(i, j + 1);
-        }
-      }
-    }
-
-    const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(Float32Array.from(verts), 3));
-    return g;
-  }, [archive]);
-
-  const material = useMemo(
-    () => tagOpacity(new LineBasicMaterial({ color: new Color('#1d3a4a'), blending: AdditiveBlending, depthWrite: false }), 0.5),
-    []
-  );
-
-  useEffect(() => () => lines.dispose(), [lines]);
-
-  return (
-    <group ref={group}>
-      <lineSegments geometry={lines} material={material} />
-    </group>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // The 24 hour dial: two rings — acoustic inside, camera outside — plus spokes
 // every three hours and a marker on the horizon.
 // ---------------------------------------------------------------------------
-function ChronosGuides({ active }: { active: number }) {
+function ChronosGuides({
+  active,
+  controls,
+}: {
+  active: number;
+  controls: React.MutableRefObject<FieldControls>;
+}) {
   const group = useFade(active);
+  const hand = useRef<Group>(null);
 
   const { rings, spokes } = useMemo(() => {
     const ringGeo = new BufferGeometry();
@@ -175,18 +110,52 @@ function ChronosGuides({ active }: { active: number }) {
     []
   );
 
+  const handGeo = useMemo(() => {
+    const g = new BufferGeometry();
+    g.setAttribute(
+      'position',
+      new BufferAttribute(
+        Float32Array.from([CHRONOS_RINGS.inner - 7, 0, 0, CHRONOS_RINGS.outer + 4, 0, 0]),
+        3
+      )
+    );
+    return g;
+  }, []);
+
+  const handMat = useMemo(
+    () =>
+      tagOpacity(
+        new LineBasicMaterial({ color: new Color(PALETTE.gold), blending: AdditiveBlending, depthWrite: false }),
+        0.7
+      ),
+    []
+  );
+
+  useFrame(() => {
+    // Follows the same minute the particle shader is lighting.
+    const minute = controls.current.sweep;
+    if (hand.current) {
+      hand.current.visible = minute >= 0;
+      if (minute >= 0) hand.current.rotation.y = -((minute / 1440) * Math.PI * 2 - Math.PI / 2);
+    }
+  });
+
   useEffect(
     () => () => {
       rings.dispose();
       spokes.dispose();
+      handGeo.dispose();
     },
-    [rings, spokes]
+    [rings, spokes, handGeo]
   );
 
   return (
     <group ref={group}>
       <lineSegments geometry={rings} material={ringMat} />
       <lineSegments geometry={spokes} material={spokeMat} />
+      <group ref={hand}>
+        <lineSegments geometry={handGeo} material={handMat} />
+      </group>
     </group>
   );
 }
@@ -205,25 +174,73 @@ function VoiceEdges({ archive, active }: { archive: Archive; active: number }) {
     const cool = new Color(PALETTE.cyan);
     const maxW = Math.max(...archive.edges.map((e) => e.w), 1);
 
-    for (const e of archive.edges) {
+    const along: number[] = [];
+    const phase: number[] = [];
+
+    archive.edges.forEach((e, i) => {
       const t = Math.min(1, e.w / maxW);
       const c = cool.clone().lerp(warm, t);
       verts.push(nodes[e.a * 3], nodes[e.a * 3 + 1], nodes[e.a * 3 + 2]);
       verts.push(nodes[e.b * 3], nodes[e.b * 3 + 1], nodes[e.b * 3 + 2]);
       const amp = 0.1 + t * 0.5;
       colors.push(c.r * amp, c.g * amp, c.b * amp, c.r * amp, c.g * amp, c.b * amp);
-    }
+      along.push(0, 1);
+      // Deterministic per-edge offset, so the web pulses unevenly like a network.
+      const p = ((i * 2654435761) % 1000) / 1000;
+      phase.push(p, p);
+    });
 
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(Float32Array.from(verts), 3));
     g.setAttribute('color', new BufferAttribute(Float32Array.from(colors), 3));
+    g.setAttribute('aAlong', new BufferAttribute(Float32Array.from(along), 1));
+    g.setAttribute('aPhase', new BufferAttribute(Float32Array.from(phase), 1));
     return g;
   }, [archive]);
 
-  const material = useMemo(
-    () => tagOpacity(new LineBasicMaterial({ vertexColors: true, blending: AdditiveBlending, depthWrite: false }), 0.85),
-    []
-  );
+  const material = useMemo(() => {
+    const m = new ShaderMaterial({
+      vertexShader: /* glsl */ `
+        attribute float aAlong;
+        attribute float aPhase;
+        varying vec3 vColor;
+        varying float vAlong;
+        varying float vPhase;
+        void main(){
+          vColor = color;
+          vAlong = aAlong;
+          vPhase = aPhase;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        uniform float uTime;
+        uniform float uOpacity;
+        varying vec3 vColor;
+        varying float vAlong;
+        varying float vPhase;
+        void main(){
+          // A charge running from one species to the other it was heard beside.
+          float head = fract(uTime * 0.24 + vPhase);
+          float spark = exp(-pow((vAlong - head) * 7.0, 2.0));
+          vec3 col = vColor * (1.0 + spark * 1.8);
+          gl_FragColor = vec4(col, (0.5 + spark * 0.35) * uOpacity);
+        }
+      `,
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 0.85 } },
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    });
+    m.userData.baseOpacity = 0.85;
+    return m;
+  }, []);
+
+  useFrame((_, delta) => {
+    material.uniforms.uTime.value += delta;
+  });
 
   useEffect(() => () => geometry.dispose(), [geometry]);
 
@@ -256,7 +273,7 @@ function StationBeacons({ archive, active }: { archive: Archive; active: number 
         }),
         s.status === 'active' ? 0.75 : 0.5
       );
-      return { station: s, x, y: geo.elevation(s.alt) - 0.4, z, ring, mat, phase: i * 0.7 };
+      return { station: s, x, y: geo.ground(s.lat, s.lng) + 0.35, z, ring, mat, phase: i * 0.7 };
     });
   }, [archive]);
 
@@ -349,12 +366,19 @@ function BloomPlinths({ archive, active }: { archive: Archive; active: number })
   );
 }
 
-export function Scenery({ archive, act }: { archive: Archive; act: number }) {
+export function Scenery({
+  archive,
+  act,
+  controls,
+}: {
+  archive: Archive;
+  act: number;
+  controls: React.MutableRefObject<FieldControls>;
+}) {
   return (
     <>
-      <Relief archive={archive} active={act === 1 || act === 4 ? 1 : 0} />
       <StationBeacons archive={archive} active={act === 1 || act === 4 ? 1 : 0} />
-      <ChronosGuides active={act === 2 ? 1 : 0} />
+      <ChronosGuides active={act === 2 ? 1 : 0} controls={controls} />
       <VoiceEdges archive={archive} active={act === 3 ? 1 : 0} />
       <BloomPlinths archive={archive} active={act === 5 ? 1 : 0} />
     </>

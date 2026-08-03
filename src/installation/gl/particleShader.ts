@@ -89,6 +89,7 @@ uniform float uDayCursor;
 uniform float uFocusSpecies;
 uniform float uFocusStation;
 uniform float uArc;
+uniform float uSweep;
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -150,6 +151,16 @@ void main(){
     float hit = step(abs(aStation - uFocusStation), 0.5);
     alpha *= mix(0.07, 1.0, hit);
     sizeMul *= mix(0.7, 1.5, hit);
+  }
+
+  // Radar sweep across the 24 hour dial: each hour lights as the hand passes.
+  if (uSweep >= 0.0) {
+    float gap = abs(aMinute - uSweep);
+    gap = min(gap, 1440.0 - gap);
+    float hit = exp(-gap * gap / 1800.0);
+    flare = max(flare, hit);
+    sizeMul *= 1.0 + hit * 1.4;
+    alpha = max(alpha, alpha * (1.0 + hit * 1.5));
   }
 
   vColor = mix(aColorFrom, aColorTo, e);

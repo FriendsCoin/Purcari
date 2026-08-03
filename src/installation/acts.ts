@@ -44,7 +44,7 @@ export const ACTS: ActDefinition[] = [
     caption: (a) =>
       `${nf.format(a.meta.counts.detections)} регистраций · ${a.meta.counts.species} видов · ` +
       `${a.meta.counts.stations} станций · ${a.meta.window.days} дней`,
-    camera: { position: [0, 3, 64], target: [0, 0, 0], fov: 44 },
+    camera: { position: [0, 5, 78], target: [0, 0, 0], fov: 42 },
     orbit: 0.018,
     drift: 0.85,
     build: layoutDormant,
@@ -64,7 +64,7 @@ export const ACTS: ActDefinition[] = [
         `Высота султана света — число регистраций; координаты и рельеф настоящие.`
       );
     },
-    camera: { position: [42, 34, 60], target: [0, 10, 0], fov: 38 },
+    camera: { position: [34, 88, 88], target: [-8, 8, 8], fov: 36 },
     orbit: 0.03,
     drift: 0.4,
     build: layoutTerrain,
@@ -103,7 +103,7 @@ export const ACTS: ActDefinition[] = [
       return `${a.meta.counts.species} вида. В центре — массовые, по краю — ${once} видов, записанных единственный раз.`;
     },
     camera: { position: [2, 26, 56], target: [0, 0, 0], fov: 42 },
-    orbit: 0.026,
+    orbit: 0.038,
     drift: 0.3,
     build: layoutVoices,
     panel: 'species',
@@ -117,7 +117,7 @@ export const ACTS: ActDefinition[] = [
     caption: (a) =>
       `${a.meta.counts.stationsActive} станции работают, ${a.meta.counts.stationsLost} замолчали — ` +
       `оборудование потеряно летом 2025 года.`,
-    camera: { position: [52, 28, 58], target: [0, 14, 0], fov: 34 },
+    camera: { position: [38, 92, 90], target: [-8, 18, 8], fov: 36 },
     orbit: 0.034,
     drift: 0.28,
     build: layoutStations,
@@ -136,7 +136,7 @@ export const ACTS: ActDefinition[] = [
       return `Индекс Шеннона: ${best.site} ${best.shannon.toFixed(2)} против ${worst.shannon.toFixed(2)} в зоне «${worst.site}».`;
     },
     camera: { position: [14, 10, 84], target: [14, -2, 0], fov: 40 },
-    orbit: 0.016,
+    orbit: 0.05,
     drift: 0.5,
     build: layoutBloom,
     panel: 'diversity',

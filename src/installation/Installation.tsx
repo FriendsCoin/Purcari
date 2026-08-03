@@ -19,9 +19,10 @@ import { makeContext, type Layout, type LayoutContext } from './layouts';
 import { labelsForAct } from './labels';
 import { ParticleField, type FieldControls } from './gl/ParticleField';
 import { Labels, type LabelRegistry } from './gl/Labels';
+import { Landscape } from './gl/Landscape';
 import { Scenery } from './gl/Scenery';
 import { PostFX } from './gl/PostFX';
-import { Rig } from './gl/Rig';
+import { Rig, type TransitionState } from './gl/Rig';
 import { Panel } from './ui/Panels';
 import { Scrubber } from './ui/Scrubber';
 import { Cursor } from './ui/Cursor';
@@ -30,6 +31,7 @@ import './ui/installation.css';
 const AUTOPLAY_SECONDS = 16;
 const IDLE_SECONDS = 45;
 const SEASON_SECONDS = 26;
+const SWEEP_SECONDS = 19;
 
 export function Installation({ onExit }: { onExit?: () => void }) {
   const { archive, error } = useArchive();
@@ -85,12 +87,14 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
     dayCursor: -1,
     focusSpecies: -1,
     focusStation: -1,
+    sweep: -1,
     drift: ACTS[0].drift,
     opacity: 1,
   });
   const pointer = useRef({ x: 0, y: 0 });
   const pointerWorld = useMemo(() => new Vector3(0, -999, 0), []);
   const labelRegistry = useRef<LabelRegistry>(new Map());
+  const transition = useRef<TransitionState>({ progress: 1, bell: 0, travelling: false });
   const labelOpacity = useRef(1);
   const actsRef = useRef<HTMLDivElement>(null);
   const seasonRef = useRef<HTMLSpanElement>(null);
@@ -195,6 +199,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
     let frame = 0;
     let elapsed = 0;
     let seasonT = 0;
+    let sweepT = 0;
     let last = performance.now();
 
     const firstDay = new Date(`${archive.meta.window.firstDay}T00:00:00Z`);
@@ -219,6 +224,16 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
       }
       actsRef.current?.style.setProperty('--progress', running ? String(elapsed / AUTOPLAY_SECONDS) : '0');
 
+      // Act II runs a hand around the dial; the shader lights each hour as it
+      // passes, so the day plays rather than just sitting there.
+      if (act === 2) {
+        sweepT = (sweepT + delta / SWEEP_SECONDS) % 1;
+        controls.current.sweep = sweepT * 1440;
+      } else {
+        controls.current.sweep = -1;
+        sweepT = 0;
+      }
+
       if (season) {
         seasonT = (seasonT + delta / SEASON_SECONDS) % 1.12;
         const cursor = seasonT * maxDay;
@@ -241,7 +256,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [entered, autoplay, season, archive]);
+  }, [entered, autoplay, season, archive, act]);
 
   const onMorphProgress = useCallback((t: number) => {
     const e = Math.max(0, Math.min(1, (t - 0.55) / 0.45));
@@ -273,10 +288,17 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
           controls={controls}
           onMorphProgress={onMorphProgress}
         />
-        <Scenery archive={archive} act={act} />
+        <Landscape archive={archive} active={act === 1 || act === 4 ? 1 : 0} />
+        <Scenery archive={archive} act={act} controls={controls} />
         <Labels anchors={anchors} registry={labelRegistry} opacity={labelOpacity} />
-        <Rig act={definition} pointer={pointer} pointerWorld={pointerWorld} enabled={entered} />
-        <PostFX />
+        <Rig
+          act={definition}
+          pointer={pointer}
+          pointerWorld={pointerWorld}
+          transition={transition}
+          enabled={entered}
+        />
+        <PostFX transition={transition} />
       </Canvas>
 
       <div className="inst__veil" />

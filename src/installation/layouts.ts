@@ -13,10 +13,11 @@
 
 import { Color } from 'three';
 import type { Archive } from './data';
+import type { Projection } from './projection';
+import { LANDSCAPE_SPAN } from './projection';
 import { PALETTE, detectionColor } from './theme';
 
-export const GROUND_SPAN = 60;
-export const VERTICAL_EXAGGERATION = 6;
+export const GROUND_SPAN = LANDSCAPE_SPAN;
 
 export interface Layout {
   position: Float32Array;
@@ -41,26 +42,9 @@ function empty(n: number): Layout {
   return { position: new Float32Array(n * 3), color: new Float32Array(n * 3), size: new Float32Array(n) };
 }
 
-/** Metre-accurate projection of the station network into scene space. */
-export function geoProjector(archive: Archive) {
-  const { lat0, lat1, lng0, lng1 } = archive.bounds;
-  const midLat = (lat0 + lat1) / 2;
-  const mPerLat = 111320;
-  const mPerLng = 111320 * Math.cos((midLat * Math.PI) / 180);
-  const heightM = (lat1 - lat0) * mPerLat;
-  const scale = GROUND_SPAN / heightM;
-  const cLat = midLat;
-  const cLng = (lng0 + lng1) / 2;
-  return {
-    scale,
-    project(lat: number, lng: number): [number, number] {
-      return [(lng - cLng) * mPerLng * scale, -(lat - cLat) * mPerLat * scale];
-    },
-    /** Ground altitude in scene units, relief exaggerated for legibility. */
-    elevation(alt: number): number {
-      return (alt - archive.bounds.alt0) * scale * VERTICAL_EXAGGERATION;
-    },
-  };
+/** Every act shares the archive's single projection onto the real terrain. */
+export function geoProjector(archive: Archive): Projection {
+  return archive.projection;
 }
 
 /** Per-detection base tint and grain size, shared by most acts. */
@@ -129,10 +113,10 @@ export function layoutTerrain(ctx: LayoutContext): Layout {
   for (let i = 0; i < n; i += 1) {
     const stIdx = archive.st[i];
     const station = stIdx >= 0 ? archive.stations[stIdx] : null;
-    const [x, z] = station
-      ? geo.project(station.lat, station.lng)
-      : geo.project(archive.lat[i], archive.lng[i]);
-    const ground = geo.elevation(station ? station.alt : archive.bounds.alt0);
+    const lat = station ? station.lat : archive.lat[i];
+    const lng = station ? station.lng : archive.lng[i];
+    const [x, z] = geo.project(lat, lng);
+    const ground = geo.ground(lat, lng);
 
     const total = station ? Math.max(station.total, 1) : 1;
     const k = stIdx >= 0 ? seen[stIdx]++ / total : rnd();
@@ -276,7 +260,7 @@ export function layoutStations(ctx: LayoutContext): Layout {
     const rad = 0.55 + Math.sin(k * Math.PI) * 0.85;
 
     out.position[i * 3] = x + Math.cos(twist) * rad;
-    out.position[i * 3 + 1] = geo.elevation(station.alt) + k * height;
+    out.position[i * 3 + 1] = geo.ground(station.lat, station.lng) + k * height;
     out.position[i * 3 + 2] = z + Math.sin(twist) * rad;
     out.size[i] = base.size[i];
 

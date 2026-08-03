@@ -7,8 +7,9 @@
  */
 
 import type { Archive } from './data';
-import { CHRONOS_RINGS, GROUND_SPAN, VERTICAL_EXAGGERATION, bloomSites, geoProjector, speciesNodes } from './layouts';
+import { CHRONOS_RINGS, GROUND_SPAN, bloomSites, geoProjector, speciesNodes } from './layouts';
 import { SITE_RU } from './layouts';
+import { VERTICAL_EXAGGERATION } from './projection';
 
 export interface LabelAnchor {
   id: string;
@@ -24,18 +25,48 @@ export interface LabelAnchor {
 export function labelsForAct(archive: Archive, act: number): LabelAnchor[] {
   switch (act) {
     case 1:
-      return stationLabels(archive, 'terrain');
+      return [...placeLabels(archive), ...stationLabels(archive, 'terrain')];
     case 2:
       return clockLabels();
     case 3:
       return speciesLabels(archive);
     case 4:
-      return stationLabels(archive, 'columns');
+      return [...placeLabels(archive), ...stationLabels(archive, 'columns')];
     case 5:
       return siteLabels(archive);
     default:
       return [];
   }
+}
+
+/**
+ * The place itself: the winery the estate is named after, and the two villages
+ * it sits between. Without them the relief is just a shape.
+ */
+function placeLabels(archive: Archive): LabelAnchor[] {
+  const landscape = archive.landscape;
+  if (!landscape) return [];
+  const geo = geoProjector(archive);
+
+  const RU: Record<string, string> = {
+    'Chateau Purcari': 'Chateau Purcari',
+    Purcari: 'Пуркарь',
+    Antonești: 'Антонешты',
+  };
+
+  return landscape.places
+    .filter((p) => p.name && (p.kind === 'winery' || p.kind === 'village'))
+    .map((p) => {
+      const [x, z] = geo.project(p.lat, p.lng);
+      const winery = p.kind === 'winery';
+      return {
+        id: `place-${p.name}`,
+        world: [x, geo.ground(p.lat, p.lng) + (winery ? 6 : 3.5), z] as [number, number, number],
+        title: RU[p.name] ?? p.name,
+        meta: winery ? 'винодельня · 1827' : 'село',
+        tone: winery ? ('accent' as const) : ('default' as const),
+      };
+    });
 }
 
 function stationLabels(archive: Archive, mode: 'terrain' | 'columns'): LabelAnchor[] {
@@ -50,7 +81,7 @@ function stationLabels(archive: Archive, mode: 'terrain' | 'columns'): LabelAnch
 
   return shown.map(({ s, i }) => {
     const [x, z] = geo.project(s.lat, s.lng);
-    const ground = geo.elevation(s.alt);
+    const ground = geo.ground(s.lat, s.lng);
     const top =
       mode === 'terrain'
         ? ground + 3 + 16 * (s.total / maxTotal) ** 0.55 + 2

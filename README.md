@@ -22,11 +22,35 @@ Open it at `/`; the analytical dashboard lives at `/#dashboard`.
 | # | Act | What the cloud becomes |
 |---|-----|------------------------|
 | 00 | Пролог | A dormant shell of grains behind the title |
-| I | Земля | Plumes of light at the ten stations' true coordinates, over relief interpolated from their altitudes |
+| I | Земля | Plumes of light at the ten stations' true coordinates, over the real relief of the estate |
 | II | Хронос | A 24-hour dial — acoustic inside, camera traps outside |
 | III | Голоса | 136 species as a spiral galaxy, common at the core, single records at the rim, linked where they share a station |
 | IV | Станции | Helical columns per station; the five silenced ones burn down to ember and ash |
 | V | Индекс | Four land uses as blooms, sized and shaped by their Shannon and Simpson indices |
+
+### The place is the real one
+
+Acts I and IV are staged on an actual basemap of the estate, not a diagram:
+
+- **Relief** from SRTM-derived terrain tiles — the 170 m drop from the vineyard
+  plateau to the Dniester floodplain, exaggerated 5.5× so it reads at all.
+- **Chateau Purcari** itself, at 46.5295 N 29.8719 E, with the eight buildings of
+  the estate around it picked out in gold and lit window by window. The two
+  loudest acoustic stations, CT44 and CT47, stand within 200 m of it.
+- **192 vineyard parcels**, ~360 ha, each filled with rows running along its own
+  long axis — the planting direction, recovered from the parcel's principal axis.
+- The **Dniester**, the ponds, the roads and the two villages the estate sits
+  between, Purcari and Antonești.
+
+Everything comes from OpenStreetMap and public elevation tiles, is baked once by
+`npm run landscape`, and is committed — the app never touches the network. The
+map dissolves into haze at the edge of the surveyed area rather than ending in a
+cut slab of ground.
+
+Stations sit on the DEM rather than on their recorded altitudes: the field
+figures run a consistent ~28 m above the terrain model, which is the usual
+geoid-versus-ellipsoid offset for this region. Labels quote the recorded value;
+the geometry uses the DEM so nothing floats.
 
 ### What the data says
 
@@ -55,16 +79,35 @@ Left idle for 45 seconds the piece resumes autoplay on its own.
 ### How it is built
 
 No new dependencies: `@react-three/fiber` drives raw `three`, with a custom GLSL
-point shader doing the morphing, drift, pointer repulsion and time filtering on
-the GPU. Post-processing is three's own `EffectComposer` — bloom, then a film
-pass for grain, vignette and chromatic aberration. Labels are DOM elements
-projected each frame, so the typography is real text rather than textures.
+point shader doing the morphing, drift, pointer repulsion, time filtering and the
+act II radar sweep on the GPU. Post-processing is three's own `EffectComposer` —
+bloom, then a film pass for grain, vignette and chromatic aberration. Labels are
+DOM elements projected each frame, so the typography is real text rather than
+textures.
 
-`npm run data` regenerates `public/installation.json` from the raw exports; it
-runs automatically before `dev` and `build`.
+The camera never cuts. Between acts it flies a bowed Bézier around the subject
+while bloom, exposure and lens aberration lift on a `sin(πt)` bell, so a move
+reads as travel rather than a dissolve. Nothing is mounted or unmounted mid-
+transition — every layer cross-fades.
+
+Terrain, parcels and buildings are triangulated and draped at load time by
+`landscapeGeometry.ts`, including an ear-clipping triangulator and a scanline row
+filler, both dependency-free. `scripts/fetch-landscape.mjs` decodes the DEM
+tiles' PNGs by hand (zlib plus the five PNG filters) for the same reason.
+
+Two build steps, both committed so a clone runs offline:
+
+```
+npm run data       # public/installation.json from the E1C exports
+npm run landscape  # public/landscape.json from OSM + elevation tiles
+```
+
+`data` runs automatically before `dev` and `build`; `landscape` is manual, since
+it goes out to the network and its result rarely changes.
 
 Source lives in `src/installation/` — `layouts.ts` holds the act geometry,
-`acts.ts` the score, `gl/` the renderer, `ui/` the chrome.
+`acts.ts` the score, `projection.ts` the single shared geo projection, `gl/` the
+renderer, `ui/` the chrome.
 
 ## Features
 

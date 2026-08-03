@@ -6,6 +6,7 @@
   "main": "src/index.tsx",
   "scripts": {
     "data": "node scripts/build-installation-data.mjs",
+    "landscape": "node scripts/fetch-landscape.mjs",
     "predev": "npm run data",
     "dev": "vite",
     "build": "npm run data && tsc && vite build",

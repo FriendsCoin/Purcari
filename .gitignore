@@ -42,3 +42,6 @@ lerna-debug.log*
 *.tmp
 *.temp
 .cache
+
+# Landscape fetch cache (DEM tiles + raw Overpass response)
+scripts/.cache/

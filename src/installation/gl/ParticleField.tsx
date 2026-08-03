@@ -37,6 +37,8 @@ export interface FieldControls {
   dayCursor: number;
   focusSpecies: number;
   focusStation: number;
+  /** Minute-of-day the chronos hand is passing, or -1 when it is parked. */
+  sweep: number;
   drift: number;
   opacity: number;
 }
@@ -110,6 +112,7 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
         uFocusSpecies: { value: -1 },
         uFocusStation: { value: -1 },
         uArc: { value: 3.2 },
+        uSweep: { value: -1 },
         uOpacity: { value: 1 },
       },
     });
@@ -195,6 +198,7 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
     u.uDayCursor.value = c.dayCursor;
     u.uFocusSpecies.value = c.focusSpecies;
     u.uFocusStation.value = c.focusStation;
+    u.uSweep.value = c.sweep;
     u.uDrift.value += (c.drift - u.uDrift.value) * Math.min(1, delta * 2);
     u.uOpacity.value += (c.opacity - u.uOpacity.value) * Math.min(1, delta * 3);
   });
