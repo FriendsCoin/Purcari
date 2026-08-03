@@ -866,3 +866,33 @@
   letter-spacing: 0.36em;
   outline: none;
 }
+
+/* --------------------------------------------------------- column captions */
+
+/*
+ * Captions for the Refuge columns, positioned from coordinates the scene
+ * reports. Rendered as DOM rather than in-canvas text because drawing type in
+ * WebGL needs a font file, and this piece is built to run with no network at
+ * all — a silent fallback would leave the comparison unlabelled.
+ */
+.inst-column-label {
+  position: absolute;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ash);
+  transition: color 400ms ease;
+  pointer-events: none;
+}
+
+.inst-column-label[data-self='true'] {
+  color: var(--foil);
+  font-weight: 600;
+}
+
+.inst-column-label[data-active='true'] {
+  color: var(--candle);
+}

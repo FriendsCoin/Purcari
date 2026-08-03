@@ -130,13 +130,13 @@ function buildColumns(data: InstallationData): ColumnLayout[] {
    * the survey found. It also puts both metrics in the same unit — species — so
    * the cross-fade compares like with like.
    */
-  const effective = new Map(bench.map((entry) => [entry.landUse, Math.exp(entry.shannon)]));
+  const effective = new Map(bench.map(entry => [entry.landUse, Math.exp(entry.shannon)]));
   const maxEffective = Math.max(...effective.values(), 1);
-  const maxCameraRichness = Math.max(...bench.map((entry) => entry.richness), 1);
-  const maxBirdRichness = Math.max(...birds.map((entry) => entry.richness), 1);
+  const maxCameraRichness = Math.max(...bench.map(entry => entry.richness), 1);
+  const maxBirdRichness = Math.max(...birds.map(entry => entry.richness), 1);
 
-  const cameraByUse = new Map(bench.map((entry) => [entry.landUse, entry]));
-  const birdByUse = new Map(birds.map((entry) => [entry.landUse, entry]));
+  const cameraByUse = new Map(bench.map(entry => [entry.landUse, entry]));
+  const birdByUse = new Map(birds.map(entry => [entry.landUse, entry]));
 
   /**
    * Row order is the camera survey's own ranking, richest first, and it never
@@ -146,7 +146,7 @@ function buildColumns(data: InstallationData): ColumnLayout[] {
    * reading is not monotonic left to right, which is honest: wooded park is
    * fourth for mammals and last for birds.
    */
-  const order = [...bench].sort((a, b) => b.shannon - a.shannon).map((entry) => entry.landUse);
+  const order = [...bench].sort((a, b) => b.shannon - a.shannon).map(entry => entry.landUse);
   for (const entry of birds) if (!order.includes(entry.landUse)) order.push(entry.landUse);
 
   const kept = order.slice(0, MAX_COLUMNS);
@@ -219,7 +219,8 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
       ranks[k] = rand(column.landUse, salt + 4);
       speeds[k] = 0.55 + rand(column.landUse, salt + 5) * 0.9;
       seeds[k] = rand(column.landUse, salt + 6);
-      scales[k] = MOTE_SIZE * (0.7 + rand(column.landUse, salt + 7) * 0.7) * (column.self ? 1.3 : 1);
+      scales[k] =
+        MOTE_SIZE * (0.7 + rand(column.landUse, salt + 7) * 0.7) * (column.self ? 1.3 : 1);
 
       colors[k * 3] = column.color.r;
       colors[k * 3 + 1] = column.color.g;
@@ -247,7 +248,7 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   const half = (columns.length - 1) * COLUMN_GAP * 0.5 + COLUMN_RADIUS;
   geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
-    Math.hypot(half, MAX_HEIGHT * 0.5) + 1,
+    Math.hypot(half, MAX_HEIGHT * 0.5) + 1
   );
   return geometry;
 }
@@ -599,12 +600,13 @@ function distanceToSegment(
   ax: number,
   ay: number,
   bx: number,
-  by: number,
+  by: number
 ): number {
   const dx = bx - ax;
   const dy = by - ay;
   const lengthSq = dx * dx + dy * dy;
-  const t = lengthSq > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0;
+  const t =
+    lengthSq > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0;
   return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
 }
 
@@ -616,9 +618,24 @@ export interface RefugeProps {
   /** Which land use is selected, by `landUse` string, or null. */
   selected?: string | null;
   onSelect?: (landUse: string | null) => void;
+  /**
+   * Reports where each column's foot sits on screen, in CSS pixels, so the
+   * parent can caption them in real type. A comparison nobody can read the
+   * labels of is decoration — and text drawn inside the canvas would need a
+   * font file, which this piece cannot fetch.
+   */
+  onLayout?: (marks: { landUse: string; x: number; y: number; self: boolean; value: number }[]) => void;
 }
 
-export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect }: RefugeProps) {
+export function Refuge({
+  data,
+  reveal = 1,
+  metric = 0,
+  selected = null,
+  onSelect,
+  onLayout,
+}: RefugeProps) {
+  const lastLayout = useRef(0);
   const groupRef = useRef<THREE.Group>(null);
   const revealRef = useRef(0);
   /** Seeded from the prop so the first frame is already the requested metric. */
@@ -627,12 +644,12 @@ export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect
   const { camera, size } = useThree();
 
   const columns = useMemo(() => buildColumns(data), [data]);
-  const hero = useMemo(() => columns.find((column) => column.self) ?? null, [columns]);
+  const hero = useMemo(() => columns.find(column => column.self) ?? null, [columns]);
 
   /** protConn is a percentage; at 0.0% the sheet's fill has no height whatsoever. */
   const protectedHeight = useMemo(
     () => (data.narrative.protection.protConn / 100) * MAX_HEIGHT,
-    [data.narrative.protection.protConn],
+    [data.narrative.protection.protConn]
   );
 
   const moteGeometry = useMemo(() => buildMoteGeometry(columns), [columns]);
@@ -640,7 +657,7 @@ export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect
   const protectionGeometry = useMemo(() => buildProtectionGeometry(columns), [columns]);
   const ringGeometry = useMemo(
     () => new THREE.RingGeometry(HERO_RING_INNER, HERO_RING_OUTER, 96),
-    [],
+    []
   );
   /** Invisible catcher, so a tap anywhere in the frame can pick or clear. */
   const backdropGeometry = useMemo(() => new THREE.PlaneGeometry(60, 40), []);
@@ -655,11 +672,11 @@ export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect
         opacity: 0,
         ...GLOW_DEFAULTS,
       }),
-    [],
+    []
   );
   const backdropMaterial = useMemo(
     () => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
-    [],
+    []
   );
 
   useEffect(() => {
@@ -678,8 +695,8 @@ export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect
       backdropMaterial,
     ];
     return () => {
-      geometries.forEach((geometry) => geometry.dispose());
-      materials.forEach((material) => material.dispose());
+      geometries.forEach(geometry => geometry.dispose());
+      materials.forEach(material => material.dispose());
     };
   }, [
     moteGeometry,
@@ -723,7 +740,7 @@ export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect
         (foot.x * 0.5 + 0.5) * size.width,
         (-foot.y * 0.5 + 0.5) * size.height,
         (head.x * 0.5 + 0.5) * size.width,
-        (-head.y * 0.5 + 0.5) * size.height,
+        (-head.y * 0.5 + 0.5) * size.height
       );
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -740,6 +757,30 @@ export function Refuge({ data, reveal = 1, metric = 0, selected = null, onSelect
 
   useFrame((state, delta) => {
     const time = state.clock.elapsedTime;
+
+    // Captions follow the columns, but at 5 Hz — they are DOM, and moving them
+    // every frame would thrash layout for no visible gain.
+    if (onLayout && groupRef.current && time - lastLayout.current > 0.2) {
+      lastLayout.current = time;
+      const group = groupRef.current;
+      const foot = new THREE.Vector3();
+      const heights = motes.uniforms.uHeight.value;
+      const presence = motes.uniforms.uPresence.value;
+      onLayout(
+        columns.map((column, i) => {
+          foot.set(column.x, 0, 0).applyMatrix4(group.matrixWorld).project(camera);
+          return {
+            landUse: column.landUse,
+            x: (foot.x * 0.5 + 0.5) * size.width,
+            y: (-foot.y * 0.5 + 0.5) * size.height,
+            self: column.self,
+            // Fade the caption out with its column so absent land uses do not
+            // leave a label hanging over empty space.
+            value: presence[i] * heights[i],
+          };
+        }),
+      );
+    }
     // Clamp the step so a tab-switch stall cannot snap every transition open.
     const dt = Math.min(delta, 1 / 15);
     // Time-based exponential smoothing: identical response at 30 or 144 fps.

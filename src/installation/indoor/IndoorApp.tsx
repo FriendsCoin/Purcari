@@ -13,6 +13,7 @@ import { Stage, CameraRig } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
+import { Refuge } from '../gl/Refuge';
 import '../ui/installation.css';
 
 /**
@@ -27,7 +28,7 @@ import '../ui/installation.css';
  * animals living on top of it, and calls the result the estate's other harvest.
  */
 
-type ChapterId = 'estate' | 'year' | 'choir';
+type ChapterId = 'estate' | 'year' | 'choir' | 'refuge';
 
 interface Chapter {
   id: ChapterId;
@@ -75,6 +76,16 @@ const CHAPTERS: Chapter[] = [
     lookAt: [0, 0, 0],
     subjectAspect: 1.7,
   },
+  {
+    id: 'refuge',
+    label: 'Refuge',
+    title: 'Richer than\nthe fields around it',
+    lede: 'Every1Counts monitors the same way across Europe. Set beside ordinary farmland and industrial land, this estate holds far more life — and not one hectare of it is protected.',
+    dwell: 38,
+    camera: [0, 2.6, 15],
+    lookAt: [0, 1.9, 0],
+    subjectAspect: 1.9,
+  },
 ];
 
 const LENSES: { id: Lens; label: string; caption: string }[] = [
@@ -111,6 +122,11 @@ export default function IndoorApp() {
   const [focusMonth, setFocusMonth] = useState<number | null>(null);
   const [clusterGuilds, setClusterGuilds] = useState(false);
   const [flagshipOnly, setFlagshipOnly] = useState(false);
+  const [refugeMetric, setRefugeMetric] = useState(0);
+  const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
+  const [refugeMarks, setRefugeMarks] = useState<
+    { landUse: string; x: number; y: number; self: boolean; value: number }[]
+  >([]);
   /**
    * The hour the estate is shown at. Starts at the château's real local time,
    * so a visitor first meets the estate as it is right now, and can then scrub
@@ -305,6 +321,20 @@ export default function IndoorApp() {
             />
           )}
 
+          {chapter.id === 'refuge' && (
+            <Refuge
+              data={data}
+              reveal={1}
+              metric={refugeMetric}
+              selected={refugeSelected}
+              onSelect={(landUse) => {
+                touch();
+                setRefugeSelected(landUse);
+              }}
+              onLayout={setRefugeMarks}
+            />
+          )}
+
           {chapter.id === 'choir' && (
             <Choir
               data={data}
@@ -487,6 +517,68 @@ export default function IndoorApp() {
                 CONSERVATION STATUS OR BY WHAT THEIR PRESENCE PROVES.
               </p>
             )}
+          </div>
+        )}
+
+        {chapter.id === 'refuge' &&
+          refugeMarks.map((mark) => (
+            <span
+              key={mark.landUse}
+              className="inst-column-label inst-pass"
+              data-self={mark.self}
+              data-active={refugeSelected === mark.landUse}
+              style={{
+                left: mark.x,
+                top: mark.y + 14,
+                opacity: Math.min(1, Math.max(0, mark.value * 1.6)),
+              }}
+            >
+              {mark.landUse}
+            </span>
+          ))}
+
+        {chapter.id === 'refuge' && data && (
+          <div className="inst-corner inst-corner--bl">
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              Compare by
+            </p>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              {[
+                { v: 0, label: 'Mammals', caption: 'Shannon diversity, camera traps' },
+                { v: 1, label: 'Birds', caption: 'Species heard per site' },
+              ].map((entry) => (
+                <button
+                  key={entry.label}
+                  className="inst-nav-item"
+                  data-active={refugeMetric === entry.v}
+                  onClick={() => {
+                    touch();
+                    setRefugeMetric(entry.v);
+                  }}
+                  style={{ minHeight: 56, padding: '0.9rem 1.1rem' }}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+            <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
+              {(refugeMetric === 0
+                ? 'SHANNON DIVERSITY, CAMERA TRAPS'
+                : 'BIRD SPECIES HEARD PER SITE'
+              ).toUpperCase()}
+            </p>
+
+            {/* The tension the whole survey leaves unresolved. */}
+            <div className="inst-rule" style={{ maxWidth: 380 }} />
+            <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+              {data.narrative.protection.protConn.toFixed(1)}%
+            </p>
+            <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem' }}>
+              {data.narrative.protection.text}
+            </p>
+            <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
+              {data.narrative.protection.policy.toUpperCase()}
+            </p>
           </div>
         )}
 
