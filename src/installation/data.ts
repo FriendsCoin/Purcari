@@ -191,6 +191,15 @@ export function useArchive(): { archive: Archive | null; error: string | null } 
   useEffect(() => {
     let alive = true;
 
+    // The single-file build inlines both payloads into the page, so there is
+    // nothing to fetch and the piece works from a file:// URL or a sandbox.
+    const inlined = (globalThis as { __PURCARI__?: { installation: Payload; landscape: Landscape | null } })
+      .__PURCARI__;
+    if (inlined) {
+      setArchive(widen(inlined.installation, inlined.landscape));
+      return undefined;
+    }
+
     const grab = async (file: string) => {
       const r = await fetch(`${import.meta.env.BASE_URL}${file}`);
       if (!r.ok) throw new Error(`${file}: ${r.status} ${r.statusText}`);

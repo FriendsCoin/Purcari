@@ -45,3 +45,6 @@ lerna-debug.log*
 
 # Landscape fetch cache (DEM tiles + raw Overpass response)
 scripts/.cache/
+
+# Single-file build output
+dist-standalone/

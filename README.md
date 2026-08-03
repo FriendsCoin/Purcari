@@ -17,6 +17,17 @@ in a browser tab, so it plays itself when nobody is driving.
 
 Open it at `/`; the analytical dashboard lives at `/#dashboard`.
 
+```bash
+npm install
+npm run dev              # installation on http://localhost:3000
+npm run build:standalone # one self-contained HTML file, no server needed
+```
+
+`build:standalone` writes `dist-standalone/purcari-living-archive.html` — about
+1.6 MB with the code, the styles and both data payloads inlined. It opens from a
+`file://` URL and makes no network requests at all, which is what you want on a
+gallery machine.
+
 ### The six acts
 
 | # | Act | What the cloud becomes |
