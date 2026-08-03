@@ -31,6 +31,22 @@ import '../ui/installation.css';
 
 type ChapterId = 'estate' | 'year' | 'choir' | 'refuge';
 
+/** Where one Refuge column's foot sits on screen, reported by the scene itself. */
+interface RefugeMark {
+  landUse: string;
+  x: number;
+  y: number;
+  self: boolean;
+  value: number;
+}
+
+/**
+ * Approximate advance of one character of the caption face — 0.6rem monospace
+ * with 0.14em tracking. Measuring for real would mean a layout read per frame
+ * for a decision that only has to be roughly right.
+ */
+const CAPTION_CHAR_PX = 7.1;
+
 interface Chapter {
   id: ChapterId;
   label: string;
@@ -125,9 +141,7 @@ export default function IndoorApp() {
   const [flagshipOnly, setFlagshipOnly] = useState(false);
   const [refugeMetric, setRefugeMetric] = useState(0);
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
-  const [refugeMarks, setRefugeMarks] = useState<
-    { landUse: string; x: number; y: number; self: boolean; value: number }[]
-  >([]);
+  const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
   /**
    * The hour the estate is shown at. Starts at the château's real local time,
    * so a visitor first meets the estate as it is right now, and can then scrub
@@ -139,6 +153,35 @@ export default function IndoorApp() {
     return now.getHours() + now.getMinutes() / 60;
   });
   const [clockTouched, setClockTouched] = useState(false);
+
+  /**
+   * The Refuge captions, with collisions removed.
+   *
+   * Seven land-use names is about 300 px of type; on a phone in portrait the row
+   * is only 430 px wide and they overlap into an unreadable smear. Shrinking the
+   * face further would make it unreadable on the kiosk too, so instead the ones
+   * that collide are dropped — in priority order, so the label that survives is
+   * always the one that matters: the estate's own first, then whatever the
+   * visitor has selected, then left to right.
+   */
+  const refugeLabels = useMemo(() => {
+    const rank = (mark: RefugeMark) =>
+      mark.self ? 0 : refugeSelected === mark.landUse ? 1 : 2;
+    const ordered = [...refugeMarks].sort((a, b) => rank(a) - rank(b) || a.x - b.x);
+    const taken: { left: number; right: number }[] = [];
+    const kept: RefugeMark[] = [];
+    for (const mark of ordered) {
+      // A column that has faded out of the current survey carries no label.
+      if (mark.value <= 0.02) continue;
+      const half = (mark.landUse.length * CAPTION_CHAR_PX) / 2 + 6;
+      const left = mark.x - half;
+      const right = mark.x + half;
+      if (taken.some((box) => left < box.right && right > box.left)) continue;
+      taken.push({ left, right });
+      kept.push(mark);
+    }
+    return kept;
+  }, [refugeMarks, refugeSelected]);
 
   const idleTimer = useRef<number | null>(null);
   const chapter = CHAPTERS[chapterIndex];
@@ -555,7 +598,7 @@ export default function IndoorApp() {
         )}
 
         {chapter.id === 'refuge' &&
-          refugeMarks.map((mark) => (
+          refugeLabels.map((mark) => (
             <span
               key={mark.landUse}
               className="inst-column-label inst-pass"

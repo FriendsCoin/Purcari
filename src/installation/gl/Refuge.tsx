@@ -55,6 +55,14 @@ const BASE_Y = -1.85;
 const HERO_RING_INNER = 0.46;
 const HERO_RING_OUTER = 0.92;
 
+/** Samples along each chord of the skyline. */
+const SKYLINE_STEPS = 20;
+/** Half-width of the tick drawn across each column's head. */
+const SKYLINE_TICK = 0.30;
+/** Radius of the pool of light a column casts on the floor, before its fill scales it. */
+const POOL_RADIUS = 0.95;
+const POOL_SEGMENTS = 40;
+
 /** How far above and below the baseline the protection sheet reaches. */
 const PROT_BAND = 0.74;
 const PROT_BELOW = 0.14;
@@ -253,6 +261,116 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   return geometry;
 }
 
+/**
+ * The skyline: a thread strung head to head across the row, plus a tick laid
+ * across each head.
+ *
+ * The columns already carry the comparison, but a row of separate glows makes the
+ * eye measure each one against the frame instead of against its neighbours. The
+ * thread turns them into a single profile — and because its height is read from
+ * the same live uniform arrays the motes are, it *bends* through the camera-to-bird
+ * cross-fade instead of being redrawn. Watching the wooded park's head fall past
+ * the vineyard's as you change who you ask is the chapter's second argument.
+ *
+ * No JavaScript touches this buffer after it is built: every vertex carries the
+ * two columns it lies between and resolves its own height in the vertex shader.
+ */
+function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const columnA: number[] = [];
+  const columnB: number[] = [];
+  const blends: number[] = [];
+  const colors: number[] = [];
+
+  const push = (x: number, a: number, b: number, blend: number, color: THREE.Color) => {
+    positions.push(x, 0, 0);
+    columnA.push(a);
+    columnB.push(b);
+    blends.push(blend);
+    colors.push(color.r, color.g, color.b);
+  };
+
+  const scratch = new THREE.Color();
+
+  for (let i = 0; i < columns.length - 1; i++) {
+    const left = columns[i];
+    const right = columns[i + 1];
+    for (let s = 0; s < SKYLINE_STEPS; s++) {
+      for (const step of [s, s + 1]) {
+        const blend = step / SKYLINE_STEPS;
+        scratch.copy(left.color).lerp(right.color, blend);
+        push(left.x + (right.x - left.x) * blend, i, i + 1, blend, scratch);
+      }
+    }
+  }
+
+  // A tick across each head — the reading itself, where the thread passes through.
+  for (let i = 0; i < columns.length; i++) {
+    const column = columns[i];
+    for (const sign of [-1, 1]) {
+      push(column.x, i, i, 0, column.color);
+      push(column.x + SKYLINE_TICK * sign, i, i, 0, column.color);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aColumnA', new THREE.Float32BufferAttribute(columnA, 1));
+  geometry.setAttribute('aColumnB', new THREE.Float32BufferAttribute(columnB, 1));
+  geometry.setAttribute('aBlend', new THREE.Float32BufferAttribute(blends, 1));
+  geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(colors, 3));
+  // Heights are resolved in the shader, so the stored geometry is a flat line and
+  // an automatic bounding sphere would cull the thread the moment it lifted.
+  const half = (columns.length - 1) * COLUMN_GAP * 0.5 + SKYLINE_TICK;
+  geometry.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
+    Math.hypot(half, MAX_HEIGHT * 0.5) + 1
+  );
+  return geometry;
+}
+
+/**
+ * A pool of light on the floor under each column, its radius following that
+ * column's fill. It costs one draw call and it is what stops the row reading as
+ * seven glows floating in a void: the cores now stand on something and cast onto
+ * it, which is the whole cellar metaphor the chapter is built on.
+ */
+function buildPoolGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const radial: number[] = [];
+  const columnIndex: number[] = [];
+  const colors: number[] = [];
+
+  const vertex = (column: ColumnLayout, ci: number, rx: number, rz: number) => {
+    positions.push(column.x, 0, 0);
+    radial.push(rx, rz);
+    columnIndex.push(ci);
+    colors.push(column.color.r, column.color.g, column.color.b);
+  };
+
+  columns.forEach((column, ci) => {
+    for (let s = 0; s < POOL_SEGMENTS; s++) {
+      const a0 = (s / POOL_SEGMENTS) * Math.PI * 2;
+      const a1 = ((s + 1) / POOL_SEGMENTS) * Math.PI * 2;
+      // A fan is fine here because the fragment shader recovers the radius from
+      // an interpolated 2D offset rather than from an interpolated scalar — the
+      // linear interpolation of a vector across a triangle is exact, so there are
+      // none of the radial spikes a per-vertex radius would produce.
+      vertex(column, ci, 0, 0);
+      vertex(column, ci, Math.cos(a0) * POOL_RADIUS, Math.sin(a0) * POOL_RADIUS);
+      vertex(column, ci, Math.cos(a1) * POOL_RADIUS, Math.sin(a1) * POOL_RADIUS);
+    }
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aRadial', new THREE.Float32BufferAttribute(radial, 2));
+  geometry.setAttribute('aColumn', new THREE.Float32BufferAttribute(columnIndex, 1));
+  geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 /** Row half-width, including the margin the baseline and sheet run out to. */
 function rowExtent(columns: ColumnLayout[]): number {
   return (columns.length - 1) * COLUMN_GAP * 0.5 + COLUMN_GAP * 0.85;
@@ -418,6 +536,133 @@ void main(){
 }
 `;
 
+const SKYLINE_VERT = /* glsl */ `
+#define MAX_COLUMNS ${MAX_COLUMNS}
+
+attribute float aColumnA;
+attribute float aColumnB;
+attribute float aBlend;
+attribute vec3 aColor;
+
+uniform float uTime;
+uniform float uReveal;
+uniform float uFocus;
+uniform float uCount;
+uniform float uHeight[MAX_COLUMNS];
+uniform float uPresence[MAX_COLUMNS];
+uniform float uSelect[MAX_COLUMNS];
+
+varying vec3  vColor;
+varying float vAlpha;
+varying float vRun;    // 0..1 along the row, for the glint
+
+void main(){
+  int ia = int(aColumnA + 0.5);
+  int ib = int(aColumnB + 0.5);
+
+  float y = mix(uHeight[ia], uHeight[ib], aBlend);
+  float presence = min(uPresence[ia], uPresence[ib]);
+  float sel = max(uSelect[ia], uSelect[ib]);
+
+  // Same left-to-right lag as the motes, so the thread arrives with its columns.
+  float order = mix(aColumnA, aColumnB, aBlend) / max(uCount - 1.0, 1.0);
+  float rv = clamp(uReveal * 1.3 - order * 0.3, 0.0, 1.0);
+  rv = rv * rv * (3.0 - 2.0 * rv);
+
+  vec3 p = vec3(position.x, y * rv, position.z);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+
+  vRun = order;
+  vColor = aColor;
+  // A land use missing from the current survey drops out of the thread rather
+  // than dragging it to the floor: the segment fades, it does not lie.
+  vAlpha = presence * rv * (0.46 + sel * 0.60) * mix(1.0, mix(0.45, 1.35, sel), uFocus);
+}
+`;
+
+const SKYLINE_FRAG = /* glsl */ `
+uniform float uTime;
+
+varying vec3  vColor;
+varying float vAlpha;
+varying float vRun;
+
+void main(){
+  // A glint travelling the length of the row, so the profile is read left to
+  // right — the direction the ranking is meant to be read in.
+  float glint = exp(-pow((vRun - fract(uTime * 0.09)) * 6.0, 2.0));
+  float a = vAlpha * (0.62 + 0.38 * glint);
+  if (a <= 0.002) discard;
+  gl_FragColor = vec4((vColor + vec3(1.0, 0.93, 0.78) * glint * 0.5) * a, a);
+}
+`;
+
+const POOL_VERT = /* glsl */ `
+#define MAX_COLUMNS ${MAX_COLUMNS}
+
+attribute vec2 aRadial;
+attribute float aColumn;
+attribute vec3 aColor;
+
+uniform float uTime;
+uniform float uReveal;
+uniform float uFocus;
+uniform float uCount;
+uniform float uFill[MAX_COLUMNS];
+uniform float uPresence[MAX_COLUMNS];
+uniform float uSelect[MAX_COLUMNS];
+
+varying vec3  vColor;
+varying vec2  vRadial;
+varying float vAlpha;
+varying float vSelect;
+
+void main(){
+  int idx = int(aColumn + 0.5);
+  float fill = uFill[idx];
+  float presence = uPresence[idx];
+  float sel = uSelect[idx];
+
+  float order = aColumn / max(uCount - 1.0, 1.0);
+  float rv = clamp(uReveal * 1.3 - order * 0.3, 0.0, 1.0);
+  rv = rv * rv * (3.0 - 2.0 * rv);
+
+  // The pool widens with the column's density, and breathes very slightly.
+  float scale = (0.45 + fill * 0.85) * (1.0 + sin(uTime * 0.35 + aColumn) * 0.03 + sel * 0.10);
+  vec3 p = vec3(position.x + aRadial.x * scale, 0.004, position.z + aRadial.y * scale);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+
+  vColor = aColor;
+  vRadial = aRadial;
+  vSelect = sel;
+  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus);
+}
+`;
+
+const POOL_FRAG = /* glsl */ `
+${TONEMAP}
+${DITHER}
+
+uniform float uTime;
+
+varying vec3  vColor;
+varying vec2  vRadial;
+varying float vAlpha;
+varying float vSelect;
+
+void main(){
+  // Radius recovered per fragment from the interpolated offset — exact, and free
+  // of the radial banding a per-vertex radius gives a triangle fan.
+  float r = length(vRadial) / ${POOL_RADIUS.toFixed(3)};
+  float body = pow(clamp(1.0 - r, 0.0, 1.0), 2.6);
+  // A ring travelling outward, slow enough to read as light settling.
+  float ripple = 0.86 + 0.14 * sin(r * 9.0 - uTime * 0.7 + vSelect * 2.0);
+  float glow = body * ripple * vAlpha * 0.46;
+  if (glow <= 0.002) discard;
+  gl_FragColor = vec4(dither(aces(vColor * glow), gl_FragCoord.xy), glow);
+}
+`;
+
 const PROTECTION_VERT = /* glsl */ `
 varying vec2 vUv;
 varying float vY;
@@ -555,6 +800,27 @@ function createMoteMaterial(): Shaded<MoteUniforms> {
   return { material, uniforms };
 }
 
+/**
+ * The skyline and the floor pools read the *same uniform record* the motes do —
+ * the object itself, not a copy of its values. Column heights, fills, presences
+ * and selections are eased once per frame in one place, and three layers that
+ * must agree about where a column's head is cannot disagree by construction.
+ */
+function createSharedMaterial(
+  uniforms: MoteUniforms,
+  vertexShader: string,
+  fragmentShader: string,
+  side: THREE.Side = THREE.FrontSide
+): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader,
+    fragmentShader,
+    side,
+    ...GLOW_DEFAULTS,
+  });
+}
+
 function createProtectionMaterial(protectedHeight: number): Shaded<ProtectionUniforms> {
   const uniforms: ProtectionUniforms = {
     uTime: { value: 0 },
@@ -653,6 +919,8 @@ export function Refuge({
   );
 
   const moteGeometry = useMemo(() => buildMoteGeometry(columns), [columns]);
+  const skylineGeometry = useMemo(() => buildSkylineGeometry(columns), [columns]);
+  const poolGeometry = useMemo(() => buildPoolGeometry(columns), [columns]);
   const baselineGeometry = useMemo(() => buildBaselineGeometry(columns), [columns]);
   const protectionGeometry = useMemo(() => buildProtectionGeometry(columns), [columns]);
   const ringGeometry = useMemo(
@@ -663,6 +931,14 @@ export function Refuge({
   const backdropGeometry = useMemo(() => new THREE.PlaneGeometry(60, 40), []);
 
   const motes = useMemo(() => createMoteMaterial(), []);
+  const skylineMaterial = useMemo(
+    () => createSharedMaterial(motes.uniforms, SKYLINE_VERT, SKYLINE_FRAG),
+    [motes]
+  );
+  const poolMaterial = useMemo(
+    () => createSharedMaterial(motes.uniforms, POOL_VERT, POOL_FRAG, THREE.DoubleSide),
+    [motes]
+  );
   const protection = useMemo(() => createProtectionMaterial(protectedHeight), [protectedHeight]);
   const ring = useMemo(() => createRingMaterial(), []);
   const baselineMaterial = useMemo(
@@ -682,6 +958,8 @@ export function Refuge({
   useEffect(() => {
     const geometries = [
       moteGeometry,
+      skylineGeometry,
+      poolGeometry,
       baselineGeometry,
       protectionGeometry,
       ringGeometry,
@@ -689,6 +967,8 @@ export function Refuge({
     ];
     const materials = [
       motes.material,
+      skylineMaterial,
+      poolMaterial,
       protection.material,
       ring.material,
       baselineMaterial,
@@ -700,11 +980,15 @@ export function Refuge({
     };
   }, [
     moteGeometry,
+    skylineGeometry,
+    poolGeometry,
     baselineGeometry,
     protectionGeometry,
     ringGeometry,
     backdropGeometry,
     motes,
+    skylineMaterial,
+    poolMaterial,
     protection,
     ring,
     baselineMaterial,
@@ -845,6 +1129,9 @@ export function Refuge({
       />
 
       <mesh geometry={protectionGeometry} material={protection.material} renderOrder={1} />
+      {/* Already built in the ground plane — the vertex shader lays the radial
+          offset into XZ directly, so this must not be rotated flat a second time. */}
+      <mesh geometry={poolGeometry} material={poolMaterial} renderOrder={1} />
       <lineSegments geometry={baselineGeometry} material={baselineMaterial} renderOrder={2} />
 
       {hero && (
@@ -858,6 +1145,7 @@ export function Refuge({
       )}
 
       <points geometry={moteGeometry} material={motes.material} renderOrder={3} />
+      <lineSegments geometry={skylineGeometry} material={skylineMaterial} renderOrder={4} />
     </group>
   );
 }
