@@ -4,6 +4,9 @@ import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // GitHub Pages serves a project site from /<repo>/, so the build needs to know
+  // its own prefix. Everything that loads data goes through import.meta.env.BASE_URL.
+  base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [react()],
   resolve: {
     alias: {

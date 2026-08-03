@@ -25,7 +25,7 @@ export interface DetailedMetrics {
  */
 export async function loadMonthlyTrends(): Promise<MonthlyTrend[]> {
   try {
-    const response = await fetch('/20251110_100109.csv');
+    const response = await fetch(`${import.meta.env.BASE_URL}20251110_100109.csv`);
     const text = await response.text();
     const lines = text.trim().split('\n').slice(1); // Skip header
 
@@ -47,7 +47,7 @@ export async function loadMonthlyTrends(): Promise<MonthlyTrend[]> {
  */
 export async function loadSiteDiversity(): Promise<SiteDiversity[]> {
   try {
-    const response = await fetch('/20251110_100135.csv');
+    const response = await fetch(`${import.meta.env.BASE_URL}20251110_100135.csv`);
     const text = await response.text();
     const lines = text.trim().split('\n').slice(1); // Skip header
 
@@ -69,7 +69,7 @@ export async function loadSiteDiversity(): Promise<SiteDiversity[]> {
  */
 export async function loadDetailedMetrics(): Promise<DetailedMetrics[]> {
   try {
-    const response = await fetch('/20251110_100150.csv');
+    const response = await fetch(`${import.meta.env.BASE_URL}20251110_100150.csv`);
     const text = await response.text();
     const lines = text.trim().split('\n').slice(1); // Skip header
 

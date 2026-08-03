@@ -5,7 +5,7 @@ import type { GeoJSONData, AnalysisData } from '@/types';
  */
 export async function loadRealGeoJSONData(): Promise<GeoJSONData> {
   try {
-    const response = await fetch('/data.geojson');
+    const response = await fetch(`${import.meta.env.BASE_URL}data.geojson`);
     if (!response.ok) {
       throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
     }

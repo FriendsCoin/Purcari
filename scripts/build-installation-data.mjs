@@ -442,6 +442,19 @@ writeFileSync(
   })
 );
 
+/**
+ * The legacy dashboard fetches these straight from the site root, so they have
+ * to live in public/ alongside everything else the build serves.
+ */
+for (const csv of [
+  '20251110_100018.csv',
+  '20251110_100109.csv',
+  '20251110_100135.csv',
+  '20251110_100150.csv',
+]) {
+  writeFileSync(join(OUT_DIR, csv), readFileSync(join(ROOT, csv)));
+}
+
 const size = (n) => `${(n / 1024).toFixed(0)} KB`;
 console.log(`installation.json  ${size(JSON.stringify(payload).length)}`);
 console.log(

@@ -28,6 +28,19 @@ npm run build:standalone # one self-contained HTML file, no server needed
 `file://` URL and makes no network requests at all, which is what you want on a
 gallery machine.
 
+### Publishing
+
+`.github/workflows/pages.yml` builds and deploys to GitHub Pages on every push
+to `main`. It needs the repository setting **Settings → Pages → Source: GitHub
+Actions** turned on once; after that the site is at
+`https://<owner>.github.io/<repo>/`, with the single-file version alongside it at
+`/purcari-living-archive.html`.
+
+A project site is served from a subdirectory, so the build takes its prefix from
+`VITE_BASE_PATH` and every data path resolves through `import.meta.env.BASE_URL`.
+For any other static host, build with the prefix that host uses — `VITE_BASE_PATH=/
+npm run build` for a domain root — and upload `dist/`.
+
 ### The six acts
 
 | # | Act | What the cloud becomes |
