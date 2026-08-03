@@ -245,6 +245,20 @@ function toCCW(pts: Point[]): Point[] {
 }
 
 /**
+ * Ear-clip a simple ring into faces of three indices into `pts`.
+ *
+ * `ShapeUtils.triangulateShape` is typed for `Vector2Like` but its duplicate
+ * end-point check calls `.equals()`, so it needs real Vector2 instances —
+ * plain `{ x, y }` objects throw at runtime.
+ */
+function triangulate(pts: Point[]): number[][] {
+  return THREE.ShapeUtils.triangulateShape(
+    pts.map(([x, y]) => new THREE.Vector2(x, y)),
+    [],
+  );
+}
+
+/**
  * Direction along which a hatch phase advances, so the stripes themselves run
  * parallel to the parcel's longest edge — vine rows follow the block, they do
  * not follow the compass. Returned in scene xz, where north is −z.
@@ -349,10 +363,7 @@ export function buildAreaLayer(
 
     tint.set(style.color).multiplyScalar(style.intensity);
     const axis = hatchAxis(pts);
-    const faces = THREE.ShapeUtils.triangulateShape(
-      pts.map(([x, y]) => ({ x, y })),
-      [],
-    );
+    const faces = triangulate(pts);
 
     const push = (q: Point) => {
       positions.push(worldXOf(p, q[0]), terrainHeightAt(p, q[0], q[1]) + lift, worldZOf(p, q[1]));
@@ -410,8 +421,6 @@ export interface LineStyle {
   intensity: number;
   /** Height above the terrain, in scene units. */
   lift: number;
-  /** Close each path back to its first point — for water body outlines. */
-  closed?: boolean;
 }
 
 /**
@@ -441,13 +450,13 @@ export function buildLineLayer(
     colors.push(tint.r * fade, tint.g * fade, tint.b * fade);
   };
 
-  for (const raw of paths) {
-    const path = style.closed ? openRing(raw) : raw;
+  // Water bodies arrive as closed rings, so their outline needs no special case:
+  // the repeated last vertex closes them.
+  for (const path of paths) {
     if (path.length < 2) continue;
-    const last = style.closed ? path.length : path.length - 1;
-    for (let i = 0; i < last; i++) {
+    for (let i = 0; i < path.length - 1; i++) {
       const a = path[i];
-      const b = path[(i + 1) % path.length];
+      const b = path[i + 1];
       if (edgeFade(p, a[0], a[1]) < MIN_FADE && edgeFade(p, b[0], b[1]) < MIN_FADE) continue;
       const steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / MAX_DRAPE_EDGE));
       for (let s = 0; s < steps; s++) {
@@ -510,7 +519,9 @@ export function buildBuildingLayer(
     if (fade < MIN_FADE) continue;
 
     const emphasis = smoothstep(style.minArea, style.maxArea, building.a);
-    roof.copy(base).lerp(accent, emphasis).multiplyScalar((0.30 + emphasis * 0.95) * fade);
+    // The ramp is chosen so the château roof lands around 0.44 luminance — nine
+    // times any shed in the village, and still well under a station's core.
+    roof.copy(base).lerp(accent, emphasis).multiplyScalar((0.22 + emphasis * 0.52) * fade);
     // Walls are the same colour held back, which gives the mass a lit top
     // without a light in the scene.
     wall.copy(roof).multiplyScalar(0.42);
@@ -540,10 +551,8 @@ export function buildBuildingLayer(
     }
 
     // Roof.
-    const faces = THREE.ShapeUtils.triangulateShape(
-      pts.map(([x, y]) => ({ x, y })),
-      [],
-    );
+    const faces = triangulate(pts);
+
     for (const face of faces) {
       const a = pts[face[0]];
       const b = pts[face[1]];

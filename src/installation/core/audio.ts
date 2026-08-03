@@ -509,14 +509,18 @@ export class SoundField {
     vibrato.stop(at + duration + 0.4);
 
     // Formant: a resonant band that gives the voice a throat rather than a speaker.
+    // Both filter frequencies have to stay under Nyquist: the top of the
+    // songbird register times the openness multiplier lands above 23 kHz, which
+    // the browser clamps while warning on every single voice.
+    const nyquist = ctx.sampleRate * 0.5;
     const formant = ctx.createBiquadFilter();
     formant.type = 'bandpass';
-    formant.frequency.value = frequency * (1.4 + params.openness);
+    formant.frequency.value = Math.min(frequency * (1.4 + params.openness), nyquist * 0.94);
     formant.Q.value = 1.6;
 
     const tone = ctx.createBiquadFilter();
     tone.type = 'lowpass';
-    tone.frequency.value = frequency * (3.2 + params.openness * 3);
+    tone.frequency.value = Math.min(frequency * (3.2 + params.openness * 3), nyquist * 0.96);
     tone.Q.value = 0.9;
 
     // Per-syllable pitch drift keeps repeated notes from sounding sequenced.

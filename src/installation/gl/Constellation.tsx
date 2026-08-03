@@ -1,10 +1,24 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { InstallationData, Site } from '../core/types';
-import { layoutSites, logScale } from '../core/data';
+import type { InstallationData, LandscapeData, Site } from '../core/types';
+import { layoutSites, loadLandscape, logScale } from '../core/data';
 import { PALETTE, toRGB, TYPOLOGY_COLORS, CLASS_COLORS } from '../core/palette';
 import { SIMPLEX_3D, DITHER, SPRITE, TONEMAP } from './chunks';
+import {
+  AREA_HATCHED,
+  AREA_PLAIN,
+  AREA_WATER,
+  CONTOUR_INTERVAL,
+  buildAreaLayer,
+  buildBuildingLayer,
+  buildLineLayer,
+  buildTerrain,
+  estateProjection,
+  terrainHeightAt,
+  terrainHeightAtWorld,
+  type EstateProjection,
+} from './landscapeGeometry';
 
 /**
  * "The Estate" — the twelve monitoring stations as a constellation standing on
@@ -14,9 +28,34 @@ import { SIMPLEX_3D, DITHER, SPRITE, TONEMAP } from './chunks';
  * differently depending on which animals you ask. `lens` cross-fades between the
  * mammal reading, the bird reading, and the combined typology, recolouring the
  * stations in place — so the visitor watches one landscape become three.
+ *
+ * The ground under them is no longer an evocation. It is the estate's own
+ * relief, from a 72×72 SRTM grid, with the vineyard blocks, the woods, the farm
+ * tracks, the streams, the ponds and every building drawn on it from
+ * OpenStreetMap. If that data cannot be fetched the chapter falls back to the
+ * abstract noise terrain rather than breaking.
  */
 
 export type Lens = 'both' | 'camera' | 'sound';
+
+/**
+ * The estate is a narrow NNE–SSW lozenge, so its long axis sets the scale: sized
+ * to fill the frame vertically with north kept up. The terrain uses the same
+ * number, so the stations land on their own ground.
+ */
+const ESTATE_RADIUS = 6.5;
+
+/** How far a station mark floats above the land it stands on, in scene units. */
+const STATION_LIFT = 0.55;
+
+/**
+ * Each drape sits a little above the surface, in this order, so the layers stack
+ * cleanly instead of fighting the terrain for the same depth: parcels lowest,
+ * then tracks, then water, then the buildings standing on top of all of it.
+ */
+const AREA_LIFT = 0.020;
+const TRACK_LIFT = 0.030;
+const WATER_LIFT = 0.038;
 
 function siteColor(site: Site, lens: Lens): [number, number, number] {
   if (lens === 'camera') return toRGB(CLASS_COLORS[site.cameraClass] ?? PALETTE.ash);
@@ -24,16 +63,234 @@ function siteColor(site: Site, lens: Lens): [number, number, number] {
   return toRGB(TYPOLOGY_COLORS[site.typology] ?? PALETTE.ash);
 }
 
-/* ------------------------------------------------------------------ ground */
+/* ------------------------------------------------------------------ shared */
 
 /**
- * The terroir beneath the fauna. A displaced disc whose height field is layered
- * noise biased along the NNE–SSW axis of the Dniester valley, washed with the
- * estate's three landscape units — Podiș on the high ground, Coline on the
- * slopes, Poale at the foot. It is an evocation of the estate's form, not a DEM:
- * no elevation model ships with the survey.
+ * Time of day. Sunrise and sunset at this latitude sit near 06:00 and 20:00; the
+ * land runs cold and blue at night, warms hard through the two twilights, and
+ * settles neutral at midday. Multiplicative, so it tints what is there without
+ * adding light of its own — and shared by every layer, so the terrain, the
+ * vineyard blocks and the château all turn together.
  */
-const GROUND_VERT = /* glsl */ `
+const HOUR_TINT = /* glsl */ `
+vec3 hourTint(float hour){
+  float dawn = 1.0 - smoothstep(0.0, 2.2, abs(hour - 6.0));
+  float dusk = 1.0 - smoothstep(0.0, 2.4, abs(hour - 20.0));
+  float day = smoothstep(5.0, 8.5, hour) * (1.0 - smoothstep(18.0, 21.5, hour));
+  vec3 night = vec3(0.52, 0.66, 1.20);
+  vec3 noon = vec3(1.0, 0.98, 0.92);
+  vec3 twilight = vec3(1.25, 0.68, 0.42);
+  vec3 tint = mix(night, noon, day);
+  return mix(tint, twilight, clamp(dawn + dusk, 0.0, 1.0) * 0.85);
+}
+`;
+
+/* ----------------------------------------------------------------- terrain */
+
+/**
+ * The real ground: a plane displaced by the SRTM grid.
+ *
+ * The heights are baked into the geometry on the CPU (see landscapeGeometry.ts)
+ * so that every draped layer can hang on exactly the same surface. The shader's
+ * only job with them is `uReveal`, which lifts the relief out of the flat as the
+ * chapter arrives.
+ */
+const TERRAIN_VERT = /* glsl */ `
+attribute float aElevation;
+uniform float uReveal;
+varying vec2 vUv;
+varying float vElev;
+varying vec3 vWorld;
+varying vec3 vNormal;
+
+void main(){
+  vUv = uv;
+  vElev = aElevation;
+
+  // This is a PlaneGeometry: its vertices lie in LOCAL XY and the mesh is
+  // rotated -90 deg about X so local +Z becomes world +Y. The elevation lives in
+  // p.z for exactly that reason — displacing p.y would push the land sideways.
+  vec3 p = position;
+  p.z *= uReveal;
+
+  // No scale in the model matrix, so rotating the baked normal is enough.
+  vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+  vec4 world = modelMatrix * vec4(p, 1.0);
+  vWorld = world.xyz;
+  gl_Position = projectionMatrix * viewMatrix * world;
+}
+`;
+
+const TERRAIN_FRAG = /* glsl */ `
+${DITHER}
+${TONEMAP}
+${HOUR_TINT}
+uniform float uTime;
+uniform float uReveal;
+uniform float uHour;
+uniform vec3 uLow;
+uniform vec3 uMid;
+uniform vec3 uHigh;
+uniform vec3 uGlow;
+uniform vec3 uPulse;   // xy = focus point in world space, z = strength
+varying vec2 vUv;
+varying float vElev;
+varying vec3 vWorld;
+varying vec3 vNormal;
+
+void main(){
+  // Dissolve toward the edge of the elevation model, so the estate floats in the
+  // dark rather than sitting on a visible rectangle. The cubed norm follows the
+  // DEM's own footprint instead of cropping it to a circle; edgeFade() in
+  // landscapeGeometry.ts evaluates the same expression for the drapes.
+  vec2 q = abs(vUv - 0.5) * 2.0;
+  float rim = 1.0 - smoothstep(0.80, 1.02, pow(pow(q.x, 3.0) + pow(q.y, 3.0), 1.0 / 3.0));
+  if (rim <= 0.001) discard;
+
+  // The estate's three landscape units, now by real altitude: Poale on the
+  // Dniester terrace below ~50 m, Coline across the hillslopes, Podiș on the
+  // plateau above ~125 m.
+  vec3 soil = mix(uLow, uMid, smoothstep(35.0, 80.0, vElev));
+  soil = mix(soil, uHigh, smoothstep(105.0, 145.0, vElev));
+
+  // Hillshade. The chapter is framed almost plan-view, where colour alone cannot
+  // convey relief; raking a low sun across the real slope is what makes the
+  // ground read as land rather than as a stain. The normal is the analytic
+  // gradient of the elevation grid, not a screen-space derivative, so the
+  // shading stays smooth instead of faceting on the grid's whole-metre steps.
+  // No lights in the scene — this is the only shading in the piece.
+  vec3 sun = normalize(vec3(-0.55, 0.42, -0.55));
+  float shade = clamp(dot(normalize(vNormal), sun) * 0.5 + 0.5, 0.0, 1.0);
+  // Kept deliberately dim. The contour lines carry the landform, the colour
+  // fills are only a wash, and the twelve stations must stay the brightest thing
+  // on screen once bloom is applied. A little more body than the abstract ground
+  // it replaces, because here the shading is carrying real slope and the
+  // hillside is worth seeing.
+  soil *= (0.25 + pow(shade, 1.6) * 0.75) * 0.28;
+
+  // True contours, ${CONTOUR_INTERVAL.toFixed(0)} m apart, with every fifth — each 50 m — burning
+  // brighter, the way a survey sheet indexes its own lines. The screen-space
+  // derivative keeps them a constant hairline instead of banding into moiré, and
+  // makes them thin out by themselves where the plateau goes flat.
+  float c = vElev / ${CONTOUR_INTERVAL.toFixed(1)};
+  float minor = abs(fract(c) - 0.5) / max(fwidth(c), 0.0001);
+  float index = c / 5.0;
+  float major = abs(fract(index) - 0.5) / max(fwidth(index), 0.0001);
+  float lines = (1.0 - smoothstep(0.0, 1.4, minor)) * 0.30
+              + (1.0 - smoothstep(0.0, 1.4, major)) * 0.34;
+
+  // A slow ripple outward from wherever the visitor last touched.
+  float d = distance(vWorld.xz, uPulse.xy);
+  float ripple = sin(d * 1.6 - uTime * 1.7) * exp(-d * 0.28) * uPulse.z;
+  soil += uGlow * max(ripple, 0.0) * 0.22;
+
+  vec3 color = (soil + uGlow * lines) * rim * hourTint(uHour);
+  gl_FragColor = vec4(dither(aces(color * uReveal), vUv), rim * uReveal * 0.9);
+}
+`;
+
+/* ------------------------------------------------------------------ drapes */
+
+/**
+ * Parcels and water bodies. One merged buffer for all of them: the class only
+ * changes the vertex colour and a kind flag, so 199 landuse polygons and 7 water
+ * bodies are a single draw call.
+ */
+const AREA_VERT = /* glsl */ `
+attribute vec3 aColor;
+attribute vec2 aRow;
+attribute float aFade;
+attribute float aKind;
+uniform float uReveal;
+varying vec3 vColor;
+varying vec2 vRow;
+varying float vFade;
+varying float vKind;
+varying vec2 vLocal;
+
+void main(){
+  vColor = aColor;
+  vRow = aRow;
+  vFade = aFade;
+  vKind = aKind;
+  // The drape is built in the land's own frame, so its local xz is what the
+  // hatch is locked to — using world xz would let the pattern slide across the
+  // vineyard as the group drifts.
+  vLocal = position.xz;
+  // Ride the relief up with the terrain as the chapter reveals.
+  vec3 p = vec3(position.x, position.y * uReveal, position.z);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}
+`;
+
+const AREA_FRAG = /* glsl */ `
+${HOUR_TINT}
+uniform float uTime;
+uniform float uReveal;
+uniform float uHour;
+varying vec3 vColor;
+varying vec2 vRow;
+varying float vFade;
+varying float vKind;
+varying vec2 vLocal;
+
+void main(){
+  vec3 color = vColor;
+
+  if (vKind > 0.5 && vKind < 1.5) {
+    // Vine rows. The spacing is symbolic — real rows are ~2.2 m apart, far below
+    // a pixel here — but the direction is not: each block is hatched along its
+    // own longest edge, so the vineyard shows its true grain. Faded out where
+    // the stripes would alias into moiré.
+    float phase = dot(vLocal, vRow) * 62.83;   // one row every 0.1 units, ~24 m
+    float legible = 1.0 - smoothstep(1.6, 3.2, fwidth(phase));
+    color *= 1.0 + smoothstep(-0.4, 1.0, sin(phase)) * 0.55 * legible;
+  } else if (vKind > 1.5) {
+    // Open water, breathing very slowly.
+    color *= 0.88 + 0.16 * sin(uTime * 0.35 + vLocal.x * 9.0 + vLocal.y * 7.0);
+  }
+
+  float a = vFade * uReveal;
+  gl_FragColor = vec4(color * hourTint(uHour) * a, a);
+}
+`;
+
+/**
+ * Tracks, streams, water outlines and buildings. Colour and the edge fade are
+ * baked per vertex, so one shader serves every line and every wall.
+ */
+const DRAPE_VERT = /* glsl */ `
+attribute vec3 aColor;
+uniform float uReveal;
+varying vec3 vColor;
+
+void main(){
+  vColor = aColor;
+  vec3 p = vec3(position.x, position.y * uReveal, position.z);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}
+`;
+
+const DRAPE_FRAG = /* glsl */ `
+${HOUR_TINT}
+uniform float uReveal;
+uniform float uHour;
+varying vec3 vColor;
+
+void main(){
+  gl_FragColor = vec4(vColor * hourTint(uHour) * uReveal, uReveal);
+}
+`;
+
+/* ------------------------------------------------------------- noise ground */
+
+/**
+ * The fallback terroir, kept from before the elevation model existed: a
+ * displaced disc whose height field is layered noise biased along the NNE–SSW
+ * axis of the Dniester valley. It is only ever seen if landscape.json fails to
+ * load — the chapter must never break in front of a visitor.
+ */
+const NOISE_VERT = /* glsl */ `
 ${SIMPLEX_3D}
 uniform float uTime;
 uniform float uReveal;
@@ -63,10 +320,11 @@ void main(){
 }
 `;
 
-const GROUND_FRAG = /* glsl */ `
+const NOISE_FRAG = /* glsl */ `
 ${SIMPLEX_3D}
 ${DITHER}
 ${TONEMAP}
+${HOUR_TINT}
 uniform float uTime;
 uniform float uReveal;
 uniform float uHour;
@@ -74,68 +332,40 @@ uniform vec3 uLow;
 uniform vec3 uMid;
 uniform vec3 uHigh;
 uniform vec3 uGlow;
-uniform vec3 uPulse;   // xy = focus point in local space, z = strength
+uniform vec3 uPulse;
 varying vec2 vUv;
 varying float vHeight;
 varying vec3 vWorld;
 
 void main(){
-  // Fade the ground out well before the geometry ends, so the estate floats in
-  // the dark rather than sitting on a visible square.
   float radius = length(vUv - 0.5) * 2.0;
   float rim = 1.0 - smoothstep(0.30, 0.86, radius);
   if (rim <= 0.001) discard;
 
-  // Landscape units by elevation band: Poale -> Coline -> Podis.
   float t = clamp(vHeight * 0.55 + 0.5, 0.0, 1.0);
   vec3 soil = mix(uLow, uMid, smoothstep(0.25, 0.62, t));
   soil = mix(soil, uHigh, smoothstep(0.62, 0.95, t));
 
-  // Hillshade. The chapter is framed almost plan-view, where colour alone cannot
-  // convey relief; reconstructing the surface normal from screen-space
-  // derivatives and raking a low light across it is what makes the ground read
-  // as land rather than as a stain. No lights in the scene — this is the only
-  // shading in the piece.
   vec3 dx = dFdx(vWorld);
   vec3 dy = dFdy(vWorld);
   vec3 normal = normalize(cross(dx, dy));
   vec3 sun = normalize(vec3(-0.55, 0.62, -0.55));
   float shade = clamp(dot(normal, sun) * 0.5 + 0.5, 0.0, 1.0);
-  // Kept deliberately dim. The contour lines carry the landform; the colour
-  // fills are only a wash, and the twelve stations must stay the brightest
-  // thing on screen once bloom is applied.
   soil *= (0.25 + pow(shade, 1.6) * 0.75) * 0.20;
 
-  // Contour lines — an echo of the estate's own geophysical survey. Screen-space
-  // derivative keeps them a constant hairline instead of banding into moiré.
   float h = vHeight * 3.0;
   float grid = abs(fract(h) - 0.5) / max(fwidth(h), 0.0001);
   float lines = (1.0 - smoothstep(0.0, 1.4, grid)) * 0.45;
 
-  // Vine rows, only on the mid slopes where the vineyard actually sits.
   float rows = sin((vWorld.x * 0.94 - vWorld.z * 0.34) * 6.0) * 0.5 + 0.5;
   float rowMask = smoothstep(0.25, 0.5, t) * (1.0 - smoothstep(0.68, 0.92, t));
   soil += uGlow * rows * rowMask * 0.035;
 
-  // A slow ripple outward from wherever the visitor last touched.
   float d = distance(vWorld.xz, uPulse.xy);
   float ripple = sin(d * 1.6 - uTime * 1.7) * exp(-d * 0.28) * uPulse.z;
   soil += uGlow * max(ripple, 0.0) * 0.22;
 
-  // Time of day. Sunrise and sunset at this latitude sit near 06:00 and 20:00;
-  // the ground runs cold and blue at night, warms hard through the two
-  // twilights, and settles neutral at midday. Multiplicative, so it tints the
-  // land without adding light of its own.
-  float dawn = 1.0 - smoothstep(0.0, 2.2, abs(uHour - 6.0));
-  float dusk = 1.0 - smoothstep(0.0, 2.4, abs(uHour - 20.0));
-  float day = smoothstep(5.0, 8.5, uHour) * (1.0 - smoothstep(18.0, 21.5, uHour));
-  vec3 night = vec3(0.52, 0.66, 1.20);
-  vec3 noon = vec3(1.0, 0.98, 0.92);
-  vec3 twilight = vec3(1.25, 0.68, 0.42);
-  vec3 tint = mix(night, noon, day);
-  tint = mix(tint, twilight, clamp(dawn + dusk, 0.0, 1.0) * 0.85);
-
-  vec3 color = (soil + uGlow * lines) * rim * tint;
+  vec3 color = (soil + uGlow * lines) * rim * hourTint(uHour);
   gl_FragColor = vec4(dither(aces(color * uReveal), vUv), rim * uReveal * 0.9);
 }
 `;
@@ -143,14 +373,11 @@ void main(){
 /* ---------------------------------------------------------------- stations */
 
 /**
- * One instanced quad per station, drawn as an additive sprite. Size follows
+ * One point per station, drawn as an additive sprite. `gl_PointSize` gives
+ * camera-facing sprites for free — cheaper and steadier than billboarded quads
+ * for twelve marks — and `gl_PointCoord` replaces a uv varying. Size follows
  * log-scaled detection volume so H10's 7,859 songs do not swallow H7's six
  * encounters; the inner core follows species richness.
- */
-/**
- * Points variant of the station shader. `gl_PointSize` gives camera-facing
- * sprites for free — cheaper and steadier than billboarded quads for twelve
- * marks — and `gl_PointCoord` replaces a uv varying.
  */
 const STATION_VERT = /* glsl */ `
 attribute vec3 aColor;
@@ -159,6 +386,7 @@ attribute float aRichness;
 attribute float aSeed;
 attribute float aSelected;
 attribute float aActivity;
+attribute float aGround;
 uniform float uTime;
 uniform float uReveal;
 varying vec3 vColor;
@@ -172,7 +400,10 @@ void main(){
   vSelected = aSelected;
   vActivity = aActivity;
 
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  // aGround is the station's own elevation on the real terrain; position.y is
+  // only the float above it, so the marks rise with the land as it reveals.
+  vec3 p = vec3(position.x, position.y + aGround * uReveal, position.z);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
   float breathe = 1.0 + sin(uTime * 0.7 + aSeed * 6.2831) * 0.06;
   // Selected stations swell and pulse harder so a fingertip has clear feedback.
   float pulse = 1.0 + vSelected * (0.35 + sin(uTime * 3.0) * 0.12);
@@ -262,19 +493,43 @@ export function Constellation({
   const revealRef = useRef(0);
   const hourRef = useRef(hour);
 
-  // The estate is a narrow NNE–SSW lozenge, so its long axis sets the scale:
-  // sized to fill the frame vertically with north kept up.
-  const placed = useMemo(() => layoutSites(data.sites, 6.5), [data.sites]);
+  /* ---- the real ground, loaded beside the survey ---- */
+  /**
+   * Optional by design: the survey data is the chapter, the landscape is the
+   * table it stands on. A failed fetch drops back to the noise terrain without
+   * telling the visitor anything went wrong.
+   */
+  const [landscape, setLandscape] = useState<LandscapeData | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadLandscape()
+      .then((loaded) => {
+        if (alive) setLandscape(loaded);
+      })
+      .catch(() => {
+        // Keep the noise ground.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  /* ---- ground ---- */
-  const groundUniforms = useMemo(
+  const placed = useMemo(() => layoutSites(data.sites, ESTATE_RADIUS), [data.sites]);
+
+  const projection = useMemo<EstateProjection | null>(
+    () => (landscape ? estateProjection(data.sites, ESTATE_RADIUS, landscape.dem) : null),
+    [landscape, data.sites],
+  );
+
+  /* ---- uniforms, shared by every layer of the land ---- */
+  const landUniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uReveal: { value: 0 },
       uHour: { value: 12 },
-      // Poale (footslopes) -> Coline (hillslopes) -> Podiș (plateau), the estate's
-      // own three landscape units. Kept low-saturation so the stations stay the
-      // brightest thing on screen.
+      // Poale (Dniester terrace) -> Coline (hillslopes) -> Podiș (plateau), the
+      // estate's own three landscape units, now keyed to real altitude. Kept
+      // low-saturation so the stations stay the brightest thing on screen.
       uLow: { value: new THREE.Color(PALETTE.sediment) },
       uMid: { value: new THREE.Color(PALETTE.brandNavy) },
       uHigh: { value: new THREE.Color(PALETTE.brandBronze) },
@@ -284,13 +539,147 @@ export function Constellation({
     [],
   );
 
+  const stationUniforms = useMemo(() => ({ uTime: { value: 0 }, uReveal: { value: 0 } }), []);
+
+  /* ---- materials ---- */
+  const materials = useMemo(() => {
+    const terrain = new THREE.ShaderMaterial({
+      vertexShader: TERRAIN_VERT,
+      fragmentShader: TERRAIN_FRAG,
+      uniforms: landUniforms,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const noise = new THREE.ShaderMaterial({
+      vertexShader: NOISE_VERT,
+      fragmentShader: NOISE_FRAG,
+      uniforms: landUniforms,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const areas = new THREE.ShaderMaterial({
+      vertexShader: AREA_VERT,
+      fragmentShader: AREA_FRAG,
+      uniforms: landUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const drape = new THREE.ShaderMaterial({
+      vertexShader: DRAPE_VERT,
+      fragmentShader: DRAPE_FRAG,
+      uniforms: landUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const built = new THREE.ShaderMaterial({
+      vertexShader: DRAPE_VERT,
+      fragmentShader: DRAPE_FRAG,
+      uniforms: landUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      // Prisms are wound outward, so only the near walls draw and the far ones
+      // do not add a second glow through them.
+      side: THREE.FrontSide,
+    });
+    const stations = new THREE.ShaderMaterial({
+      vertexShader: STATION_VERT,
+      fragmentShader: STATION_FRAG,
+      uniforms: stationUniforms,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+    });
+    return { terrain, noise, areas, drape, built, stations };
+  }, [landUniforms, stationUniforms]);
+
+  useEffect(
+    () => () => {
+      Object.values(materials).forEach((material) => material.dispose());
+    },
+    [materials],
+  );
+
+  /* ---- the map, merged into one buffer per layer ---- */
+  const layers = useMemo(() => {
+    if (!landscape || !projection) return null;
+    return {
+      terrain: buildTerrain(projection),
+      areas: buildAreaLayer(
+        landscape,
+        projection,
+        {
+          // The estate's own wine tone for the blocks it is planted with…
+          vineyard: { color: PALETTE.wine, intensity: 0.24, kind: AREA_HATCHED },
+          // …and a cool green for the woods, which is where the survey found the
+          // richest stations.
+          forest: { color: PALETTE.vine, intensity: 0.22, kind: AREA_PLAIN },
+          orchard: { color: PALETTE.chlorophyll, intensity: 0.16, kind: AREA_PLAIN },
+          meadow: { color: PALETTE.moss, intensity: 0.20, kind: AREA_PLAIN },
+          farmland: { color: PALETTE.brandBronze, intensity: 0.11, kind: AREA_PLAIN },
+          water: { color: PALETTE.water, intensity: 0.34, kind: AREA_WATER },
+        },
+        { color: PALETTE.brandBronze, intensity: 0.09, kind: AREA_PLAIN },
+        AREA_LIFT,
+      ),
+      // Kept just under the contour lines, so the tracks read as a network
+      // without competing with the landform they cross.
+      tracks: buildLineLayer(landscape.tracks, projection, {
+        color: PALETTE.brandBronze,
+        intensity: 0.30,
+        lift: TRACK_LIFT,
+      }),
+      // Streams and the ponds' own edges read as one water network.
+      waterways: buildLineLayer([...landscape.streams, ...landscape.water], projection, {
+        color: PALETTE.water,
+        intensity: 0.55,
+        lift: WATER_LIFT,
+      }),
+      buildings: buildBuildingLayer(landscape, projection, {
+        base: PALETTE.brandBronze,
+        accent: PALETTE.foil,
+        // The château is 3,380 m² and the cellar block beside it 2,385 m²; the
+        // next building on the estate is 734. So the two that matter cross this
+        // ramp and nothing else comes close.
+        minArea: 500,
+        maxArea: 2400,
+        minHeight: 0.05,
+        maxHeight: 0.16,
+      }),
+    };
+  }, [landscape, projection]);
+
+  useEffect(
+    () => () => {
+      if (!layers) return;
+      Object.values(layers).forEach((geometry) => geometry.dispose());
+    },
+    [layers],
+  );
+
   /**
-   * A densely tessellated plane, not a CircleGeometry — a circle is a triangle
-   * fan with a single centre vertex and no interior tessellation, so displacing
-   * it in the vertex shader produces radial spikes rather than terrain. The disc
-   * shape comes from the rim fade in the fragment shader instead.
+   * The fallback ground: a densely tessellated plane, not a CircleGeometry — a
+   * circle is a triangle fan with a single centre vertex and no interior
+   * tessellation, so displacing it in the vertex shader produces radial spikes
+   * rather than terrain. Only built while the real landscape is missing.
    */
-  const groundGeometry = useMemo(() => new THREE.PlaneGeometry(24, 24, 200, 200), []);
+  const noiseGeometry = useMemo(
+    () => (landscape ? null : new THREE.PlaneGeometry(24, 24, 200, 200)),
+    [landscape],
+  );
+
+  useEffect(
+    () => () => {
+      noiseGeometry?.dispose();
+    },
+    [noiseGeometry],
+  );
 
   /* ---- stations, as a single Points draw ---- */
   const { stationGeometry, stationOrder } = useMemo(() => {
@@ -302,14 +691,18 @@ export function Constellation({
     const richness = new Float32Array(n);
     const seeds = new Float32Array(n);
     const selected = new Float32Array(n);
+    const ground = new Float32Array(n);
 
     const maxDetections = Math.max(...data.sites.map((s) => s.detections));
     const maxRichness = Math.max(...data.sites.map((s) => s.richness));
 
     placed.forEach((entry, i) => {
       positions[i * 3] = entry.position[0];
-      positions[i * 3 + 1] = 0.55;
+      positions[i * 3 + 1] = STATION_LIFT;
       positions[i * 3 + 2] = entry.position[2];
+      // Every station stands on its own elevation — H10 down at 35 m in the
+      // woodland by the river, H6 up at 156 m on the ridge.
+      ground[i] = projection ? terrainHeightAt(projection, entry.site.x, entry.site.y) : 0;
 
       const [r, g, b] = siteColor(entry.site, lens);
       colors[i * 3] = r;
@@ -330,15 +723,18 @@ export function Constellation({
     geometry.setAttribute('aRichness', new THREE.BufferAttribute(richness, 1));
     geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
     geometry.setAttribute('aSelected', new THREE.BufferAttribute(selected, 1));
+    geometry.setAttribute('aGround', new THREE.BufferAttribute(ground, 1));
     // Filled every frame from the smoothed clock; seeded here so the first
     // frame is not blank.
     geometry.setAttribute('aActivity', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
     return { stationGeometry: geometry, stationOrder: placed.map((p) => p.site.id) };
-  }, [placed, data.sites, lens, selectedSite]);
+  }, [placed, data.sites, lens, selectedSite, projection]);
 
-  const stationUniforms = useMemo(
-    () => ({ uTime: { value: 0 }, uReveal: { value: 0 } }),
-    [],
+  useEffect(
+    () => () => {
+      stationGeometry.dispose();
+    },
+    [stationGeometry],
   );
 
   /* ---- filaments between stations ---- */
@@ -369,7 +765,10 @@ export function Constellation({
           for (const t of [s / segments, (s + 1) / segments]) {
             const x = a[0] + (b[0] - a[0]) * t;
             const z = a[2] + (b[2] - a[2]) * t;
-            const y = 0.55 + Math.sin(t * Math.PI) * lift;
+            // The filament follows the ground it crosses, so a tie between the
+            // ridge and the floodplain visibly spans the drop.
+            const ground = projection ? terrainHeightAtWorld(projection, x, z) : 0;
+            const y = ground + STATION_LIFT + Math.sin(t * Math.PI) * lift;
             positions.push(x, y, z);
             // Floors at 0.4 so even the weakest kept filament stays legible
             // against the ground; the strongest ties reach full foil.
@@ -385,7 +784,14 @@ export function Constellation({
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     return geometry;
-  }, [placed, data.links]);
+  }, [placed, data.links, projection]);
+
+  useEffect(
+    () => () => {
+      linkGeometry.dispose();
+    },
+    [linkGeometry],
+  );
 
   /* ---- interaction ---- */
   const handlePointer = (event: { point: THREE.Vector3; stopPropagation: () => void }) => {
@@ -428,10 +834,10 @@ export function Constellation({
     }
     attr.needsUpdate = true;
 
-    groundUniforms.uTime.value = t;
-    groundUniforms.uReveal.value = r;
-    groundUniforms.uHour.value = hourRef.current;
-    groundUniforms.uPulse.value.set(pulse.current.x, pulse.current.y, pulse.current.z);
+    landUniforms.uTime.value = t;
+    landUniforms.uReveal.value = r;
+    landUniforms.uHour.value = hourRef.current;
+    landUniforms.uPulse.value.set(pulse.current.x, pulse.current.y, pulse.current.z);
     pulse.current.z *= 1 - Math.min(1, delta * 0.75);
 
     stationUniforms.uTime.value = t;
@@ -452,23 +858,35 @@ export function Constellation({
 
   return (
     <group ref={groupRef}>
-      <mesh
-        ref={groundRef}
-        geometry={groundGeometry}
-        rotation={[-Math.PI / 2, 0, 0]}
-        onPointerDown={handlePointer}
-      >
-        <shaderMaterial
-          vertexShader={GROUND_VERT}
-          fragmentShader={GROUND_FRAG}
-          uniforms={groundUniforms}
-          transparent
-          depthWrite={false}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+      {layers ? (
+        <>
+          <mesh
+            ref={groundRef}
+            geometry={layers.terrain}
+            material={materials.terrain}
+            rotation={[-Math.PI / 2, 0, 0]}
+            renderOrder={0}
+            onPointerDown={handlePointer}
+          />
+          {/* Every drape is already in the land's frame, so none of them rotate. */}
+          <mesh geometry={layers.areas} material={materials.areas} renderOrder={1} />
+          <lineSegments geometry={layers.tracks} material={materials.drape} renderOrder={2} />
+          <lineSegments geometry={layers.waterways} material={materials.drape} renderOrder={3} />
+          <mesh geometry={layers.buildings} material={materials.built} renderOrder={4} />
+        </>
+      ) : (
+        noiseGeometry && (
+          <mesh
+            ref={groundRef}
+            geometry={noiseGeometry}
+            material={materials.noise}
+            rotation={[-Math.PI / 2, 0, 0]}
+            onPointerDown={handlePointer}
+          />
+        )
+      )}
 
-      <lineSegments ref={linksRef} geometry={linkGeometry}>
+      <lineSegments ref={linksRef} geometry={linkGeometry} renderOrder={5}>
         <lineBasicMaterial
           vertexColors
           transparent
@@ -478,18 +896,13 @@ export function Constellation({
         />
       </lineSegments>
 
-      <points ref={stationsRef} geometry={stationGeometry} userData={{ stationOrder }}>
-        <shaderMaterial
-          vertexShader={STATION_VERT}
-          fragmentShader={STATION_FRAG}
-          uniforms={stationUniforms}
-          transparent
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          depthTest={false}
-        />
-      </points>
+      <points
+        ref={stationsRef}
+        geometry={stationGeometry}
+        material={materials.stations}
+        renderOrder={6}
+        userData={{ stationOrder }}
+      />
     </group>
   );
 }
-
