@@ -167,9 +167,43 @@ Vite prints a `http://192.168.x.x:4173/` address; open `/pocket.html` there.
 This is plain HTTP, so sensors still will not be granted — use `--host` with a
 tunnel, or a certificate, if you need to demo the live sensor behaviour.
 
-**3. Any static host.** `npx vite build` emits `dist/` with all four entries
-(`index`, `indoor`, `outdoor`, `pocket`). Serve it over HTTPS and the sensors
-work as they do on the installed kiosk.
+**3. GitHub Pages — the one that works outdoors on mobile data.**
+
+`docs/live/index.html` is already committed: the pocket edition as a single
+self-contained file. It makes zero external requests, so it needs no base-URL
+configuration and serves correctly from any sub-path.
+
+To publish it, once:
+
+> **Settings → Pages → Build and deployment → Source: Deploy from a branch**
+> Branch: `claude/interactive-media-art-dashboard-ki7oz7` · Folder: `/docs` → **Save**
+
+After a minute or two the site is live at:
+
+```
+https://friendscoin.github.io/Purcari/live/
+```
+
+That URL is HTTPS, so **the camera and microphone are granted** and Presence
+runs on real sensors. It works over cellular, which is the only way to test the
+outdoor piece where it belongs. Once the branch merges, repoint Pages at `main`
+and the same path keeps working.
+
+The Pages REST API is blocked from the build sandbox, so this toggle cannot be
+scripted from here.
+
+**4. Any other static host.** `npx vite build` emits `dist/` with all four
+entries (`index`, `indoor`, `outdoor`, `pocket`). Serve over HTTPS and the
+sensors behave exactly as on the installed kiosk. A drag-and-drop host works
+too — `docs/live/index.html` alone is the whole piece.
+
+### Why not a tunnel
+
+Tried, and it cannot work from this build environment: `cloudflared` needs
+outbound TCP on 7844, which the network policy blocks, and SSH-based tunnels on
+443 are terminated by the TLS-intercepting proxy. Only genuine HTTPS to real
+hosts leaves the sandbox. Pages is also simply better here — a permanent URL
+that survives the session and reaches a phone on mobile data.
 
 ---
 
