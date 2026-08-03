@@ -330,24 +330,51 @@ void main(){
   uv = 0.5 + centred * (1.0 + dot(centred, centred) * 0.012);
 
   float aberration = 0.0075 * uAberration;
-  vec3 current = sampleDispersed(tScene, uv, aberration);
+  float exposure = uExposure;
 
-  // Chapter change: a noise field crosses a rising threshold, so the outgoing
-  // image breaks up in organic patches instead of dipping uniformly.
+  /**
+   * Chapter change.
+   *
+   * Three things happen at once, because a crossfade alone reads as a slideshow.
+   * The two images move against each other — the outgoing one recedes while the
+   * incoming one settles forward out of a slight push-in — so the cut has a
+   * direction. A noise field crossing a rising threshold breaks the outgoing
+   * image up in organic patches rather than dipping it uniformly. And a band of
+   * light travels across the frame along that front, with the lens dispersion
+   * and exposure lifting as it passes, so the change reads as something igniting
+   * rather than as two layers being blended.
+   */
+  vec3 current;
   if (uDissolve > 0.001){
-    vec3 previous = sampleDispersed(tPrev, uv, aberration);
-    float n = snoise(vec3(uv * 4.5, uTime * 0.15)) * 0.5 + 0.5;
-    float edge = smoothstep(uDissolve - 0.28, uDissolve + 0.28, n);
-    // Light blooms along the dissolve front.
-    float front = 1.0 - abs(n - uDissolve) * 3.4;
-    vec3 mixed = mix(current, previous, edge);
-    current = mixed + max(front, 0.0) * vec3(0.55, 0.36, 0.16) * 0.42;
+    float t = uDissolve;
+    // Push: incoming eases in from 4% oversize, outgoing keeps drifting out.
+    vec2 inUv  = 0.5 + (uv - 0.5) * (1.0 + t * 0.045);
+    vec2 outUv = 0.5 + (uv - 0.5) * (1.0 - (1.0 - t) * 0.055);
+
+    float lift = 1.0 + sin(t * 3.14159) * 0.55;
+    current = sampleDispersed(tScene, inUv, aberration * lift);
+    vec3 previous = sampleDispersed(tPrev, outUv, aberration * lift);
+
+    // The front runs on a diagonal, warped by noise so it is never a straight wipe.
+    float sweep = dot(uv - 0.5, normalize(vec2(0.82, 0.57))) * 0.5 + 0.5;
+    float n = snoise(vec3(uv * 3.2, uTime * 0.2)) * 0.20;
+    float field = clamp(sweep + n, 0.0, 1.0);
+    float front = smoothstep(t - 0.22, t + 0.22, field);
+
+    current = mix(current, previous, front);
+
+    // A hot filament riding the boundary, brightest mid-transition.
+    float band = exp(-pow((field - t) * 7.0, 2.0)) * sin(t * 3.14159);
+    current += band * vec3(0.62, 0.42, 0.20) * 0.55;
+    exposure *= 1.0 + band * 0.25;
+  } else {
+    current = sampleDispersed(tScene, uv, aberration);
   }
 
   vec3 bloom = texture2D(tBloom, uv).rgb;
   vec3 lit = current + bloom * uBloom;
 
-  lit *= uExposure;
+  lit *= exposure;
   vec3 mapped = aces(lit);
 
   float vignette = smoothstep(1.28, 0.32, length(centred) * 1.72);

@@ -214,6 +214,12 @@ export class Engine {
     const rawDelta = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
     const delta = Math.min(Math.max(rawDelta, 1e-4), MAX_DELTA);
+    // Chapter dissolves run on wall-clock time, not on the clamped simulation
+    // step. Clamping protects the motion from a stall; applying it to the
+    // transition instead stretches a 1.4 s crossfade into twenty seconds on a
+    // machine rendering at two frames a second, which is exactly the machine
+    // that can least afford to be drawing two chapters at once.
+    const wallDelta = Math.min(Math.max(rawDelta, 1e-4), 1);
 
     this.time += delta;
     this.chapterElapsed += delta;
@@ -252,7 +258,7 @@ export class Engine {
     this.post.renderScene(chapter.scene, chapter.camera, this.post.sceneTarget);
 
     if (this.outgoing) {
-      this.transition -= delta / TRANSITION_DURATION;
+      this.transition -= wallDelta / TRANSITION_DURATION;
       if (this.transition <= 0) {
         this.transition = 0;
         this.outgoing.exit();

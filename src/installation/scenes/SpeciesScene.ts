@@ -58,6 +58,8 @@ export class SpeciesScene extends ChapterBase {
 
   private selected: number | null = null;
   private selectStrength = 0;
+  /** 0 on entering, 1 once the opening move has landed. */
+  private flight = 0;
   private cachedReadout: Readout;
   private readoutKey = '';
   private readonly markerProbe = new Vector3();
@@ -260,6 +262,7 @@ export class SpeciesScene extends ChapterBase {
     this.uniforms.uReveal.value = 0;
     this.selected = null;
     this.selectStrength = 0;
+    this.flight = 0;
     this.desired.radius = this.restSpherical.radius * 1.3;
   }
 
@@ -288,6 +291,11 @@ export class SpeciesScene extends ChapterBase {
       this.desiredTarget.set(0, 0, 0);
       this.recentres = true;
     }
+
+    // Opening move: the web unrolls from a steep angle into its resting one.
+    this.flight = Math.min(1, this.flight + ctx.delta / 4.5);
+    const landed = 1 - Math.pow(1 - this.flight, 3);
+    this.desired.phi = damp(this.desired.phi, this.restSpherical.phi + (1 - landed) * 0.55, 2.0, ctx.delta);
 
     this.updateCameraRig(ctx);
     this.updateMarker();

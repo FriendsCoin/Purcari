@@ -45,6 +45,8 @@ export class CircadianScene extends ChapterBase {
   /** Continuous position of the hand, 0..24. */
   private hour = 4.5;
   private scrubHold = 0;
+  /** 0 on entering, 1 once the opening move has landed. */
+  private flight = 0;
   private cachedReadout: Readout;
   private readoutHour = -1;
 
@@ -150,6 +152,7 @@ export class CircadianScene extends ChapterBase {
     this.uniforms.uReveal.value = 0;
     this.hour = peakHour - 1.5;
     this.scrubHold = 0;
+    this.flight = 0;
   }
 
   update(ctx: FrameContext): void {
@@ -172,6 +175,7 @@ export class CircadianScene extends ChapterBase {
     this.uniforms.uHour.value = this.hour;
     this.uniforms.uScrub.value = damp(this.uniforms.uScrub.value, this.scrubHold > 0 ? 1 : 0, 3, ctx.delta);
 
+    this.flight = Math.min(1, this.flight + ctx.delta / 4.2);
     this.frameCamera(ctx);
     this.refreshReadout();
   }
@@ -183,10 +187,17 @@ export class CircadianScene extends ChapterBase {
   private frameCamera(ctx: FrameContext): void {
     const halfV = MathUtils.degToRad(this.camera.fov) / 2;
     const halfH = Math.atan(Math.tan(halfV) * ctx.aspect);
-    const distance = (R_OUTER * 1.22) / Math.tan(Math.min(halfV, halfH));
+    const framed = (R_OUTER * 1.22) / Math.tan(Math.min(halfV, halfH));
 
-    const sway = Math.sin(ctx.time * 0.21) * 0.035 + ctx.pointer.centroid.x * 0.06;
-    const tilt = Math.cos(ctx.time * 0.17) * 0.03 + ctx.pointer.centroid.y * 0.05;
+    // Opening move: the dial comes up out of a steep, distant three-quarter view
+    // and rolls flat to the panel, so the chapter arrives as a camera move
+    // rather than as a cut to a diagram.
+    const landed = 1 - Math.pow(1 - this.flight, 3);
+    const distance = framed * (1 + (1 - landed) * 0.85);
+
+    const sway = Math.sin(ctx.time * 0.21) * 0.035 + ctx.pointer.centroid.x * 0.06 + (1 - landed) * 0.5;
+    const tilt =
+      Math.cos(ctx.time * 0.17) * 0.03 + ctx.pointer.centroid.y * 0.05 + (1 - landed) * 0.55;
 
     this.spherical.radius = damp(this.spherical.radius, distance, 2.2, ctx.delta);
     this.spherical.theta = damp(this.spherical.theta, sway, 1.6, ctx.delta);

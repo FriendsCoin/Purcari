@@ -25,10 +25,44 @@ recorders and a short camera-trap line, across 121 species.
 | | Chapter | What it shows | Touch |
 |---|---|---|---|
 | — | **Le chœur** | Attract state. All 2,665 detections held in a ring whose azimuth is time of day, with a wave of light sweeping it in clock order. Because the dawn chorus is almost a third of the record, the wave arrives as a visible swell every half minute and goes quiet overnight. | Drag to turn, tap to push the cloud |
-| I | **Terroir** | The five recording stations on their real coordinates along 3 km of vineyard, each a shaft of light scaled to what it heard, its detections spiralling up out of the ground in time-of-day order. | Drag to orbit, tap a beacon to focus it |
+| I | **Terroir** | The real landform, drawn as a three-dimensional contour map: the vineyard plateau at ~155 m breaking and falling 150 m to the Dniester floodplain. The château stands at the foot of that break, the five recorders at their true coordinates and elevations, each a shaft of light scaled to what it heard. | Drag to orbit, tap a beacon or the château |
 | II | **Circadien** | Every detection on a 24-hour dial: angle from the minute it was recorded, distance from the centre from its rank within that hour. The spikes *are* the hourly histogram, and the tallest by a wide margin is the dawn chorus at 04:00–07:00. | Drag left/right to scrub the hour |
 | III | **Espèces** | 121 species positioned by *when* they sing — the angle of each node is the circular mean of its 24-hour profile, so the dawn chorus gathers on one side and the owls and nightjars drift to the other. Distance from the centre is inverse abundance. Links join species with similar daily rhythms. | Drag to rotate, tap a node to select it |
 | IV | **Flux** | The seventeen days of the survey as a river of light, thinning from 347 detections on 4 August to one on the last three days. | Drag left/right to scrub the day |
+
+### What Chapter I is made of
+
+The terrain is **not** procedural. `scripts/fetch-terrain.mjs` pulls a 72 x 72 grid
+of NASA SRTM 30 m elevations covering 3.5 x 5.5 km around the survey area and
+bakes it to `src/installation/data/terrain.json` (17 KB). The mesh displaces
+against that as a half-float texture; the contour lines, the shoreline and the
+vineyard mask are all derived from it, so the shape of the ground on screen is
+the shape of the ground at Purcari.
+
+That elevation data turned out to explain the survey. The site is bimodal —
+a plateau at 150–160 m and a floodplain around 0 m, with a steep escarpment
+between:
+
+| Station | Elevation | Detections | Species |
+|---|---|---|---|
+| ct45 | 157 m | 9 | 5 |
+| ct48 | 142 m | 261 | 54 |
+| AU-03 | 91 m | 605 | 75 |
+| **ct47** | **27 m** | **1 082** | **65** |
+| **AU-05** | **35 m** | **708** | **69** |
+
+The two recorders at the bottom of the drop logged more than the other three
+combined, and every heron, bittern, little bittern, crake, swan and crane in the
+dataset came from them. Château Purcari itself (46.5295 N, 29.8719 E, from
+OpenStreetMap) sits about 120 m from ct47. The richest listening point in the
+survey is on the château's doorstep, at the ecotone where the vines meet the
+water — which is the same edge effect the dashboard's hypotheses test for.
+
+The estate is drawn as an architectural line model: massing, roofs, lit windows
+and the tree alley. Its **position is exact**; its **footprint is exaggerated
+six times**, for the same reason the relief is exaggerated seven times — a 44 m
+building on a 5.5 km landscape is a third of a scene unit and vanishes. It is a
+portrait of the estate's massing, not a survey of the building.
 
 Two ideas run through all five so a visitor keeps their bearings: **midnight is
 up and hours run clockwise** everywhere a clock appears, and **colour always
@@ -80,6 +114,7 @@ through state.
 ```
 installation.html                 kiosk entry point
 scripts/build-installation-atlas.mjs   bakes data.geojson -> atlas.json
+scripts/fetch-terrain.mjs              fetches SRTM     -> terrain.json
 src/installation/
   main.tsx                        bootstrap (deliberately no StrictMode)
   Installation.tsx                shell: overlay, chapter state, service corner
@@ -93,22 +128,27 @@ src/installation/
     palette.ts                    colours and ecological guilds
   scenes/
     ChapterBase.ts                camera rig + touch uniform plumbing
+    chateau.ts                    procedural line model of the estate
     ChorusScene.ts  TerroirScene.ts  CircadianScene.ts
     SpeciesScene.ts FluxScene.ts
   data/
-    atlas.ts / atlas.json         the baked dataset
+    atlas.ts / atlas.json         the baked detections
+    terrain.ts / terrain.json     the baked elevation model
   ui/                             Readout, ChapterNav, Sparkline, Diagnostics
   styles/installation.css         overlay chrome (no Tailwind in this bundle)
 ```
 
 ### Rebuilding the data
 
-`src/installation/data/atlas.json` is committed, so a clone builds without the
-raw export. Regenerate it when the survey data changes:
+Both data files are committed, so a clone builds with no network access.
 
 ```
-npm run atlas
+npm run atlas      # detections   data.geojson (3.4 MB) -> atlas.json  (51 KB)
+npm run terrain    # elevation    SRTM via opentopodata -> terrain.json (17 KB)
 ```
+
+`npm run terrain` hits a public endpoint at one request per second and takes
+about a minute. It only needs re-running if the area of interest changes.
 
 **Timestamps.** The export carries a `Z` suffix, but the hourly histogram peaks
 at 04:00–06:00, which is the dawn chorus for Moldova in August (sunrise ~06:10).
@@ -137,9 +177,33 @@ reintroduce:
    numbers mean something completely different — a 0.02 shadow lift becomes 25%
    of the visible range instead of 2%.
 
+Two more that cost real time during the build:
+
+4. **Anything that covers the frame must stay under the bloom threshold.** The
+   contour lines were originally bright enough to trip the bright-pass, and the
+   five-level mip chain smeared the whole escarpment into soft cells that looked
+   exactly like a bug in a particle system. Broad coverage plus any brightness is
+   a bloom problem; only the beacons, the windows and the water are meant to glow.
+5. **Animation timing runs on wall-clock, simulation on the clamped delta.** The
+   frame loop clamps delta to 1/20 s so a stall cannot slingshot the motion. The
+   chapter dissolve deliberately does *not* use that clamp: driving a 1.4 s
+   crossfade off it stretched the transition to twenty seconds on a machine
+   rendering at two frames a second — while it was drawing two chapters at once.
+
 Also: `active`, `filter`, `input`, `output` and `sample` are reserved words in
 GLSL ES and will fail to compile. And a backtick inside a shader comment ends the
 template literal.
+
+### Isolating a layer
+
+Chapter I stacks eleven layers, and a shader misbehaving in one of them is very
+hard to attribute by eye. Any of them can be switched off from the URL:
+
+```
+/installation.html?hide=mist,water,canopies
+```
+
+Names: `terrain water vines mass edges windows trunks canopies shaft halo motes mist`.
 
 ### Performance
 

@@ -402,6 +402,12 @@ void main(){
   // Flow, sampled against the direction of travel so it reads as current.
   float flow = snoise(vec3(vUv.x * 9.0 - uTime * 0.32, vUv.y * 3.0, uTime * 0.1)) * 0.5 + 0.5;
 
+  // Caustics: two counter-running bands that pinch into bright filaments where
+  // they cross, the way light does on the surface of moving water.
+  float c1 = snoise(vec3(vUv.x * 22.0 - uTime * 0.7, vUv.y * 5.0, 0.0));
+  float c2 = snoise(vec3(vUv.x * 17.0 + uTime * 0.5, vUv.y * 4.0, 9.3));
+  float caustic = pow(max(1.0 - abs(c1 - c2), 0.0), 7.0) * 0.5;
+
   vec3 tint = mix(uGold, uEmber, vUv.x * 0.7);
   tint = mix(tint, uDusk * 1.5, vNight * 0.75);
 
@@ -409,7 +415,7 @@ void main(){
   float head = exp(-vPlayhead * vPlayhead * 3.0);
   float passed = smoothstep(0.4, -0.6, vPlayhead);
 
-  float intensity = (crest * (0.60 + flow * 0.55) + body) * (0.5 + passed * 0.5);
+  float intensity = (crest * (0.60 + flow * 0.55 + caustic) + body) * (0.5 + passed * 0.5);
   intensity += head * crest * 0.7;
   intensity *= 0.55 + vHeight * 0.9;
   intensity *= uReveal * (1.0 + uScrub * 0.35);

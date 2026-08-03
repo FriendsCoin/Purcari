@@ -234,10 +234,15 @@ void main(){
   pos.xz = mat2(c, -s, s, c) * pos.xz;
 
   // The chorus wave: a front travelling through the cloud in time-of-day order.
-  float d = abs(fract(uPhase - aPhase + 1.0) - 0.0);
-  d = min(d, 1.0 - d);
-  float wave = exp(-d * d * 470.0);
+  float signed = fract(uPhase - aPhase + 1.0);
+  signed = signed > 0.5 ? signed - 1.0 : signed;
+  // Ahead of the front it falls away fast; behind it, slowly.
+  float lead = exp(-signed * signed * 2600.0);
+  float tail = signed > 0.0 ? exp(-signed * 26.0) * 0.55 : 0.0;
+  float wave = clamp(lead + tail, 0.0, 1.4);
 
+  // The ring swells where the chorus is passing and settles behind it.
+  pos.y += wave * 1.1 + sin(aPhase * 6.2831853 * 3.0 + uTime * 0.25) * 0.5;
   pos += normalize(pos + 1e-4) * wave * 2.6;
   pos = mix(pos, pos * 1.12, 1.0 - uAttention);
 
