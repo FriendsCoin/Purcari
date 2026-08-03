@@ -31,6 +31,14 @@
     "react/prop-types": "off",
     "no-console": ["warn", { "allow": ["warn", "error"] }]
   },
+  "overrides": [
+    {
+      "files": ["src/components/three/**/*.tsx", "src/installation/gl/**/*.tsx"],
+      "rules": {
+        "react/no-unknown-property": "off"
+      }
+    }
+  ],
   "settings": {
     "react": {
       "version": "detect"

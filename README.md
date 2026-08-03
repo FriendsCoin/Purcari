@@ -7,6 +7,23 @@
 
 An interactive data visualization dashboard for analyzing biodiversity monitoring data at the Purcari Winery in Moldova. This application processes wildlife observation data from camera traps and BirdNET audio recordings, providing insights into species diversity, temporal patterns, and ecological interactions.
 
+The repository also contains two **media-art installations** built on the same
+survey — a touchscreen piece for inside the château and a sensor-driven piece for
+outdoors. See **[docs/INSTALLATION.md](docs/INSTALLATION.md)**.
+
+| | Entry | Input |
+|---|---|---|
+| **Terroir vivant** — indoor touchscreen | `/indoor.html` | Touch |
+| **Presence** — outdoor sensor piece | `/outdoor.html` | Camera + microphone (+ optional serial) |
+
+Both run unattended, share `public/data/installation.json`, and are built from a
+full survey year: 12 stations, 213 species, 37,948 detections, 363 days.
+
+```bash
+npm run data     # rebuild the installation bundle from the raw sensor exports
+npm run dev      # then open /indoor.html or /outdoor.html
+```
+
 ## Features
 
 - **Interactive Map Visualization** - Leaflet-based mapping with hotspot markers and heatmaps

@@ -13,11 +13,22 @@ node_modules/
 
 # Misc
 .DS_Store
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+
+# Environment. Ignore every .env* by default and allow back only the two files
+# that are meant to be public — the previous list ignored .env.development.local
+# but not .env.development, which is tracked, so a key pasted into it would have
+# been committed. Note that anything VITE_-prefixed is inlined into the client
+# bundle and is therefore public regardless of which file it lives in: API keys
+# must never be VITE_ variables.
+.env*
+!.env.example
+!.env.development
+
+# Credentials
+*.pem
+*.key
+secrets.json
+credentials.json
 
 # Logs
 npm-debug.log*
@@ -42,3 +53,7 @@ lerna-debug.log*
 *.tmp
 *.temp
 .cache
+
+# Single-file preview builds
+dist-single/
+.single-build/

@@ -24,11 +24,21 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
+      // Three entries: the analytical dashboard, plus the two installation
+      // versions. Each kiosk loads only its own bundle — the touchscreen never
+      // ships the sensor code, and the outdoor piece never ships Leaflet.
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        indoor: path.resolve(__dirname, 'indoor.html'),
+        outdoor: path.resolve(__dirname, 'outdoor.html'),
+        pocket: path.resolve(__dirname, 'pocket.html'),
+      },
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
           'map-vendor': ['leaflet', 'react-leaflet'],
           'ui-vendor': ['lucide-react'],
+          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
         },
       },
     },

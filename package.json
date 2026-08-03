@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "data": "python3 scripts/build_installation_data.py --camera data/export_biodiversite_sitecamera.csv --sound data/export_biodiversite_site_sound.csv --out public/data/installation.json",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\"",
@@ -15,7 +16,8 @@
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "build:single": "vite build && node scripts/build-single-file.mjs pocket dist-single/terroir-vivant.html"
   },
   "keywords": [
     "biodiversity",

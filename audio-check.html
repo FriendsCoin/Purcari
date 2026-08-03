@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice audition · Purcari installation</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #0b0812;
+        color: #ede6d6;
+        font: 14px/1.6 'Montserrat', system-ui, sans-serif;
+      }
+      h1 { font-weight: 300; font-size: 1.6rem; margin: 0 0 0.4rem; }
+      p.note { color: #7a7264; max-width: 70ch; margin: 0 0 1.6rem; }
+      table { border-collapse: collapse; width: 100%; font-size: 13px; }
+      th, td { text-align: right; padding: 0.35rem 0.7rem; border-bottom: 1px solid #241026; }
+      th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+      th { color: #c9a227; font-weight: 600; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+      button { background: transparent; border: 1px solid #c9a227; color: #ffe9b0; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 12px; }
+      canvas { display: block; background: #05040a; border: 1px solid #241026; }
+      .bad { color: #d9455f; }
+      .ok { color: #9bd16b; }
+      #summary { margin: 1.4rem 0; padding: 1rem; border: 1px solid #241026; }
+    </style>
+  </head>
+  <body>
+    <h1>Voice audition</h1>
+    <p class="note">
+      Dev tool, not part of the installation build — it is not one of the Vite
+      build entries, so it never ships. Renders each species' synthesised phrase
+      offline and reports peak level, duration and spectral centroid, so the
+      voices can be checked for audibility and for being distinct from one
+      another without listening to 213 of them. Click a row to hear it.
+    </p>
+    <div id="summary">rendering…</div>
+    <table id="table"></table>
+    <script type="module" src="/src/installation/dev/audioCheck.ts"></script>
+  </body>
+</html>

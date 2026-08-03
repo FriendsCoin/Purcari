@@ -1,0 +1,763 @@
+/*
+ * Installation chrome.
+ *
+ * Deliberately not Tailwind: this is a fixed-resolution kiosk piece with a small,
+ * highly specific type system, and the utility classes fight that. Montserrat is
+ * the Purcari house face; the display serif carries the poetic register.
+ *
+ * Fonts are declared with system fallbacks and no network requests — installation
+ * machines are frequently offline, and a missing webfont must never blank a wall.
+ */
+
+:root {
+  --void: #05040a;
+  --cellar: #0b0812;
+  --sediment: #150b18;
+  --garnet: #5e0b2a;
+  --wine: #8c1338;
+  --gold: #c9a227;
+  --foil: #e8c86a;
+  --candle: #ffe9b0;
+  --bronze: #aa7d50;
+  --navy: #202f61;
+  --bone: #ede6d6;
+  --parchment: #c7bca5;
+  --ash: #7a7264;
+
+  --display: 'Cormorant Garamond', 'Didot', 'Playfair Display', Georgia, serif;
+  --body: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Courier New', monospace;
+
+  /* Touch targets on a kiosk must clear a gloved fingertip. */
+  --touch: 72px;
+}
+
+.inst-root {
+  position: fixed;
+  inset: 0;
+  background: var(--void);
+  color: var(--bone);
+  font-family: var(--body);
+  overflow: hidden;
+  /* Kiosk hygiene: no text selection, no callouts, no rubber-band scroll. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  cursor: none;
+}
+
+.inst-root.inst-cursor-visible {
+  cursor: default;
+}
+
+.inst-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---------------------------------------------------------------- overlays */
+
+.inst-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.inst-layer > * {
+  pointer-events: auto;
+}
+
+/* Anything that should not eat touches. */
+.inst-pass {
+  pointer-events: none !important;
+}
+
+/* ------------------------------------------------------------------- type */
+
+.inst-display {
+  font-family: var(--display);
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  line-height: 1.06;
+}
+
+.inst-title {
+  font-family: var(--display);
+  font-size: clamp(2.6rem, 6.2vw, 6.4rem);
+  font-weight: 300;
+  line-height: 0.98;
+  margin: 0;
+}
+
+.inst-subtitle {
+  font-family: var(--body);
+  font-size: clamp(0.72rem, 1.1vw, 1rem);
+  font-weight: 500;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--foil);
+  margin: 0;
+}
+
+.inst-lede {
+  font-family: var(--display);
+  font-size: clamp(1.15rem, 1.9vw, 1.9rem);
+  font-weight: 300;
+  font-style: italic;
+  line-height: 1.42;
+  color: var(--parchment);
+  max-width: 34ch;
+}
+
+.inst-body {
+  font-size: clamp(0.82rem, 1.05vw, 1rem);
+  line-height: 1.62;
+  color: var(--parchment);
+  font-weight: 300;
+  max-width: 46ch;
+}
+
+.inst-label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.inst-figure {
+  font-family: var(--display);
+  font-size: clamp(2rem, 4vw, 4rem);
+  font-weight: 300;
+  line-height: 1;
+  color: var(--candle);
+  font-variant-numeric: tabular-nums;
+}
+
+.inst-mono {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--ash);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stacked on the kiosk, wrapping inline on a phone — see the phone block. */
+.inst-statline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.inst-sci {
+  font-style: italic;
+  font-family: var(--display);
+  color: var(--foil);
+}
+
+/* ------------------------------------------------------------------ chrome */
+
+.inst-corner {
+  position: absolute;
+  padding: clamp(1.6rem, 3vw, 3.4rem);
+}
+
+.inst-corner--tl { top: 0; left: 0; }
+.inst-corner--tr { top: 0; right: 0; text-align: right; }
+.inst-corner--bl { bottom: 0; left: 0; }
+.inst-corner--br { bottom: 0; right: 0; text-align: right; }
+
+.inst-rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0.4;
+  margin: 0.9rem 0;
+}
+
+/* -------------------------------------------------------------- navigation */
+
+.inst-nav {
+  position: absolute;
+  bottom: clamp(1.4rem, 3vh, 3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: clamp(0.5rem, 1.4vw, 1.4rem);
+  align-items: center;
+}
+
+.inst-nav-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ash);
+  font-family: var(--body);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 1.1rem clamp(0.8rem, 1.6vw, 1.6rem);
+  min-height: var(--touch);
+  cursor: pointer;
+  position: relative;
+  transition: color 420ms ease;
+}
+
+.inst-nav-item::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0.7rem;
+  width: 0;
+  height: 1px;
+  background: var(--foil);
+  transform: translateX(-50%);
+  transition: width 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.inst-nav-item[data-active='true'] {
+  color: var(--candle);
+}
+
+.inst-nav-item[data-active='true']::after {
+  width: calc(100% - 1.4rem);
+}
+
+/* Progress ring on the active chapter during the attract loop. */
+.inst-nav-progress {
+  position: absolute;
+  left: 50%;
+  bottom: 0.4rem;
+  transform: translateX(-50%);
+  width: calc(100% - 1.4rem);
+  height: 1px;
+  background: rgba(232, 200, 106, 0.16);
+}
+
+.inst-nav-progress span {
+  display: block;
+  height: 100%;
+  background: var(--foil);
+  transform-origin: left;
+}
+
+/* ------------------------------------------------------------------ panels */
+
+.inst-panel {
+  background: linear-gradient(
+    160deg,
+    rgba(21, 11, 24, 0.94),
+    rgba(11, 8, 18, 0.88)
+  );
+  border: 1px solid rgba(201, 162, 39, 0.18);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  padding: clamp(1.2rem, 2vw, 2.2rem);
+}
+
+/*
+ * Centred with auto margins rather than translateY(-50%): the .inst-rise
+ * entrance animates `transform`, which would otherwise overwrite the centring
+ * and drop the panel to the bottom half of the screen.
+ */
+.inst-panel--right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: clamp(1.4rem, 3vw, 3.4rem);
+  margin: auto 0;
+  height: fit-content;
+  width: clamp(280px, 26vw, 440px);
+  max-height: 80vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.inst-panel--right::-webkit-scrollbar {
+  display: none;
+}
+
+.inst-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid rgba(201, 162, 39, 0.09);
+  gap: 1rem;
+}
+
+.inst-stat-row:last-child { border-bottom: none; }
+
+.inst-stat-row dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ash);
+  font-weight: 500;
+}
+
+.inst-stat-row dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  color: var(--candle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------- animations */
+
+@keyframes inst-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes inst-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes inst-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes inst-sweep {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.inst-rise { animation: inst-rise 1200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.inst-fade { animation: inst-fade 1600ms ease both; }
+.inst-breathe { animation: inst-breathe 4.5s ease-in-out infinite; }
+
+.inst-delay-1 { animation-delay: 160ms; }
+.inst-delay-2 { animation-delay: 340ms; }
+.inst-delay-3 { animation-delay: 540ms; }
+.inst-delay-4 { animation-delay: 760ms; }
+
+/* Anyone who has asked the OS to reduce motion gets the piece without the
+   entrances — the WebGL scenes stay, since they are the artwork itself. */
+@media (prefers-reduced-motion: reduce) {
+  .inst-rise,
+  .inst-fade,
+  .inst-breathe {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ touch prompt */
+
+.inst-prompt {
+  position: absolute;
+  bottom: clamp(6rem, 12vh, 10rem);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  color: var(--foil);
+  font-size: 0.7rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.inst-prompt-ring {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 1rem;
+  border: 1px solid var(--foil);
+  border-radius: 50%;
+  position: relative;
+}
+
+.inst-prompt-ring::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--foil);
+  border-radius: 50%;
+  animation: inst-ping 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes inst-ping {
+  0% { transform: scale(1); opacity: 0.9; }
+  80%, 100% { transform: scale(2.1); opacity: 0; }
+}
+
+/* ------------------------------------------------------------------ meters */
+
+.inst-meter {
+  height: 2px;
+  background: rgba(201, 162, 39, 0.14);
+  overflow: hidden;
+}
+
+.inst-meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--wine), var(--foil));
+  transform-origin: left;
+  transition: transform 320ms ease;
+}
+
+/* --------------------------------------------------------------- species */
+
+.inst-species-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.4rem 0;
+}
+
+.inst-swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 12px currentColor;
+  background: currentColor;
+}
+
+.inst-status {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 0.14rem 0.42rem;
+  border: 1px solid currentColor;
+  color: var(--wine);
+}
+
+.inst-status[data-level='VU'] { color: #e2705a; }
+.inst-status[data-level='NT'] { color: var(--gold); }
+
+/* --------------------------------------------------------------- outdoor */
+
+/* The outdoor piece is read from several metres away, so everything scales up
+   and the contrast floor is higher. */
+.inst-outdoor .inst-body { font-size: clamp(1rem, 1.5vw, 1.5rem); max-width: 40ch; }
+.inst-outdoor .inst-label { font-size: 0.86rem; letter-spacing: 0.3em; color: var(--parchment); }
+.inst-outdoor .inst-figure { font-size: clamp(3.4rem, 8vw, 9rem); }
+.inst-outdoor .inst-mono { font-size: 1rem; }
+
+.inst-hint {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(3rem, 8vh, 7rem);
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: 60ch;
+}
+
+.inst-hint-title {
+  font-family: var(--display);
+  font-size: clamp(1.8rem, 3.6vw, 3.6rem);
+  font-weight: 300;
+  line-height: 1.12;
+  margin: 0 0 0.8rem;
+  transition: color 900ms ease;
+}
+
+/* ---------------------------------------------------------------- phone */
+
+/*
+ * A phone is not a small kiosk. The kiosk layout pins four independent blocks
+ * to four corners, which is right on a 55" panel and collides on every axis at
+ * 390px. On a handset the piece becomes a vertical stack instead: a title band
+ * at the top, the artwork taking the whole middle, and controls in the thumb
+ * zone at the bottom. Detail panels become bottom sheets.
+ *
+ * Everything below is layout only — the palette, type scale and motion are the
+ * same system the kiosk uses.
+ */
+@media (max-width: 820px) {
+  :root {
+    --touch: 56px;
+  }
+
+  .inst-corner {
+    padding: 1rem 1.1rem;
+  }
+
+  /* Title band, with a scrim so type stays legible over a bright scene. */
+  .inst-corner--tl {
+    top: 0;
+    left: 0;
+    right: 0;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    background: linear-gradient(
+      180deg,
+      rgba(5, 4, 10, 0.92) 0%,
+      rgba(5, 4, 10, 0.72) 55%,
+      transparent 100%
+    );
+    padding-bottom: 2.2rem;
+  }
+
+  .inst-title {
+    font-size: clamp(2.1rem, 10vw, 3.1rem);
+    white-space: normal !important;
+  }
+
+  /* The lede is wall text — too long to hold a phone screen hostage. */
+  .inst-lede {
+    font-size: 0.98rem;
+    line-height: 1.4;
+    max-width: 100%;
+    margin-top: 0.7rem;
+  }
+
+  /*
+   * Totals collapse from a four-element corner block into one baseline row —
+   * "213 SPECIES · 37,948 DETECTIONS" — so it costs a single line instead of
+   * fighting the chapter controls for the bottom of the screen.
+   */
+  .inst-corner--tr {
+    top: auto;
+    bottom: calc(var(--touch) + 0.7rem + env(safe-area-inset-bottom));
+    right: 0;
+    left: 0;
+    text-align: left;
+    padding: 0 1.1rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .inst-corner--tr .inst-figure {
+    font-size: 1.35rem;
+  }
+
+  .inst-corner--tr .inst-label,
+  .inst-corner--tr .inst-rule {
+    display: none;
+  }
+
+  .inst-corner--tr .inst-mono {
+    line-height: 1.4 !important;
+    font-size: 0.58rem;
+  }
+
+  /* The stacked totals become one row, separated properly rather than run together. */
+  .inst-statline {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    overflow: hidden;
+  }
+
+  .inst-statline span + span::before {
+    content: '· ';
+    color: var(--gold);
+  }
+
+  /* Only the first two fit at 390px; Shannon stays on the kiosk. */
+  .inst-statline span:nth-child(3) {
+    display: none;
+  }
+
+  /* Chapter controls stack above the totals row. */
+  .inst-corner--bl {
+    bottom: calc(var(--touch) + 3.1rem + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    padding: 0 1.1rem;
+  }
+
+  /* Wall credits and the touch prompt are gallery furniture; a phone has neither. */
+  .inst-corner--br,
+  .inst-prompt {
+    display: none;
+  }
+
+  .inst-nav {
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    transform: none;
+    justify-content: space-around;
+    gap: 0;
+    background: linear-gradient(0deg, rgba(5, 4, 10, 0.94), transparent);
+    padding-top: 0.6rem;
+  }
+
+  .inst-nav-item {
+    min-height: var(--touch);
+    padding: 0.9rem 0.5rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+  }
+
+  /* Detail panels become bottom sheets, clear of the nav. */
+  .inst-panel--right {
+    top: auto;
+    bottom: calc(var(--touch) + 0.6rem + env(safe-area-inset-bottom));
+    left: 0.6rem;
+    right: 0.6rem;
+    margin: 0;
+    width: auto;
+    max-height: 52vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    animation: inst-sheet 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes inst-sheet {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /*
+   * Outdoor: the headline is the piece on a phone, so it gets the room. The
+   * count and the clock share the top row, so the count must stop short of the
+   * clock rather than running the full width the way the indoor title does.
+   */
+  .inst-outdoor .inst-corner--tl {
+    background: none;
+    padding-bottom: 1rem;
+    right: auto;
+    max-width: 60%;
+  }
+
+  .inst-hint {
+    bottom: auto;
+    top: 42%;
+    left: 1.1rem;
+    right: 1.1rem;
+    transform: none;
+    max-width: 100%;
+  }
+
+  .inst-hint-title {
+    font-size: clamp(1.6rem, 8vw, 2.4rem);
+  }
+
+  .inst-outdoor .inst-body {
+    font-size: 0.95rem;
+    max-width: 100%;
+  }
+
+  .inst-outdoor .inst-figure {
+    font-size: 3.2rem;
+  }
+
+  /* Tightened so "SPECIES PRESENT · AWAKE NOW" holds one line beside the clock. */
+  .inst-outdoor .inst-label {
+    font-size: 0.56rem;
+    letter-spacing: 0.13em;
+  }
+
+  .inst-outdoor .inst-mono {
+    font-size: 0.72rem;
+  }
+
+  /* The returning-species ticker keeps to the bottom-left, above the fold. */
+  .inst-outdoor .inst-corner--bl {
+    bottom: max(0.8rem, env(safe-area-inset-bottom));
+  }
+
+  .inst-outdoor .inst-corner--tr {
+    top: max(1rem, env(safe-area-inset-top));
+    bottom: auto;
+    left: auto;
+    right: 0;
+    text-align: right;
+    display: block;
+  }
+
+  .inst-gate button {
+    padding: 1.1rem 2.2rem;
+  }
+
+  .inst-diag {
+    font-size: 0.58rem;
+    max-width: 100%;
+  }
+}
+
+/* Landscape phone: short and wide, so the title band must not eat the scene. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .inst-title {
+    font-size: 1.7rem;
+  }
+  .inst-lede,
+  .inst-corner--br,
+  .inst-prompt {
+    display: none;
+  }
+  .inst-corner {
+    padding: 0.7rem 1rem;
+  }
+  .inst-hint {
+    top: auto;
+    bottom: 4.2rem;
+  }
+}
+
+/* ------------------------------------------------------------ diagnostics */
+
+.inst-diag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  line-height: 1.6;
+  color: #6de08f;
+  background: rgba(0, 0, 0, 0.82);
+  padding: 0.9rem 1.2rem;
+  border-right: 1px solid rgba(109, 224, 143, 0.3);
+  border-bottom: 1px solid rgba(109, 224, 143, 0.3);
+  z-index: 99;
+  white-space: pre;
+}
+
+.inst-diag button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid #6de08f;
+  color: #6de08f;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0.3rem 0.7rem;
+  margin: 0.35rem 0.35rem 0 0;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- gate/intro */
+
+.inst-gate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, rgba(21, 11, 24, 0.6), var(--void) 72%);
+  z-index: 40;
+  text-align: center;
+  padding: 2rem;
+}
+
+.inst-gate button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--gold);
+  color: var(--candle);
+  font-family: var(--body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  padding: 1.3rem 3rem;
+  min-height: var(--touch);
+  cursor: pointer;
+  transition: background 500ms ease, letter-spacing 500ms ease;
+}
+
+.inst-gate button:hover,
+.inst-gate button:focus-visible {
+  background: rgba(201, 162, 39, 0.12);
+  letter-spacing: 0.36em;
+  outline: none;
+}

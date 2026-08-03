@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="description" content="Terroir vivant — a year of wildlife at Château Purcari" />
+    <meta name="theme-color" content="#05040A" />
+    <!-- Kiosk: keep the panel awake and hide iOS/Android browser chrome. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="%2305040A"/><circle cx="32" cy="30" r="15" fill="none" stroke="%23C9A227" stroke-width="2"/><circle cx="32" cy="30" r="4.5" fill="%23FFE9B0"/><circle cx="20" cy="21" r="2" fill="%238C1338"/><circle cx="45" cy="24" r="2" fill="%234EA8C7"/><circle cx="42" cy="41" r="2" fill="%236FA65A"/><circle cx="22" cy="40" r="2" fill="%239B7BD4"/></svg>' />
+    <title>Terroir vivant · Château Purcari</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #05040a;
+        overscroll-behavior: none;
+      }
+      #root {
+        height: 100%;
+      }
+      /* Shown until React mounts — a black screen on a wall reads as a fault. */
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #c9a227;
+        font-family: 'Montserrat', system-ui, sans-serif;
+        font-size: 0.66rem;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="boot">Château Purcari</div></div>
+    <script type="module" src="/src/installation/pocket/main.tsx"></script>
+  </body>
+</html>

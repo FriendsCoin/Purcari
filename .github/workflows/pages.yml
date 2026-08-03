@@ -1,0 +1,79 @@
+name: Deploy installation preview
+
+# Publishes docs/ to GitHub Pages, which is how the outdoor piece gets tested on
+# a real phone: browsers only grant camera and microphone access over HTTPS.
+#
+# Pages must be switched on once by hand before this can run — set
+# Settings → Pages → Source to "GitHub Actions". The automated routes are all
+# closed: the Pages REST API is unreachable from the build sandbox, and the
+# workflow's own GITHUB_TOKEN may deploy to an existing Pages site but not
+# create one ("Resource not accessible by integration"), so `enablement: true`
+# below cannot bootstrap it either. It is kept only so the setting is restored
+# automatically if Pages is ever turned back off.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/interactive-media-art-dashboard-ki7oz7
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deployments at once, but let a queued one finish rather than
+# cancelling it — a half-deployed site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # `enablement` is deliberately not set: a workflow's GITHUB_TOKEN may
+      # deploy to an existing Pages site but cannot create one, so asking it to
+      # only turns a clear "Pages is off" into a confusing permissions error.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Require Pages to be switched on
+        if: steps.pages.outcome == 'failure'
+        run: |
+          echo "::error::GitHub Pages is not enabled for this repository."
+          {
+            echo "### Pages is not enabled yet"
+            echo ""
+            echo "Open <https://github.com/${{ github.repository }}/settings/pages>"
+            echo "and set **Source** to **GitHub Actions**, then re-run this workflow."
+            echo ""
+            echo "This is the one step that cannot be automated: the Pages REST API"
+            echo "is unreachable from the build sandbox, and this workflow's token"
+            echo "can deploy to an existing Pages site but not create one."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      # docs/ becomes the site root, so docs/live/index.html serves at /live/.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Report the URL
+        run: |
+          echo "### Installation preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deployment.outputs.page_url }}live/" >> "$GITHUB_STEP_SUMMARY"
