@@ -80,6 +80,12 @@ const cssPath = resolve(outDir, 'app.css');
 const css = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : '';
 const data = readFileSync(resolve(root, 'public', 'data', 'installation.json'), 'utf8');
 
+// The landscape bundle must be inlined too, or the preview would try to fetch
+// it and get nothing — the Estate chapter would silently fall back to the
+// abstract ground on exactly the build most people will actually see.
+const landscapePath = resolve(root, 'public', 'data', 'landscape.json');
+const landscape = existsSync(landscapePath) ? readFileSync(landscapePath, 'utf8') : 'null';
+
 /**
  * Nothing embedded in a <script> may be able to close it. A minified bundle
  * really does contain `</script>` inside string literals, and that ends the
@@ -121,7 +127,8 @@ html = injectBefore(
 html = injectBefore(
   html,
   '</body>',
-  `<script>window.__PURCARI_DATA__ = ${forScript(data)};</script>
+  `<script>window.__PURCARI_DATA__ = ${forScript(data)};
+window.__PURCARI_LANDSCAPE__ = ${forScript(landscape)};</script>
 <script type="module">${forScript(js)}</script>
 `,
 );
@@ -130,4 +137,8 @@ writeFileSync(outPath, html);
 rmSync(resolve(root, '.single-build'), { recursive: true, force: true });
 
 const kb = (Buffer.byteLength(html) / 1024).toFixed(0);
-console.log(`wrote ${outPath} (${kb} kB) — js ${(js.length / 1024) | 0} kB, css ${(css.length / 1024) | 0} kB, data inlined`);
+console.log(
+  `wrote ${outPath} (${kb} kB) — js ${(js.length / 1024) | 0} kB, ` +
+    `css ${(css.length / 1024) | 0} kB, survey ${(data.length / 1024) | 0} kB, ` +
+    `landscape ${(landscape.length / 1024) | 0} kB`,
+);
