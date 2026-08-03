@@ -5,6 +5,7 @@ import { GUILD_COLORS, GUILD_ORDER, guildLabel } from './engine/palette';
 import { ChorusScene } from './scenes/ChorusScene';
 import { CircadianScene } from './scenes/CircadianScene';
 import { FluxScene } from './scenes/FluxScene';
+import { OverlapScene } from './scenes/OverlapScene';
 import { SpeciesScene } from './scenes/SpeciesScene';
 import { TerroirScene } from './scenes/TerroirScene';
 import { atlas } from './data/atlas';
@@ -66,6 +67,7 @@ export function Installation(): JSX.Element {
     instance.register(new CircadianScene());
     instance.register(new SpeciesScene());
     instance.register(new FluxScene());
+    instance.register(new OverlapScene());
     instance.setHome('chorus');
     instance.goTo('chorus', true);
     instance.start();
@@ -125,7 +127,7 @@ export function Installation(): JSX.Element {
             <p className="masthead__sub">Observatoire de la biodiversité</p>
           </div>
           <div className="masthead__meta">
-            <div>31 juillet — 16 août 2025</div>
+            <div>{readout.period ?? '31 juillet — 16 août 2025'}</div>
             <div>46.52° N · 29.87° E</div>
           </div>
         </header>
@@ -137,15 +139,22 @@ export function Installation(): JSX.Element {
 
         <footer className="footer">
           <div className="footer__legend">
-            {GUILD_ORDER.filter(id => id !== 'unknown').map(id => (
-              <span className="legend__item" key={id} style={{ color: GUILD_COLORS[id] }}>
+            {(
+              readout.legend ??
+              GUILD_ORDER.filter(id => id !== 'unknown').map(id => ({
+                label: guildLabel(id),
+                color: GUILD_COLORS[id],
+              }))
+            ).map(entry => (
+              <span className="legend__item" key={entry.label} style={{ color: entry.color }}>
                 <span className="legend__swatch" aria-hidden="true" />
-                <span>{guildLabel(id)}</span>
+                <span>{entry.label}</span>
               </span>
             ))}
           </div>
           <div>
-            {atlas.meta.total.toLocaleString('fr-FR')} détections · Every1Counts &amp; BirdNET
+            {readout.source ??
+              `${atlas.meta.total.toLocaleString('fr-FR')} détections · Every1Counts & BirdNET`}
           </div>
         </footer>
       </div>

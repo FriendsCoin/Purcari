@@ -1,7 +1,7 @@
 import type { PerspectiveCamera, Scene, Vector3 } from 'three';
 import type { Pointer } from './Pointer';
 
-export type ChapterId = 'chorus' | 'terroir' | 'circadian' | 'species' | 'flux';
+export type ChapterId = 'chorus' | 'terroir' | 'circadian' | 'species' | 'flux' | 'overlap';
 
 /** What the WebGL layer wants the DOM overlay to display right now. */
 export interface Readout {
@@ -22,6 +22,15 @@ export interface Readout {
    * with y down. Set when a chapter has a selected object on screen.
    */
   marker?: { x: number; y: number };
+  /**
+   * Provenance for the chapter currently on screen. Chapters drawn from a
+   * different survey than the acoustic default set these so the masthead and
+   * footer never label a chapter with the wrong dates or the wrong source.
+   */
+  period?: string;
+  source?: string;
+  /** Replaces the guild legend when a chapter colours by something else. */
+  legend?: { label: string; color: string }[];
 }
 
 export interface FrameContext {

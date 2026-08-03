@@ -42,6 +42,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Floodplain water masked to the DEM shoreline, valley mist, and a cinematic
   establishing flight with a slow arc replacing the constant turntable.
 
+#### Chapter V — Chevauchement
+- New chapter built from the Every1Counts ten-month camera-trap analysis: 18
+  species as a ring of chords, warm where two species share their hours and cool
+  where they avoid each other, with the highlight walking the ring on its own.
+- The ring order is the dominant eigenvector of the correlation matrix, not a
+  layout choice. It separates eight mammals from ten birds unaided, places the
+  red fox at almost exactly zero and files the dog with the birds.
+- `scripts/extract-overlap-matrix.mjs` recovers the matrix from the deck's
+  rendered heatmap, validated against the RdBu ramp, an exactly +1 diagonal and
+  matrix symmetry — all three enforced, symmetry currently exact at 0.000.
+- Readouts can now carry `period`, `source` and `legend`, so the masthead and
+  footer follow the chapter. Chapter V is a different survey from the other four
+  and the overlay no longer labels it with the acoustic dates.
+
 #### Motion
 - Chapter transitions rebuilt: the outgoing image recedes while the incoming one
   settles forward, a noise-warped diagonal front carries a band of light across

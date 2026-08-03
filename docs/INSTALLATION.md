@@ -29,6 +29,7 @@ recorders and a short camera-trap line, across 121 species.
 | II | **Circadien** | Every detection on a 24-hour dial: angle from the minute it was recorded, distance from the centre from its rank within that hour. The spikes *are* the hourly histogram, and the tallest by a wide margin is the dawn chorus at 04:00–07:00. | Drag left/right to scrub the hour |
 | III | **Espèces** | 121 species positioned by *when* they sing — the angle of each node is the circular mean of its 24-hour profile, so the dawn chorus gathers on one side and the owls and nightjars drift to the other. Distance from the centre is inverse abundance. Links join species with similar daily rhythms. | Drag to rotate, tap a node to select it |
 | IV | **Flux** | The seventeen days of the survey as a river of light, thinning from 347 detections on 4 August to one on the last three days. | Drag left/right to scrub the day |
+| V | **Chevauchement** | Eighteen camera-trap species and the correlation between their daily rhythms, as a ring of chords. Warm means two species are out at the same hours, cool means they avoid each other. The highlight walks the ring on its own. | Tap a species to hold it |
 
 ### What Chapter I is made of
 
@@ -67,6 +68,51 @@ portrait of the estate's massing, not a survey of the building.
 Two ideas run through all five so a visitor keeps their bearings: **midnight is
 up and hours run clockwise** everywhere a clock appears, and **colour always
 means ecological guild** (the legend in the footer is the only key needed).
+
+### What Chapter V is made of, and where its numbers come from
+
+Chapter V is the only one **not** built from `data.geojson`. It comes from the
+Every1Counts analysis deck covering ten months of camera-trap data (June 2025 –
+March 2026) — a different survey, a different method, and 18 species that barely
+overlap with the 121 acoustic ones.
+
+Because it is a different dataset, the overlay says so: chapters can set
+`period`, `source` and `legend` on their readout, and this one overrides the
+masthead dates, the footer credit and the guild legend. No chapter is ever
+labelled with another chapter's provenance.
+
+The deck ships the correlation matrix as a **rendered heatmap, not as numbers**,
+so `scripts/extract-overlap-matrix.mjs` reads the values back out of the pixels.
+That is a last resort, and it is only defensible because the encoding is fully
+determined and independently checkable:
+
+- the plot uses the ColorBrewer **RdBu** ramp with the scale pinned to [-1, 1]
+  (the legend is labelled 1 / 0.5 / 0 / -0.5 / -1), so colour to value is a
+  lookup rather than a judgement;
+- every cell on the leading diagonal must come back as exactly **+1**;
+- the matrix must be **symmetric** — rho(i,j) and rho(j,i) are sampled from two
+  different pixels and have to agree.
+
+All three run on every extraction and the script exits non-zero if any drifts.
+On the current deck the symmetry error is **0.000** and the worst colour sits
+22.7 units from the ramp, giving roughly ±0.02 on each value — far finer than
+anything the chapter draws. **If the raw correlation table ever becomes
+available, delete this script and use it.**
+
+The ring order is also not a design choice. It is the dominant eigenvector of the
+matrix, recovered by power iteration, and it separates the community by itself:
+
+```
+Sanglier  Blaireau  Chacal  Mulot  Lièvre  Chat  Chevreuil  Renard | Grive  Pinson …
+   -0.31    -0.30   -0.29  -0.22  -0.21  -0.15    -0.13    -0.01  | +0.08  +0.16
+   \___________________ mammals _______________________/          \____ birds ____/
+```
+
+Eight mammals at one pole, ten birds at the other, the **red fox at almost
+exactly zero** — crepuscular, at home in both halves — and the dog filed among
+the birds, because dogs are walked in daylight. Neighbours on the ring share
+their hours; opposite sides never meet. The strongest relationships in the whole
+matrix are avoidances: pheasant/wild boar -0.85, badger/pheasant -0.85.
 
 ### A note on the decline in Chapter IV
 
@@ -115,6 +161,7 @@ through state.
 installation.html                 kiosk entry point
 scripts/build-installation-atlas.mjs   bakes data.geojson -> atlas.json
 scripts/fetch-terrain.mjs              fetches SRTM     -> terrain.json
+scripts/extract-overlap-matrix.mjs     reads the deck   -> overlap.json
 src/installation/
   main.tsx                        bootstrap (deliberately no StrictMode)
   Installation.tsx                shell: overlay, chapter state, service corner
@@ -130,10 +177,11 @@ src/installation/
     ChapterBase.ts                camera rig + touch uniform plumbing
     chateau.ts                    procedural line model of the estate
     ChorusScene.ts  TerroirScene.ts  CircadianScene.ts
-    SpeciesScene.ts FluxScene.ts
+    SpeciesScene.ts FluxScene.ts  OverlapScene.ts
   data/
     atlas.ts / atlas.json         the baked detections
     terrain.ts / terrain.json     the baked elevation model
+    overlap.ts / overlap.json     the camera-trap correlation matrix
   ui/                             Readout, ChapterNav, Sparkline, Diagnostics
   styles/installation.css         overlay chrome (no Tailwind in this bundle)
 ```
@@ -143,9 +191,13 @@ src/installation/
 Both data files are committed, so a clone builds with no network access.
 
 ```
-npm run atlas      # detections   data.geojson (3.4 MB) -> atlas.json  (51 KB)
+npm run atlas      # detections   data.geojson (3.4 MB) -> atlas.json   (51 KB)
 npm run terrain    # elevation    SRTM via opentopodata -> terrain.json (17 KB)
+npm run overlap -- <heatmap.png>   # chapter V matrix   -> overlap.json  (7 KB)
 ```
+
+The heatmap for the last one is the third embedded image on slide 7 of the
+Every1Counts deck; extract it with any PDF tool that can pull raw images.
 
 `npm run terrain` hits a public endpoint at one request per second and takes
 about a minute. It only needs re-running if the area of interest changes.

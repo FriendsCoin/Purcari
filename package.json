@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "atlas": "node scripts/build-installation-atlas.mjs",
     "terrain": "node scripts/fetch-terrain.mjs",
+    "overlap": "node scripts/extract-overlap-matrix.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\"",
