@@ -90,6 +90,12 @@ function formatNumber(value: number): string {
   return value.toLocaleString('en-US');
 }
 
+function formatHour(value: number): string {
+  const h = Math.floor(value) % 24;
+  const m = Math.round((value - Math.floor(value)) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 export default function IndoorApp() {
   const [data, setData] = useState<InstallationData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +110,18 @@ export default function IndoorApp() {
   const [selectedSpecies, setSelectedSpecies] = useState<Species | null>(null);
   const [focusMonth, setFocusMonth] = useState<number | null>(null);
   const [clusterGuilds, setClusterGuilds] = useState(false);
+  const [flagshipOnly, setFlagshipOnly] = useState(false);
+  /**
+   * The hour the estate is shown at. Starts at the château's real local time,
+   * so a visitor first meets the estate as it is right now, and can then scrub
+   * a whole day and watch the community hand over from the day shift to the
+   * night one. Every response to it comes from measured hourly profiles.
+   */
+  const [hour, setHour] = useState(() => {
+    const now = new Date();
+    return now.getHours() + now.getMinutes() / 60;
+  });
+  const [clockTouched, setClockTouched] = useState(false);
 
   const idleTimer = useRef<number | null>(null);
   const chapter = CHAPTERS[chapterIndex];
@@ -193,14 +211,16 @@ export default function IndoorApp() {
     if (!started || !data) return;
     const tick = window.setInterval(() => {
       if (!soundField.ready) return;
+      // Follows the scrubber once the visitor has taken hold of it, so the
+      // room's voices match the hour on screen; otherwise it tracks real time.
       const now = new Date();
-      const hour = now.getHours() + now.getMinutes() / 60;
+      const sounding = clockTouched ? hour : now.getHours() + now.getMinutes() / 60;
       // The Choir chapter earns a fuller soundscape; the others stay in the background.
       const density = CHAPTERS[chapterIndex].id === 'choir' ? 0.45 : 0.22;
-      chorus.current.update(data.species, hour, density);
+      chorus.current.update(data.species, sounding, density);
     }, 400);
     return () => window.clearInterval(tick);
-  }, [started, data, chapterIndex]);
+  }, [started, data, chapterIndex, clockTouched, hour]);
 
   const site = useMemo(
     () => (data && selectedSite ? data.sites.find((s) => s.id === selectedSite) ?? null : null),
@@ -266,6 +286,7 @@ export default function IndoorApp() {
               data={data}
               reveal={1}
               lens={lens}
+              hour={hour}
               selectedSite={selectedSite}
               onSelectSite={handleSelectSite}
             />
@@ -289,7 +310,8 @@ export default function IndoorApp() {
               data={data}
               reveal={1}
               cluster={clusterGuilds ? 1 : 0}
-              hour={12}
+              hour={hour}
+              flagshipOnly={flagshipOnly}
               selected={selectedSpecies}
               onSelect={handleSelectSpecies}
             />
@@ -316,6 +338,37 @@ export default function IndoorApp() {
             className="inst-corner inst-corner--bl"
             style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}
           >
+            {/*
+              The clock. Native range input on purpose: it is the one control a
+              visitor can already drive without instruction, and it carries
+              keyboard focus and arrow-key stepping for free.
+            */}
+            <div className="inst-clock" style={{ marginBottom: '1rem' }}>
+              <div className="inst-clock-head">
+                <span className="inst-label">Hour of day</span>
+                <span className="inst-clock-time">{formatHour(hour)}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={23.75}
+                step={0.25}
+                value={hour}
+                aria-label="Hour of day"
+                onChange={(event) => {
+                  touch();
+                  setClockTouched(true);
+                  setHour(Number(event.target.value));
+                }}
+              />
+              <div className="inst-clock-scale">
+                <span>00</span>
+                <span>06</span>
+                <span>12</span>
+                <span>18</span>
+                <span>24</span>
+              </div>
+            </div>
             <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
               Read the land as
             </p>
@@ -343,6 +396,37 @@ export default function IndoorApp() {
 
         {chapter.id === 'choir' && data && (
           <div className="inst-corner inst-corner--bl">
+            {/*
+              The clock. Native range input on purpose: it is the one control a
+              visitor can already drive without instruction, and it carries
+              keyboard focus and arrow-key stepping for free.
+            */}
+            <div className="inst-clock" style={{ marginBottom: '1rem' }}>
+              <div className="inst-clock-head">
+                <span className="inst-label">Hour of day</span>
+                <span className="inst-clock-time">{formatHour(hour)}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={23.75}
+                step={0.25}
+                value={hour}
+                aria-label="Hour of day"
+                onChange={(event) => {
+                  touch();
+                  setClockTouched(true);
+                  setHour(Number(event.target.value));
+                }}
+              />
+              <div className="inst-clock-scale">
+                <span>00</span>
+                <span>06</span>
+                <span>12</span>
+                <span>18</span>
+                <span>24</span>
+              </div>
+            </div>
             {/* The rosette is unreadable without naming the clusters. */}
             {clusterGuilds && (
               <div
@@ -373,17 +457,36 @@ export default function IndoorApp() {
                   ))}
               </div>
             )}
-            <button
-              className="inst-nav-item"
-              data-active={clusterGuilds}
-              onClick={() => {
-                touch();
-                setClusterGuilds((v) => !v);
-              }}
-              style={{ minHeight: 56, paddingLeft: 0 }}
-            >
-              {clusterGuilds ? 'Merge the swarm' : 'Sort by guild'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+              <button
+                className="inst-nav-item"
+                data-active={clusterGuilds}
+                onClick={() => {
+                  touch();
+                  setClusterGuilds((v) => !v);
+                }}
+                style={{ minHeight: 56, paddingLeft: 0 }}
+              >
+                {clusterGuilds ? 'Merge the swarm' : 'Sort by guild'}
+              </button>
+              <button
+                className="inst-nav-item"
+                data-active={flagshipOnly}
+                onClick={() => {
+                  touch();
+                  setFlagshipOnly((v) => !v);
+                }}
+                style={{ minHeight: 56 }}
+              >
+                {flagshipOnly ? 'Show all 213' : 'The ones that matter'}
+              </button>
+            </div>
+            {flagshipOnly && (
+              <p className="inst-mono" style={{ marginTop: '0.6rem', maxWidth: '34ch', lineHeight: 1.7 }}>
+                {data.flagships.length} SPECIES THE SURVEY SINGLES OUT — BY
+                CONSERVATION STATUS OR BY WHAT THEIR PRESENCE PROVES.
+              </p>
+            )}
           </div>
         )}
 

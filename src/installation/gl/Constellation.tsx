@@ -69,6 +69,7 @@ ${DITHER}
 ${TONEMAP}
 uniform float uTime;
 uniform float uReveal;
+uniform float uHour;
 uniform vec3 uLow;
 uniform vec3 uMid;
 uniform vec3 uHigh;
@@ -121,7 +122,20 @@ void main(){
   float ripple = sin(d * 1.6 - uTime * 1.7) * exp(-d * 0.28) * uPulse.z;
   soil += uGlow * max(ripple, 0.0) * 0.22;
 
-  vec3 color = (soil + uGlow * lines) * rim;
+  // Time of day. Sunrise and sunset at this latitude sit near 06:00 and 20:00;
+  // the ground runs cold and blue at night, warms hard through the two
+  // twilights, and settles neutral at midday. Multiplicative, so it tints the
+  // land without adding light of its own.
+  float dawn = 1.0 - smoothstep(0.0, 2.2, abs(uHour - 6.0));
+  float dusk = 1.0 - smoothstep(0.0, 2.4, abs(uHour - 20.0));
+  float day = smoothstep(5.0, 8.5, uHour) * (1.0 - smoothstep(18.0, 21.5, uHour));
+  vec3 night = vec3(0.52, 0.66, 1.20);
+  vec3 noon = vec3(1.0, 0.98, 0.92);
+  vec3 twilight = vec3(1.25, 0.68, 0.42);
+  vec3 tint = mix(night, noon, day);
+  tint = mix(tint, twilight, clamp(dawn + dusk, 0.0, 1.0) * 0.85);
+
+  vec3 color = (soil + uGlow * lines) * rim * tint;
   gl_FragColor = vec4(dither(aces(color * uReveal), vUv), rim * uReveal * 0.9);
 }
 `;
@@ -144,22 +158,28 @@ attribute float aScale;
 attribute float aRichness;
 attribute float aSeed;
 attribute float aSelected;
+attribute float aActivity;
 uniform float uTime;
 uniform float uReveal;
 varying vec3 vColor;
 varying float vRichness;
 varying float vSelected;
+varying float vActivity;
 
 void main(){
   vColor = aColor;
   vRichness = aRichness;
   vSelected = aSelected;
+  vActivity = aActivity;
 
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float breathe = 1.0 + sin(uTime * 0.7 + aSeed * 6.2831) * 0.06;
   // Selected stations swell and pulse harder so a fingertip has clear feedback.
   float pulse = 1.0 + vSelected * (0.35 + sin(uTime * 3.0) * 0.12);
-  gl_PointSize = aScale * breathe * pulse * uReveal * (300.0 / -mv.z);
+  // A station never vanishes — it dims to a quarter — so the map of the estate
+  // stays readable at 03:00 while the busy stations clearly carry the night.
+  float clock = 0.62 + aActivity * 0.58;
+  gl_PointSize = aScale * breathe * pulse * clock * uReveal * (300.0 / -mv.z);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -169,6 +189,7 @@ ${SPRITE}
 varying vec3 vColor;
 varying float vRichness;
 varying float vSelected;
+varying float vActivity;
 
 void main(){
   vec2 coord = gl_PointCoord;
@@ -183,8 +204,11 @@ void main(){
   float ringR = 0.62 - vSelected * 0.06;
   float ring = (1.0 - smoothstep(0.0, 0.035, abs(d - ringR))) * (0.22 + vSelected * 0.65);
 
-  float a = core + halo * 0.55 + ring;
+  float a = (core + halo * 0.55 + ring) * (0.46 + vActivity * 0.54);
   vec3 color = vColor * (0.6 + core * 1.9) + vec3(1.0, 0.92, 0.75) * core * 0.55;
+  // Busy stations pick up a warm cast, so the hour reads in colour as well as
+  // in size — legible even to a visitor who cannot judge small size changes.
+  color += vec3(0.35, 0.24, 0.10) * vActivity * core;
   gl_FragColor = vec4(color * a, a);
 }
 `;
@@ -199,12 +223,34 @@ interface ConstellationProps {
   lens?: Lens;
   selectedSite?: string | null;
   onSelectSite?: (siteId: string | null) => void;
+  /**
+   * Hour of day, 0..24. Each station brightens and swells in proportion to how
+   * much life its own sensors actually recorded at that hour, and the ground
+   * shifts from night through dawn to day. Scrubbing it shows the estate change
+   * hands: the vineyard blocks empty out after dark while the woodland edge and
+   * the pond margin come up.
+   */
+  hour?: number;
+}
+
+/**
+ * How busy a station is at a given hour, 0..1 against its own daily peak.
+ * Relative to itself, not to the estate, so a quiet station still shows its own
+ * rhythm instead of staying dark all day.
+ */
+function siteActivityAt(site: Site, hour: number): number {
+  const peak = Math.max(...site.hourly, 1);
+  const h = ((Math.floor(hour) % 24) + 24) % 24;
+  const next = site.hourly[(h + 1) % 24];
+  const frac = hour - Math.floor(hour);
+  return (site.hourly[h] * (1 - frac) + next * frac) / peak;
 }
 
 export function Constellation({
   data,
   reveal = 1,
   lens = 'both',
+  hour = 12,
   selectedSite = null,
   onSelectSite,
 }: ConstellationProps) {
@@ -214,6 +260,7 @@ export function Constellation({
   const linksRef = useRef<THREE.LineSegments>(null);
   const pulse = useRef(new THREE.Vector3(0, 0, 0));
   const revealRef = useRef(0);
+  const hourRef = useRef(hour);
 
   // The estate is a narrow NNE–SSW lozenge, so its long axis sets the scale:
   // sized to fill the frame vertically with north kept up.
@@ -224,6 +271,7 @@ export function Constellation({
     () => ({
       uTime: { value: 0 },
       uReveal: { value: 0 },
+      uHour: { value: 12 },
       // Poale (footslopes) -> Coline (hillslopes) -> Podiș (plateau), the estate's
       // own three landscape units. Kept low-saturation so the stations stay the
       // brightest thing on screen.
@@ -282,6 +330,9 @@ export function Constellation({
     geometry.setAttribute('aRichness', new THREE.BufferAttribute(richness, 1));
     geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
     geometry.setAttribute('aSelected', new THREE.BufferAttribute(selected, 1));
+    // Filled every frame from the smoothed clock; seeded here so the first
+    // frame is not blank.
+    geometry.setAttribute('aActivity', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
     return { stationGeometry: geometry, stationOrder: placed.map((p) => p.site.id) };
   }, [placed, data.sites, lens, selectedSite]);
 
@@ -361,8 +412,25 @@ export function Constellation({
     revealRef.current += (reveal - revealRef.current) * Math.min(1, delta * 2.2);
     const r = revealRef.current;
 
+    /* ---- clock ---- */
+    // Eased across the 24h wrap so scrubbing past midnight does not run the
+    // whole day backwards.
+    const target = hour;
+    let diff = target - hourRef.current;
+    if (diff > 12) diff -= 24;
+    if (diff < -12) diff += 24;
+    hourRef.current = (hourRef.current + diff * Math.min(1, delta * 5) + 24) % 24;
+
+    const attr = stationGeometry.getAttribute('aActivity') as THREE.BufferAttribute;
+    const values = attr.array as Float32Array;
+    for (let i = 0; i < placed.length; i++) {
+      values[i] = siteActivityAt(placed[i].site, hourRef.current);
+    }
+    attr.needsUpdate = true;
+
     groundUniforms.uTime.value = t;
     groundUniforms.uReveal.value = r;
+    groundUniforms.uHour.value = hourRef.current;
     groundUniforms.uPulse.value.set(pulse.current.x, pulse.current.y, pulse.current.z);
     pulse.current.z *= 1 - Math.min(1, delta * 0.75);
 

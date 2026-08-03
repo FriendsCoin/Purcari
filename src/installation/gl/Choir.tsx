@@ -123,6 +123,13 @@ export interface ChoirProps {
   hour?: number;
   selected?: Species | null;
   onSelect?: (species: Species | null) => void;
+  /**
+   * Show only the species the survey singles out — the ones carrying a
+   * conservation status or narrative weight. The rest stay faintly present
+   * rather than disappearing, so the rare are seen *against* the common:
+   * the turtle dove is Vulnerable in a crowd of two hundred that are not.
+   */
+  flagshipOnly?: boolean;
 }
 
 export function Choir({
@@ -132,6 +139,7 @@ export function Choir({
   hour = 12,
   selected = null,
   onSelect,
+  flagshipOnly = false,
 }: ChoirProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const revealRef = useRef(0);
@@ -277,7 +285,10 @@ export function Choir({
         const isTarget = target !== null && species[i].sci === target.sci;
         sel[i] = isTarget ? 1 : 0;
         // Dim everything outside the selected animal's own guild.
-        dim[i] = target === null ? 0 : species[i].guild === target.guild ? (isTarget ? 0 : 0.55) : 1;
+        let d = target === null ? 0 : species[i].guild === target.guild ? (isTarget ? 0 : 0.55) : 1;
+        // The flagship filter pushes everything else back, but never to zero.
+        if (filterRef.current && !species[i].flagship && !isTarget) d = Math.max(d, 0.88);
+        dim[i] = d;
       }
       selectedAttr.needsUpdate = true;
       dimmed.needsUpdate = true;
@@ -286,6 +297,8 @@ export function Choir({
   );
 
   const lastSelected = useRef<string | null>(null);
+  const filterRef = useRef(flagshipOnly);
+  const lastFilter = useRef(flagshipOnly);
 
   /**
    * Nearest-mark picking in screen space. Raycasting `Points` with a threshold
@@ -329,8 +342,10 @@ export function Choir({
     uniforms.uCluster.value = clusterRef.current;
     uniforms.uHour.value = hourRef.current;
 
-    if (lastSelected.current !== (selected?.sci ?? null)) {
+    filterRef.current = flagshipOnly;
+    if (lastSelected.current !== (selected?.sci ?? null) || lastFilter.current !== flagshipOnly) {
       lastSelected.current = selected?.sci ?? null;
+      lastFilter.current = flagshipOnly;
       applySelection(selected);
     }
 
