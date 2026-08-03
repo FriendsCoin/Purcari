@@ -1,0 +1,57 @@
+name: Deploy installation preview
+
+# Publishes docs/ to GitHub Pages, which is how the outdoor piece gets tested on
+# a real phone: browsers only grant camera and microphone access over HTTPS.
+#
+# `configure-pages` runs with `enablement: true` so the first run turns Pages on
+# by itself. That matters because the setting lives only in the web UI — the
+# GitHub iOS app has no Pages screen at all — and the Pages REST API is not
+# reachable from the build sandbox.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/interactive-media-art-dashboard-ki7oz7
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deployments at once, but let a queued one finish rather than
+# cancelling it — a half-deployed site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # docs/ becomes the site root, so docs/live/index.html serves at /live/.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Report the URL
+        run: |
+          echo "### Installation preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deployment.outputs.page_url }}live/" >> "$GITHUB_STEP_SUMMARY"
