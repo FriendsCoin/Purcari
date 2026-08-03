@@ -768,6 +768,66 @@ export default function IndoorApp() {
             <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
               00:00 — 23:00
             </p>
+
+            {/*
+              And its year. Together with the daily rhythm above this is the
+              whole portrait: a nightjar peaks at dusk in June and is simply
+              absent in January, and both facts are visible at a glance.
+            */}
+            <p className="inst-label" style={{ margin: '1.1rem 0 0.6rem' }}>
+              Its year
+            </p>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 42 }}>
+              {selectedSpecies.monthly.map((value, month) => {
+                const peak = Math.max(...selectedSpecies.monthly, 1);
+                const isPeak = month === selectedSpecies.peakMonth - 1;
+                return (
+                  <div
+                    key={month}
+                    title={`${MONTHS[month]} — ${value}`}
+                    style={{
+                      flex: 1,
+                      height: `${Math.max(3, (value / peak) * 100)}%`,
+                      background: isPeak
+                        ? PALETTE.candle
+                        : GUILD_COLORS[selectedSpecies.guild] ?? PALETTE.foil,
+                      opacity: isPeak ? 1 : 0.42,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <div
+              className="inst-mono"
+              style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem' }}
+            >
+              <span>JAN</span>
+              <span>{MONTHS[selectedSpecies.peakMonth - 1].toUpperCase()}</span>
+              <span>DEC</span>
+            </div>
+
+            {/* Where it was actually recorded. */}
+            <div className="inst-rule" />
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              Where
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+              {Object.entries(selectedSpecies.sites)
+                .sort((a, b) => b[1] - a[1])
+                .map(([siteId, count]) => (
+                  <span
+                    key={siteId}
+                    className="inst-mono"
+                    style={{
+                      padding: '0.2rem 0.45rem',
+                      border: `1px solid ${GUILD_COLORS[selectedSpecies.guild] ?? PALETTE.foil}44`,
+                      color: PALETTE.parchment,
+                    }}
+                  >
+                    {siteId} · {formatNumber(count)}
+                  </span>
+                ))}
+            </div>
           </aside>
         )}
 
