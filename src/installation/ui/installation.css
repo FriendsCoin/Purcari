@@ -696,6 +696,111 @@
   }
 }
 
+/* ------------------------------------------------------------- time scrub */
+
+/*
+ * The clock control. A native range input styled to disappear into the piece:
+ * the visible track is the gradient of the day itself, so the control reads as
+ * a horizon rather than as a widget.
+ */
+.inst-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: clamp(220px, 30vw, 460px);
+}
+
+.inst-clock-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.inst-clock-time {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  color: var(--candle);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.inst-clock input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 30px;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* The track carries the day: night, dawn, noon, dusk, night. */
+.inst-clock input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    #2a3566 0%,
+    #4a4a86 18%,
+    #ff9a5a 27%,
+    #ffe9b0 50%,
+    #ff8a4a 80%,
+    #3d3f78 90%,
+    #2a3566 100%
+  );
+}
+
+.inst-clock input[type='range']::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    #2a3566 0%,
+    #4a4a86 18%,
+    #ff9a5a 27%,
+    #ffe9b0 50%,
+    #ff8a4a 80%,
+    #3d3f78 90%,
+    #2a3566 100%
+  );
+}
+
+.inst-clock input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--candle);
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 16px rgba(255, 233, 176, 0.65);
+}
+
+.inst-clock input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--candle);
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 16px rgba(255, 233, 176, 0.65);
+}
+
+.inst-clock input[type='range']:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+}
+
+.inst-clock-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  color: var(--ash);
+  letter-spacing: 0.1em;
+}
+
 /* ------------------------------------------------------------ diagnostics */
 
 .inst-diag {
@@ -760,4 +865,34 @@
   background: rgba(201, 162, 39, 0.12);
   letter-spacing: 0.36em;
   outline: none;
+}
+
+/* --------------------------------------------------------- column captions */
+
+/*
+ * Captions for the Refuge columns, positioned from coordinates the scene
+ * reports. Rendered as DOM rather than in-canvas text because drawing type in
+ * WebGL needs a font file, and this piece is built to run with no network at
+ * all — a silent fallback would leave the comparison unlabelled.
+ */
+.inst-column-label {
+  position: absolute;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ash);
+  transition: color 400ms ease;
+  pointer-events: none;
+}
+
+.inst-column-label[data-self='true'] {
+  color: var(--foil);
+  font-weight: 600;
+}
+
+.inst-column-label[data-active='true'] {
+  color: var(--candle);
 }

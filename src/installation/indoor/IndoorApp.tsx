@@ -9,10 +9,12 @@ import {
   PALETTE,
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
+import { useChapterTransition } from '../core/useChapterTransition';
 import { Stage, CameraRig } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
+import { Refuge } from '../gl/Refuge';
 import '../ui/installation.css';
 
 /**
@@ -27,7 +29,23 @@ import '../ui/installation.css';
  * animals living on top of it, and calls the result the estate's other harvest.
  */
 
-type ChapterId = 'estate' | 'year' | 'choir';
+type ChapterId = 'estate' | 'year' | 'choir' | 'refuge';
+
+/** Where one Refuge column's foot sits on screen, reported by the scene itself. */
+interface RefugeMark {
+  landUse: string;
+  x: number;
+  y: number;
+  self: boolean;
+  value: number;
+}
+
+/**
+ * Approximate advance of one character of the caption face — 0.6rem monospace
+ * with 0.14em tracking. Measuring for real would mean a layout read per frame
+ * for a decision that only has to be roughly right.
+ */
+const CAPTION_CHAR_PX = 7.1;
 
 interface Chapter {
   id: ChapterId;
@@ -75,6 +93,16 @@ const CHAPTERS: Chapter[] = [
     lookAt: [0, 0, 0],
     subjectAspect: 1.7,
   },
+  {
+    id: 'refuge',
+    label: 'Refuge',
+    title: 'Richer than\nthe fields around it',
+    lede: 'Every1Counts monitors the same way across Europe. Set beside ordinary farmland and industrial land, this estate holds far more life — and not one hectare of it is protected.',
+    dwell: 38,
+    camera: [0, 2.6, 15],
+    lookAt: [0, 1.9, 0],
+    subjectAspect: 1.9,
+  },
 ];
 
 const LENSES: { id: Lens; label: string; caption: string }[] = [
@@ -88,6 +116,12 @@ const IDLE_RESUME_MS = 120_000;
 
 function formatNumber(value: number): string {
   return value.toLocaleString('en-US');
+}
+
+function formatHour(value: number): string {
+  const h = Math.floor(value) % 24;
+  const m = Math.round((value - Math.floor(value)) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 export default function IndoorApp() {
@@ -104,9 +138,54 @@ export default function IndoorApp() {
   const [selectedSpecies, setSelectedSpecies] = useState<Species | null>(null);
   const [focusMonth, setFocusMonth] = useState<number | null>(null);
   const [clusterGuilds, setClusterGuilds] = useState(false);
+  const [flagshipOnly, setFlagshipOnly] = useState(false);
+  const [refugeMetric, setRefugeMetric] = useState(0);
+  const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
+  const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
+  /**
+   * The hour the estate is shown at. Starts at the château's real local time,
+   * so a visitor first meets the estate as it is right now, and can then scrub
+   * a whole day and watch the community hand over from the day shift to the
+   * night one. Every response to it comes from measured hourly profiles.
+   */
+  const [hour, setHour] = useState(() => {
+    const now = new Date();
+    return now.getHours() + now.getMinutes() / 60;
+  });
+  const [clockTouched, setClockTouched] = useState(false);
+
+  /**
+   * The Refuge captions, with collisions removed.
+   *
+   * Seven land-use names is about 300 px of type; on a phone in portrait the row
+   * is only 430 px wide and they overlap into an unreadable smear. Shrinking the
+   * face further would make it unreadable on the kiosk too, so instead the ones
+   * that collide are dropped — in priority order, so the label that survives is
+   * always the one that matters: the estate's own first, then whatever the
+   * visitor has selected, then left to right.
+   */
+  const refugeLabels = useMemo(() => {
+    const rank = (mark: RefugeMark) =>
+      mark.self ? 0 : refugeSelected === mark.landUse ? 1 : 2;
+    const ordered = [...refugeMarks].sort((a, b) => rank(a) - rank(b) || a.x - b.x);
+    const taken: { left: number; right: number }[] = [];
+    const kept: RefugeMark[] = [];
+    for (const mark of ordered) {
+      // A column that has faded out of the current survey carries no label.
+      if (mark.value <= 0.02) continue;
+      const half = (mark.landUse.length * CAPTION_CHAR_PX) / 2 + 6;
+      const left = mark.x - half;
+      const right = mark.x + half;
+      if (taken.some((box) => left < box.right && right > box.left)) continue;
+      taken.push({ left, right });
+      kept.push(mark);
+    }
+    return kept;
+  }, [refugeMarks, refugeSelected]);
 
   const idleTimer = useRef<number | null>(null);
   const chapter = CHAPTERS[chapterIndex];
+  const transition = useChapterTransition<ChapterId>(chapter.id);
 
   useEffect(() => {
     loadInstallationData().then(setData).catch((e: Error) => setError(e.message));
@@ -193,14 +272,16 @@ export default function IndoorApp() {
     if (!started || !data) return;
     const tick = window.setInterval(() => {
       if (!soundField.ready) return;
+      // Follows the scrubber once the visitor has taken hold of it, so the
+      // room's voices match the hour on screen; otherwise it tracks real time.
       const now = new Date();
-      const hour = now.getHours() + now.getMinutes() / 60;
+      const sounding = clockTouched ? hour : now.getHours() + now.getMinutes() / 60;
       // The Choir chapter earns a fuller soundscape; the others stay in the background.
       const density = CHAPTERS[chapterIndex].id === 'choir' ? 0.45 : 0.22;
-      chorus.current.update(data.species, hour, density);
+      chorus.current.update(data.species, sounding, density);
     }, 400);
     return () => window.clearInterval(tick);
-  }, [started, data, chapterIndex]);
+  }, [started, data, chapterIndex, clockTouched, hour]);
 
   const site = useMemo(
     () => (data && selectedSite ? data.sites.find((s) => s.id === selectedSite) ?? null : null),
@@ -234,6 +315,78 @@ export default function IndoorApp() {
     [touch],
   );
 
+
+  /** One chapter's 3D content at a given reveal. */
+  const renderScene = (id: ChapterId, reveal: number, interactive: boolean) => {
+    if (!data) return null;
+    switch (id) {
+      case 'estate':
+        return (
+          <Constellation
+            key="estate"
+            data={data}
+            reveal={reveal}
+            lens={lens}
+            hour={hour}
+            selectedSite={selectedSite}
+            onSelectSite={interactive ? handleSelectSite : undefined}
+          />
+        );
+      case 'year':
+        return (
+          <Chronogram
+            key="year"
+            data={data}
+            reveal={reveal}
+            modality="both"
+            focusMonth={focusMonth}
+            onSelectMonth={
+              interactive
+                ? (month) => {
+                    touch();
+                    setFocusMonth((current) => (current === month ? null : month));
+                  }
+                : undefined
+            }
+          />
+        );
+      case 'refuge':
+        return (
+          <Refuge
+            key="refuge"
+            data={data}
+            reveal={reveal}
+            metric={refugeMetric}
+            selected={refugeSelected}
+            onSelect={
+              interactive
+                ? (landUse) => {
+                    touch();
+                    setRefugeSelected(landUse);
+                  }
+                : undefined
+            }
+            onLayout={interactive ? setRefugeMarks : undefined}
+          />
+        );
+      case 'choir':
+        return (
+          <Choir
+            key="choir"
+            data={data}
+            reveal={reveal}
+            cluster={clusterGuilds ? 1 : 0}
+            hour={hour}
+            flagshipOnly={flagshipOnly}
+            selected={selectedSpecies}
+            onSelect={interactive ? handleSelectSpecies : undefined}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   if (error) {
     return (
       <div className="inst-root" style={{ display: 'grid', placeItems: 'center' }}>
@@ -253,6 +406,7 @@ export default function IndoorApp() {
           bloomStrength={0.95}
           bloomRadius={0.75}
           bloomThreshold={0.12}
+          swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
         >
           <CameraRig
             position={chapter.camera}
@@ -261,39 +415,14 @@ export default function IndoorApp() {
             speed={0.5}
           />
 
-          {chapter.id === 'estate' && (
-            <Constellation
-              data={data}
-              reveal={1}
-              lens={lens}
-              selectedSite={selectedSite}
-              onSelectSite={handleSelectSite}
-            />
-          )}
-
-          {chapter.id === 'year' && (
-            <Chronogram
-              data={data}
-              reveal={1}
-              modality="both"
-              focusMonth={focusMonth}
-              onSelectMonth={(month) => {
-                touch();
-                setFocusMonth((current) => (current === month ? null : month));
-              }}
-            />
-          )}
-
-          {chapter.id === 'choir' && (
-            <Choir
-              data={data}
-              reveal={1}
-              cluster={clusterGuilds ? 1 : 0}
-              hour={12}
-              selected={selectedSpecies}
-              onSelect={handleSelectSpecies}
-            />
-          )}
+          {/*
+            Both chapters are on stage during a dissolve. The outgoing one keeps
+            rendering at a falling `reveal` but stops accepting touches, so a
+            fading scene cannot steal a tap meant for the arriving one.
+          */}
+          {renderScene(transition.current, transition.reveal, true)}
+          {transition.previous !== null &&
+            renderScene(transition.previous, transition.fade, false)}
         </Stage>
       )}
 
@@ -316,6 +445,37 @@ export default function IndoorApp() {
             className="inst-corner inst-corner--bl"
             style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}
           >
+            {/*
+              The clock. Native range input on purpose: it is the one control a
+              visitor can already drive without instruction, and it carries
+              keyboard focus and arrow-key stepping for free.
+            */}
+            <div className="inst-clock" style={{ marginBottom: '1rem' }}>
+              <div className="inst-clock-head">
+                <span className="inst-label">Hour of day</span>
+                <span className="inst-clock-time">{formatHour(hour)}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={23.75}
+                step={0.25}
+                value={hour}
+                aria-label="Hour of day"
+                onChange={(event) => {
+                  touch();
+                  setClockTouched(true);
+                  setHour(Number(event.target.value));
+                }}
+              />
+              <div className="inst-clock-scale">
+                <span>00</span>
+                <span>06</span>
+                <span>12</span>
+                <span>18</span>
+                <span>24</span>
+              </div>
+            </div>
             <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
               Read the land as
             </p>
@@ -343,6 +503,37 @@ export default function IndoorApp() {
 
         {chapter.id === 'choir' && data && (
           <div className="inst-corner inst-corner--bl">
+            {/*
+              The clock. Native range input on purpose: it is the one control a
+              visitor can already drive without instruction, and it carries
+              keyboard focus and arrow-key stepping for free.
+            */}
+            <div className="inst-clock" style={{ marginBottom: '1rem' }}>
+              <div className="inst-clock-head">
+                <span className="inst-label">Hour of day</span>
+                <span className="inst-clock-time">{formatHour(hour)}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={23.75}
+                step={0.25}
+                value={hour}
+                aria-label="Hour of day"
+                onChange={(event) => {
+                  touch();
+                  setClockTouched(true);
+                  setHour(Number(event.target.value));
+                }}
+              />
+              <div className="inst-clock-scale">
+                <span>00</span>
+                <span>06</span>
+                <span>12</span>
+                <span>18</span>
+                <span>24</span>
+              </div>
+            </div>
             {/* The rosette is unreadable without naming the clusters. */}
             {clusterGuilds && (
               <div
@@ -373,17 +564,98 @@ export default function IndoorApp() {
                   ))}
               </div>
             )}
-            <button
-              className="inst-nav-item"
-              data-active={clusterGuilds}
-              onClick={() => {
-                touch();
-                setClusterGuilds((v) => !v);
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+              <button
+                className="inst-nav-item"
+                data-active={clusterGuilds}
+                onClick={() => {
+                  touch();
+                  setClusterGuilds((v) => !v);
+                }}
+                style={{ minHeight: 56, paddingLeft: 0 }}
+              >
+                {clusterGuilds ? 'Merge the swarm' : 'Sort by guild'}
+              </button>
+              <button
+                className="inst-nav-item"
+                data-active={flagshipOnly}
+                onClick={() => {
+                  touch();
+                  setFlagshipOnly((v) => !v);
+                }}
+                style={{ minHeight: 56 }}
+              >
+                {flagshipOnly ? 'Show all 213' : 'The ones that matter'}
+              </button>
+            </div>
+            {flagshipOnly && (
+              <p className="inst-mono" style={{ marginTop: '0.6rem', maxWidth: '34ch', lineHeight: 1.7 }}>
+                {data.flagships.length} SPECIES THE SURVEY SINGLES OUT — BY
+                CONSERVATION STATUS OR BY WHAT THEIR PRESENCE PROVES.
+              </p>
+            )}
+          </div>
+        )}
+
+        {chapter.id === 'refuge' &&
+          refugeLabels.map((mark) => (
+            <span
+              key={mark.landUse}
+              className="inst-column-label inst-pass"
+              data-self={mark.self}
+              data-active={refugeSelected === mark.landUse}
+              style={{
+                left: mark.x,
+                top: mark.y + 14,
+                opacity: Math.min(1, Math.max(0, mark.value * 1.6)),
               }}
-              style={{ minHeight: 56, paddingLeft: 0 }}
             >
-              {clusterGuilds ? 'Merge the swarm' : 'Sort by guild'}
-            </button>
+              {mark.landUse}
+            </span>
+          ))}
+
+        {chapter.id === 'refuge' && data && (
+          <div className="inst-corner inst-corner--bl">
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              Compare by
+            </p>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              {[
+                { v: 0, label: 'Mammals', caption: 'Shannon diversity, camera traps' },
+                { v: 1, label: 'Birds', caption: 'Species heard per site' },
+              ].map((entry) => (
+                <button
+                  key={entry.label}
+                  className="inst-nav-item"
+                  data-active={refugeMetric === entry.v}
+                  onClick={() => {
+                    touch();
+                    setRefugeMetric(entry.v);
+                  }}
+                  style={{ minHeight: 56, padding: '0.9rem 1.1rem' }}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+            <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
+              {(refugeMetric === 0
+                ? 'SHANNON DIVERSITY, CAMERA TRAPS'
+                : 'BIRD SPECIES HEARD PER SITE'
+              ).toUpperCase()}
+            </p>
+
+            {/* The tension the whole survey leaves unresolved. */}
+            <div className="inst-rule" style={{ maxWidth: 380 }} />
+            <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+              {data.narrative.protection.protConn.toFixed(1)}%
+            </p>
+            <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem' }}>
+              {data.narrative.protection.text}
+            </p>
+            <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
+              {data.narrative.protection.policy.toUpperCase()}
+            </p>
           </div>
         )}
 
@@ -539,6 +811,66 @@ export default function IndoorApp() {
             <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
               00:00 — 23:00
             </p>
+
+            {/*
+              And its year. Together with the daily rhythm above this is the
+              whole portrait: a nightjar peaks at dusk in June and is simply
+              absent in January, and both facts are visible at a glance.
+            */}
+            <p className="inst-label" style={{ margin: '1.1rem 0 0.6rem' }}>
+              Its year
+            </p>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 42 }}>
+              {selectedSpecies.monthly.map((value, month) => {
+                const peak = Math.max(...selectedSpecies.monthly, 1);
+                const isPeak = month === selectedSpecies.peakMonth - 1;
+                return (
+                  <div
+                    key={month}
+                    title={`${MONTHS[month]} — ${value}`}
+                    style={{
+                      flex: 1,
+                      height: `${Math.max(3, (value / peak) * 100)}%`,
+                      background: isPeak
+                        ? PALETTE.candle
+                        : GUILD_COLORS[selectedSpecies.guild] ?? PALETTE.foil,
+                      opacity: isPeak ? 1 : 0.42,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <div
+              className="inst-mono"
+              style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem' }}
+            >
+              <span>JAN</span>
+              <span>{MONTHS[selectedSpecies.peakMonth - 1].toUpperCase()}</span>
+              <span>DEC</span>
+            </div>
+
+            {/* Where it was actually recorded. */}
+            <div className="inst-rule" />
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              Where
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+              {Object.entries(selectedSpecies.sites)
+                .sort((a, b) => b[1] - a[1])
+                .map(([siteId, count]) => (
+                  <span
+                    key={siteId}
+                    className="inst-mono"
+                    style={{
+                      padding: '0.2rem 0.45rem',
+                      border: `1px solid ${GUILD_COLORS[selectedSpecies.guild] ?? PALETTE.foil}44`,
+                      color: PALETTE.parchment,
+                    }}
+                  >
+                    {siteId} · {formatNumber(count)}
+                  </span>
+                ))}
+            </div>
           </aside>
         )}
 
