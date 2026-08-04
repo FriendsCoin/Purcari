@@ -39,6 +39,10 @@ export interface FieldControls {
   focusStation: number;
   /** Minute-of-day the chronos hand is passing, or -1 when it is parked. */
   sweep: number;
+  /** 0 bird / 1 mammal / 2 domestic, or -1 for everything. */
+  focusKind: number;
+  /** Index of the inspected grain, or -1. */
+  picked: number;
   drift: number;
   opacity: number;
 }
@@ -49,9 +53,18 @@ interface Props {
   controls: React.MutableRefObject<FieldControls>;
   morphSeconds?: number;
   onMorphProgress?: (t: number) => void;
+  /** Written true once the cloud has finished rearranging. */
+  settled?: React.MutableRefObject<boolean>;
 }
 
-export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, onMorphProgress }: Props) {
+export function ParticleField({
+  archive,
+  layout,
+  controls,
+  morphSeconds = 2.4,
+  onMorphProgress,
+  settled,
+}: Props) {
   const { size } = useThree();
   const n = archive.count;
 
@@ -88,6 +101,11 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
     geo.setAttribute('aDay', new BufferAttribute(Float32Array.from(archive.day), 1));
     geo.setAttribute('aSpecies', new BufferAttribute(Float32Array.from(archive.sp), 1));
     geo.setAttribute('aStation', new BufferAttribute(Float32Array.from(archive.st), 1));
+    geo.setAttribute('aKind', new BufferAttribute(Float32Array.from(archive.kind), 1));
+    geo.setAttribute(
+      'aIndex',
+      new BufferAttribute(Float32Array.from({ length: n }, (_, i) => i), 1)
+    );
     geo.boundingSphere = null;
 
     const mat = new ShaderMaterial({
@@ -113,6 +131,8 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
         uFocusStation: { value: -1 },
         uArc: { value: 3.2 },
         uSweep: { value: -1 },
+        uFocusKind: { value: -1 },
+        uPicked: { value: -1 },
         uOpacity: { value: 1 },
       },
     });
@@ -170,7 +190,8 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
 
     morph.current.t = 0;
     material.uniforms.uMorph.value = 0;
-  }, [layout, buffers, geometry, material, n]);
+    if (settled) settled.current = false;
+  }, [layout, buffers, geometry, material, n, settled]);
 
   useEffect(() => {
     material.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
@@ -188,6 +209,7 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
       morph.current.t = Math.min(1, morph.current.t + delta / morphSeconds);
       u.uMorph.value = morph.current.t;
       onMorphProgress?.(morph.current.t);
+      if (settled && morph.current.t >= 1) settled.current = true;
     }
 
     u.uTime.value += delta;
@@ -199,6 +221,8 @@ export function ParticleField({ archive, layout, controls, morphSeconds = 2.4, o
     u.uFocusSpecies.value = c.focusSpecies;
     u.uFocusStation.value = c.focusStation;
     u.uSweep.value = c.sweep;
+    u.uFocusKind.value = c.focusKind;
+    u.uPicked.value = c.picked;
     u.uDrift.value += (c.drift - u.uDrift.value) * Math.min(1, delta * 2);
     u.uOpacity.value += (c.opacity - u.uOpacity.value) * Math.min(1, delta * 3);
   });

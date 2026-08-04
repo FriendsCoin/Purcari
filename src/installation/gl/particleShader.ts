@@ -73,6 +73,8 @@ attribute float aMinute;
 attribute float aDay;
 attribute float aSpecies;
 attribute float aStation;
+attribute float aKind;
+attribute float aIndex;
 
 uniform float uMorph;
 uniform float uTime;
@@ -90,6 +92,8 @@ uniform float uFocusSpecies;
 uniform float uFocusStation;
 uniform float uArc;
 uniform float uSweep;
+uniform float uFocusKind;
+uniform float uPicked;
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -151,6 +155,20 @@ void main(){
     float hit = step(abs(aStation - uFocusStation), 0.5);
     alpha *= mix(0.07, 1.0, hit);
     sizeMul *= mix(0.7, 1.5, hit);
+  }
+
+  // Group filter: birds, mammals or domestic animals only.
+  if (uFocusKind >= 0.0) {
+    float hit = step(abs(aKind - uFocusKind), 0.5);
+    alpha *= mix(0.04, 1.0, hit);
+    sizeMul *= mix(0.6, 1.0, hit);
+  }
+
+  // The grain the visitor clicked: held bright so the card and the cloud agree.
+  if (uPicked >= 0.0 && abs(aIndex - uPicked) < 0.5) {
+    flare = 1.0;
+    alpha = 1.0;
+    sizeMul *= 3.4;
   }
 
   // Radar sweep across the 24 hour dial: each hour lights as the hand passes.

@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { ACESFilmicToneMapping, Vector3 } from 'three';
 import { ACTS } from './acts';
-import { useArchive, type Archive } from './data';
+import { KIND_LABEL, describeDetection, useArchive, type Archive, type DetectionDetail } from './data';
 import { makeContext, type Layout, type LayoutContext } from './layouts';
 import { labelsForAct } from './labels';
 import { ParticleField, type FieldControls } from './gl/ParticleField';
@@ -26,6 +26,8 @@ import { Rig, type TransitionState } from './gl/Rig';
 import { Panel } from './ui/Panels';
 import { Scrubber } from './ui/Scrubber';
 import { Cursor } from './ui/Cursor';
+import { Inspector } from './ui/Inspector';
+import { Picker } from './gl/Picker';
 import './ui/installation.css';
 
 const AUTOPLAY_SECONDS = 16;
@@ -65,6 +67,10 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
   const [window_, setWindow] = useState<[number, number]>([0, 1439]);
   const [autoplay, setAutoplay] = useState(true);
   const [season, setSeason] = useState(false);
+  const [detail, setDetail] = useState<DetectionDetail | null>(null);
+  const [isolated, setIsolated] = useState<number>(-1);
+  const [kind, setKind] = useState<number>(-1);
+  const [help, setHelp] = useState(false);
 
   const context = useMemo<LayoutContext>(() => makeContext(archive), [archive]);
   const cache = useRef(new Map<number, Layout>());
@@ -88,6 +94,8 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
     focusSpecies: -1,
     focusStation: -1,
     sweep: -1,
+    focusKind: -1,
+    picked: -1,
     drift: ACTS[0].drift,
     opacity: 1,
   });
@@ -96,6 +104,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
   const labelRegistry = useRef<LabelRegistry>(new Map());
   const transition = useRef<TransitionState>({ progress: 1, bell: 0, travelling: false });
   const labelOpacity = useRef(1);
+  const settled = useRef(true);
   const actsRef = useRef<HTMLDivElement>(null);
   const seasonRef = useRef<HTMLSpanElement>(null);
   const lastInteraction = useRef(performance.now());
@@ -103,6 +112,10 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
   controls.current.window = window_;
   controls.current.drift = definition.drift;
   controls.current.pointer = pointerWorld;
+  controls.current.focusKind = kind;
+  controls.current.picked = detail ? detail.index : -1;
+  // An isolated species overrides the transient hover focus.
+  if (isolated >= 0) controls.current.focusSpecies = isolated;
 
   const anchors = useMemo(() => labelsForAct(archive, definition.key), [archive, definition.key]);
 
@@ -132,7 +145,17 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
         setSeason((s) => !s);
         touch();
       } else if (e.key === 'Escape') {
-        setWindow([0, 1439]);
+        // Peel back one layer at a time rather than resetting everything.
+        if (help) setHelp(false);
+        else if (detail) setDetail(null);
+        else if (isolated >= 0) {
+          setIsolated(-1);
+          controls.current.focusSpecies = -1;
+        } else if (kind >= 0) setKind(-1);
+        else setWindow([0, 1439]);
+        touch();
+      } else if (e.key === '?' || e.key === '/') {
+        setHelp((h) => !h);
         touch();
       } else if (/^[0-7]$/.test(e.key)) go(Number(e.key));
       else return;
@@ -191,7 +214,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
       globalThis.removeEventListener('touchstart', onTouchStart);
       globalThis.removeEventListener('touchend', onTouchEnd);
     };
-  }, [act, entered, go, touch]);
+  }, [act, entered, go, touch, help, detail, isolated, kind]);
 
   // ------------------------------------------- autoplay, idle, season clock
   useEffect(() => {
@@ -287,6 +310,19 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
           layout={layout}
           controls={controls}
           onMorphProgress={onMorphProgress}
+          settled={settled}
+        />
+        <Picker
+          layout={layout}
+          count={archive.count}
+          settled={settled}
+          onPick={(index) => {
+            touch();
+            setDetail(index === null ? null : describeDetection(archive, index));
+          }}
+          onHover={(index) => {
+            document.body.classList.toggle('is-grabbable', index !== null);
+          }}
         />
         <Landscape archive={archive} active={definition.key === 'land' || definition.key === 'stations' ? 1 : 0} />
         <Scenery archive={archive} act={definition.key} controls={controls} />
@@ -391,9 +427,29 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
                 touch();
                 setSeason((s) => !s);
               }}
+              title="Проиграть сезон по дням (P)"
             >
               <span className="pill__dot" />
               Сезон <span ref={seasonRef} />
+            </button>
+            <div className="kinds" role="group" aria-label="Группы животных">
+              {[0, 1, 2].map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="kinds__item"
+                  aria-pressed={kind === k}
+                  onClick={() => {
+                    touch();
+                    setKind((current) => (current === k ? -1 : k));
+                  }}
+                >
+                  {KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="pill" onClick={() => setHelp(true)} title="Справка (?)">
+              ?
             </button>
             <button
               type="button"
@@ -441,6 +497,49 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
           <span className="intro__hint">стрелки · колесо · пробел — автопрокрутка</span>
         </div>
       </div>
+
+      <Inspector
+        archive={archive}
+        detail={detail}
+        isolated={isolated >= 0}
+        onClose={() => setDetail(null)}
+        onIsolate={(speciesId) => {
+          touch();
+          if (isolated === speciesId) {
+            setIsolated(-1);
+            controls.current.focusSpecies = -1;
+          } else {
+            setIsolated(speciesId);
+          }
+        }}
+      />
+
+      {help && (
+        <div className="help" role="dialog" aria-label="Справка" onClick={() => setHelp(false)}>
+          <div className="help__card" onClick={(e) => e.stopPropagation()}>
+            <div className="help__head">
+              <span className="panel__title">Управление</span>
+              <button type="button" className="inspector__close" onClick={() => setHelp(false)}>
+                ✕
+              </button>
+            </div>
+            <dl className="help__list">
+              <div><dt>← →, колесо, свайп</dt><dd>соседний акт</dd></div>
+              <div><dt>0 – 7</dt><dd>перейти к акту</dd></div>
+              <div><dt>клик по частице</dt><dd>что это было за наблюдение</dd></div>
+              <div><dt>пробел</dt><dd>автопрокрутка</dd></div>
+              <div><dt>P</dt><dd>проиграть сезон по дням</dd></div>
+              <div><dt>перетащить шкалу</dt><dd>срез времени суток</dd></div>
+              <div><dt>Esc</dt><dd>снять выделение, затем фильтр, затем срез</dd></div>
+              <div><dt>?</dt><dd>эта справка</dd></div>
+            </dl>
+            <p className="help__note">
+              Каждая частица — одно настоящее наблюдение из архива 2025 года. Без действий
+              инсталляция через 45 секунд начинает играть себя сама.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Cursor />
     </div>
