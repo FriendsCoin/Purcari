@@ -182,6 +182,84 @@ export function layoutChronos(ctx: LayoutContext): Layout {
 export const CHRONOS_RINGS = { inner: CHRONOS_INNER, outer: CHRONOS_OUTER };
 
 // ---------------------------------------------------------------------------
+// SEASON — the chronos dial extruded through eighty days
+// ---------------------------------------------------------------------------
+export const SEASON = { radius: 21, height: 46 };
+
+/**
+ * Same angular mapping as the dial, so the morph out of act III is a lift
+ * rather than a rearrangement: hour around, day up the axis.
+ *
+ * The shape is an honest picture of the survey rather than of the wildlife.
+ * The cameras ran all summer and scatter thinly up the whole cylinder; the
+ * microphones ran for a fortnight and pack the top into a dense collar.
+ */
+export function layoutSeason(ctx: LayoutContext): Layout {
+  const { archive, base } = ctx;
+  const n = archive.count;
+  const out = empty(n);
+  const rnd = mulberry32(2408);
+  const maxDay = Math.max(archive.meta.window.days - 1, 1);
+
+  for (let i = 0; i < n; i += 1) {
+    const angle = (archive.minute[i] / 1440) * Math.PI * 2 - Math.PI / 2;
+    // Acoustic inside, camera outside — the same reading as the dial.
+    const radius = SEASON.radius + (archive.src[i] === 0 ? -2.2 : 2.2) + (rnd() - 0.5) * 1.4;
+
+    out.position[i * 3] = Math.cos(angle) * radius;
+    out.position[i * 3 + 1] = (archive.day[i] / maxDay) * SEASON.height - SEASON.height / 2;
+    out.position[i * 3 + 2] = Math.sin(angle) * radius;
+    out.size[i] = base.size[i];
+  }
+  out.color.set(base.color);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// TAIL — rank abundance, built out of the detections themselves
+// ---------------------------------------------------------------------------
+export const TAIL = { width: 74, height: 26 };
+
+/**
+ * One column per species, ordered by abundance, each column made of that
+ * species' own grains. The height is log-scaled or the 255 of the commonest
+ * would flatten the 33 species heard exactly once into the floor — and those
+ * are the point.
+ */
+export function layoutTail(ctx: LayoutContext): Layout {
+  const { archive, base } = ctx;
+  const n = archive.count;
+  const out = empty(n);
+  const rnd = mulberry32(6231);
+
+  const total = archive.species.length;
+  const maxCount = Math.max(...archive.species.map((s) => s.count), 1);
+  const seen = new Int32Array(total);
+
+  for (let i = 0; i < n; i += 1) {
+    const spId = archive.sp[i];
+    const species = archive.species[spId];
+    const rank = species.rank;
+
+    const x = (rank / Math.max(total - 1, 1) - 0.5) * TAIL.width;
+    const bar = 1.5 + TAIL.height * (Math.log(species.count + 1) / Math.log(maxCount + 1));
+    const k = seen[spId]++ / Math.max(species.count, 1);
+
+    out.position[i * 3] = x + (rnd() - 0.5) * 0.32;
+    out.position[i * 3 + 1] = k * bar - TAIL.height * 0.42;
+    out.position[i * 3 + 2] = (rnd() - 0.5) * 0.9;
+    out.size[i] = base.size[i];
+  }
+  out.color.set(base.color);
+  return out;
+}
+
+/** Where a species' column stands, for labels and guides. */
+export function tailColumn(archive: Archive, rank: number): number {
+  return (rank / Math.max(archive.species.length - 1, 1) - 0.5) * TAIL.width;
+}
+
+// ---------------------------------------------------------------------------
 // ACT 3 — voices: 136 species as a spiral galaxy, common at the core
 // ---------------------------------------------------------------------------
 export function speciesNodes(archive: Archive): Float32Array {

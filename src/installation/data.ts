@@ -133,6 +133,9 @@ export interface Archive extends Payload {
   minute: Uint16Array;
   day: Uint16Array;
   src: Uint8Array;
+  night: Uint8Array;
+  /** 0 bird, 1 mammal, 2 domestic, 3 unknown — cheap enough for the shader. */
+  kind: Uint8Array;
   lat: Float32Array;
   lng: Float32Array;
   /** Geographic extent, used to normalise coordinates into scene space. */
@@ -142,6 +145,9 @@ export interface Archive extends Payload {
   perStation: number[][];
   perSpecies: number[][];
 }
+
+export const KIND_CODE: Record<string, number> = { bird: 0, mammal: 1, domestic: 2, unknown: 3 };
+export const KIND_LABEL = ['птицы', 'звери', 'домашние', 'не определён'];
 
 function widen(p: Payload, landscape: Landscape | null): Archive {
   const n = p.detections.sp.length;
@@ -168,6 +174,8 @@ function widen(p: Payload, landscape: Landscape | null): Archive {
     minute: Uint16Array.from(p.detections.min),
     day: Uint16Array.from(p.detections.day),
     src: Uint8Array.from(p.detections.src),
+    night: Uint8Array.from(p.detections.night),
+    kind: Uint8Array.from(p.detections.sp.map((id) => KIND_CODE[p.species[id]?.kind ?? 'unknown'])),
     lat,
     lng,
     bounds: {
@@ -228,6 +236,42 @@ export function useArchive(): { archive: Archive | null; error: string | null } 
 }
 
 export const MINUTES_PER_DAY = 1440;
+
+/** Calendar date of a day offset, counted from the archive's first day. */
+export function dateOf(archive: Archive, day: number): Date {
+  const first = Date.parse(`${archive.meta.window.firstDay}T00:00:00Z`);
+  return new Date(first + day * 86400000);
+}
+
+const RU_DATE = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'long',
+  timeZone: 'UTC',
+});
+
+export interface DetectionDetail {
+  index: number;
+  species: Species;
+  station: Station | null;
+  date: string;
+  time: string;
+  source: 'acoustic' | 'camera';
+  night: boolean;
+}
+
+/** Everything the inspector card needs about one recorded detection. */
+export function describeDetection(archive: Archive, index: number): DetectionDetail {
+  const stationIndex = archive.st[index];
+  return {
+    index,
+    species: archive.species[archive.sp[index]],
+    station: stationIndex >= 0 ? archive.stations[stationIndex] : null,
+    date: RU_DATE.format(dateOf(archive, archive.day[index])),
+    time: clock(archive.minute[index]),
+    source: archive.src[index] === 0 ? 'acoustic' : 'camera',
+    night: archive.night[index] === 1,
+  };
+}
 
 /** Formats a minute-of-day as HH:MM. */
 export function clock(minute: number): string {

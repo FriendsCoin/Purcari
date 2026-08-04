@@ -12,7 +12,9 @@ import {
   layoutBloom,
   layoutChronos,
   layoutDormant,
+  layoutSeason,
   layoutStations,
+  layoutTail,
   layoutTerrain,
   layoutVoices,
 } from './layouts';
@@ -29,7 +31,7 @@ export interface ActDefinition {
   drift: number;
   build: (ctx: LayoutContext) => Layout;
   /** Which readout panel the overlay shows alongside this act. */
-  panel: 'summary' | 'stations' | 'clock' | 'species' | 'network' | 'diversity';
+  panel: 'summary' | 'stations' | 'clock' | 'season' | 'species' | 'tail' | 'network' | 'diversity';
 }
 
 const nf = new Intl.NumberFormat('ru-RU');
@@ -72,8 +74,23 @@ export const ACTS: ActDefinition[] = [
   },
   {
     id: 2,
-    key: 'chronos',
+    key: 'stations',
     numeral: 'II',
+    title: 'Станции',
+    subtitle: 'Сеть и её потери',
+    caption: (a) =>
+      `${a.meta.counts.stationsActive} станции работают, ${a.meta.counts.stationsLost} замолчали — ` +
+      `оборудование потеряно летом 2025 года.`,
+    camera: { position: [38, 92, 90], target: [-8, 18, 8], fov: 36 },
+    orbit: 0.034,
+    drift: 0.28,
+    build: layoutStations,
+    panel: 'network',
+  },
+  {
+    id: 3,
+    key: 'chronos',
+    numeral: 'III',
     title: 'Хронос',
     subtitle: 'Одни сутки на всех',
     caption: (a) => {
@@ -93,9 +110,30 @@ export const ACTS: ActDefinition[] = [
     panel: 'clock',
   },
   {
-    id: 3,
+    id: 4,
+    key: 'season',
+    numeral: 'IV',
+    title: 'Сезон',
+    subtitle: 'Восемьдесят дней',
+    caption: (a) => {
+      const acoustic = a.daily.filter((d) => d.audio > 0).length;
+      const camera = a.daily.filter((d) => d.camera > 0).length;
+      return (
+        `Тот же циферблат, вытянутый через сезон: час по кругу, день вверх. ` +
+        `Фотоловушки писали ${camera} дней, микрофоны — ${acoustic}. ` +
+        `Плотный воротник наверху не всплеск жизни, а включённый микрофон.`
+      );
+    },
+    camera: { position: [0, 6, 92], target: [0, 0, 0], fov: 38 },
+    orbit: 0.05,
+    drift: 0.26,
+    build: layoutSeason,
+    panel: 'season',
+  },
+  {
+    id: 5,
     key: 'voices',
-    numeral: 'III',
+    numeral: 'V',
     title: 'Голоса',
     subtitle: 'Кто здесь живёт',
     caption: (a) => {
@@ -109,24 +147,33 @@ export const ACTS: ActDefinition[] = [
     panel: 'species',
   },
   {
-    id: 4,
-    key: 'stations',
-    numeral: 'IV',
-    title: 'Станции',
-    subtitle: 'Сеть и её потери',
-    caption: (a) =>
-      `${a.meta.counts.stationsActive} станции работают, ${a.meta.counts.stationsLost} замолчали — ` +
-      `оборудование потеряно летом 2025 года.`,
-    camera: { position: [38, 92, 90], target: [-8, 18, 8], fov: 36 },
-    orbit: 0.034,
-    drift: 0.28,
-    build: layoutStations,
-    panel: 'network',
+    id: 6,
+    key: 'tail',
+    numeral: 'VI',
+    title: 'Хвост',
+    subtitle: 'Немногие и многие',
+    caption: (a) => {
+      const counts = a.species.map((s) => s.count).sort((x, y) => x - y);
+      const median = counts[Math.floor(counts.length / 2)];
+      const rare = counts.filter((c) => c <= median).length;
+      const top = a.species.slice(0, 10).reduce((sum, s) => sum + s.count, 0);
+      const all = counts.reduce((x, y) => x + y, 0);
+      return (
+        `Каждый столб — вид, сложенный из своих же регистраций. ` +
+        `${rare} вида из ${a.meta.counts.species} записаны не чаще ${median} раз, ` +
+        `а первая десятка — ${Math.round((top / all) * 100)} % всего архива. Хвост и есть разнообразие.`
+      );
+    },
+    camera: { position: [4, 12, 62], target: [0, -1, 0], fov: 36 },
+    orbit: 0.012,
+    drift: 0.22,
+    build: layoutTail,
+    panel: 'tail',
   },
   {
-    id: 5,
+    id: 7,
     key: 'index',
-    numeral: 'V',
+    numeral: 'VII',
     title: 'Индекс',
     subtitle: 'Чем измеряется живое',
     caption: (a) => {

@@ -873,3 +873,35 @@
     transition-duration: 1ms !important;
   }
 }
+
+/* Per-day bars for the season panel: eighty days, two networks. */
+.daybars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 64px;
+  margin-bottom: 14px;
+}
+
+.daybars__col {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1px;
+}
+
+.daybars__seg {
+  display: block;
+  width: 100%;
+}
+
+.daybars__seg--audio {
+  background: var(--gold);
+}
+
+.daybars__seg--camera {
+  background: var(--wine);
+}

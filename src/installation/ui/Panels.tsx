@@ -150,6 +150,92 @@ export function Panel({ archive, act, onFocusSpecies, onFocusStation, window: wi
       );
     }
 
+    case 'season': {
+      const acousticDays = archive.daily.filter((d) => d.audio > 0).length;
+      const cameraDays = archive.daily.filter((d) => d.camera > 0).length;
+      const peak = archive.daily.reduce((a, b) => (a.audio + a.camera > b.audio + b.camera ? a : b));
+      const max = Math.max(...archive.daily.map((d) => d.audio + d.camera), 1);
+      return (
+        <Shell title="Сезон" note={`${m.window.days} дней`}>
+          <div className="daybars" role="img" aria-label="Регистрации по дням">
+            {archive.daily.map((d) => (
+              <span
+                key={d.date}
+                className="daybars__col"
+                title={`${d.date} — акустика ${d.audio}, камеры ${d.camera}`}
+              >
+                <i
+                  className="daybars__seg daybars__seg--audio"
+                  style={{ height: `${(d.audio / max) * 100}%` }}
+                />
+                <i
+                  className="daybars__seg daybars__seg--camera"
+                  style={{ height: `${(d.camera / max) * 100}%` }}
+                />
+              </span>
+            ))}
+          </div>
+          <Row name="Дней с камерами" value={String(cameraDays)} />
+          <Row name="Дней с акустикой" value={String(acousticDays)} accent />
+          <Row name="Самый плотный день" value={peak.date.slice(5)} />
+          <Row name="— в нём регистраций" value={nf.format(peak.audio + peak.camera)} />
+          <p className="row__meta" style={{ marginTop: 12, whiteSpace: 'normal', lineHeight: 1.7 }}>
+            Две сети покрывают сезон совершенно по-разному: фотоловушки стояли всё лето,
+            микрофоны включили в конце июля. Поэтому августовский «взрыв» — это про технику,
+            а не про животных.
+          </p>
+          <Legend />
+        </Shell>
+      );
+    }
+
+    case 'tail': {
+      const counts = archive.species.map((s) => s.count).sort((a, b) => a - b);
+      const median = counts[Math.floor(counts.length / 2)];
+      const once = counts.filter((c) => c === 1).length;
+      const all = counts.reduce((a, b) => a + b, 0);
+      const top10 = archive.species.slice(0, 10).reduce((sum, s) => sum + s.count, 0);
+      const notable = archive.species.filter((s) => s.iucn && s.count <= median);
+      return (
+        <Shell title="Редкость" note={`${m.counts.species} видов`}>
+          <Row name="Медиана регистраций" value={String(median)} accent />
+          <Row name="Записаны один раз" value={`${once} вида`} />
+          <Row name="Не чаще медианы" value={`${counts.filter((c) => c <= median).length} вида`} />
+          <Row name="Доля первой десятки" value={`${Math.round((top10 / all) * 100)} %`} />
+          <Bar value={top10 / all} />
+          <p className="row__meta" style={{ marginTop: 12, whiteSpace: 'normal', lineHeight: 1.7 }}>
+            Так устроено любое живое сообщество: несколько массовых видов и длинный хвост
+            редких. Индексы Шеннона и Симпсона в следующем акте измеряют именно длину
+            и ровность этого хвоста.
+          </p>
+          {notable.length > 0 && (
+            <>
+              <div className="panel__head" style={{ marginTop: 18 }}>
+                <span className="panel__title">Редкие и охраняемые</span>
+              </div>
+              {notable.slice(0, 5).map((s) => (
+                <button
+                  type="button"
+                  key={`tail-${s.id}`}
+                  className="row row--interactive"
+                  onMouseEnter={() => onFocusSpecies(s.id)}
+                  onMouseLeave={() => onFocusSpecies(-1)}
+                  onFocus={() => onFocusSpecies(s.id)}
+                  onBlur={() => onFocusSpecies(-1)}
+                >
+                  <span className="row__label">
+                    <span className="row__name">{s.ru}</span>
+                    <span className="row__meta">{s.iucn?.note}</span>
+                  </span>
+                  <span className="row__value row__value--accent">{s.count}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </Shell>
+      );
+    }
+
     case 'species': {
       const top = archive.species.slice(0, 12);
       const max = top[0]?.count ?? 1;

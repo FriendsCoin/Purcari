@@ -104,7 +104,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
   controls.current.drift = definition.drift;
   controls.current.pointer = pointerWorld;
 
-  const anchors = useMemo(() => labelsForAct(archive, act), [archive, act]);
+  const anchors = useMemo(() => labelsForAct(archive, definition.key), [archive, definition.key]);
 
   const touch = useCallback(() => {
     lastInteraction.current = performance.now();
@@ -134,7 +134,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
       } else if (e.key === 'Escape') {
         setWindow([0, 1439]);
         touch();
-      } else if (/^[0-5]$/.test(e.key)) go(Number(e.key));
+      } else if (/^[0-7]$/.test(e.key)) go(Number(e.key));
       else return;
       e.preventDefault();
     };
@@ -226,7 +226,7 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
 
       // Act II runs a hand around the dial; the shader lights each hour as it
       // passes, so the day plays rather than just sitting there.
-      if (act === 2) {
+      if (ACTS[act].key === 'chronos') {
         sweepT = (sweepT + delta / SWEEP_SECONDS) % 1;
         controls.current.sweep = sweepT * 1440;
       } else {
@@ -288,8 +288,8 @@ function Piece({ archive, onExit }: { archive: Archive; onExit?: () => void }) {
           controls={controls}
           onMorphProgress={onMorphProgress}
         />
-        <Landscape archive={archive} active={act === 1 || act === 4 ? 1 : 0} />
-        <Scenery archive={archive} act={act} controls={controls} />
+        <Landscape archive={archive} active={definition.key === 'land' || definition.key === 'stations' ? 1 : 0} />
+        <Scenery archive={archive} act={definition.key} controls={controls} />
         <Labels anchors={anchors} registry={labelRegistry} opacity={labelOpacity} />
         <Rig
           act={definition}

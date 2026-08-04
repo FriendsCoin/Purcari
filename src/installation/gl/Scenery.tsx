@@ -372,15 +372,16 @@ export function Scenery({
   controls,
 }: {
   archive: Archive;
-  act: number;
+  /** Act key rather than index, so reordering the score cannot desync the stage. */
+  act: string;
   controls: React.MutableRefObject<FieldControls>;
 }) {
   return (
     <>
-      <StationBeacons archive={archive} active={act === 1 || act === 4 ? 1 : 0} />
-      <ChronosGuides active={act === 2 ? 1 : 0} controls={controls} />
-      <VoiceEdges archive={archive} active={act === 3 ? 1 : 0} />
-      <BloomPlinths archive={archive} active={act === 5 ? 1 : 0} />
+      <StationBeacons archive={archive} active={act === 'land' || act === 'stations' ? 1 : 0} />
+      <ChronosGuides active={act === 'chronos' ? 1 : 0} controls={controls} />
+      <VoiceEdges archive={archive} active={act === 'voices' ? 1 : 0} />
+      <BloomPlinths archive={archive} active={act === 'index' ? 1 : 0} />
     </>
   );
 }

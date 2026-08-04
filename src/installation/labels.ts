@@ -6,8 +6,8 @@
  * world position that the projector converts to screen coordinates every frame.
  */
 
-import type { Archive } from './data';
-import { CHRONOS_RINGS, GROUND_SPAN, bloomSites, geoProjector, speciesNodes } from './layouts';
+import { dateOf, type Archive } from './data';
+import { CHRONOS_RINGS, GROUND_SPAN, SEASON, TAIL, bloomSites, geoProjector, speciesNodes, tailColumn } from './layouts';
 import { SITE_RU } from './layouts';
 import { VERTICAL_EXAGGERATION } from './projection';
 
@@ -22,21 +22,104 @@ export interface LabelAnchor {
   station?: number;
 }
 
-export function labelsForAct(archive: Archive, act: number): LabelAnchor[] {
+export function labelsForAct(archive: Archive, act: string): LabelAnchor[] {
   switch (act) {
-    case 1:
+    case 'land':
       return [...placeLabels(archive), ...stationLabels(archive, 'terrain')];
-    case 2:
-      return clockLabels();
-    case 3:
-      return speciesLabels(archive);
-    case 4:
+    case 'stations':
       return [...placeLabels(archive), ...stationLabels(archive, 'columns')];
-    case 5:
+    case 'chronos':
+      return clockLabels();
+    case 'season':
+      return seasonLabels(archive);
+    case 'voices':
+      return speciesLabels(archive);
+    case 'tail':
+      return tailLabels(archive);
+    case 'index':
       return siteLabels(archive);
     default:
       return [];
   }
+}
+
+/** Month rings up the season cylinder, plus what each instrument covered. */
+function seasonLabels(archive: Archive): LabelAnchor[] {
+  const out: LabelAnchor[] = [];
+  const maxDay = Math.max(archive.meta.window.days - 1, 1);
+  const yOf = (day: number) => (day / maxDay) * SEASON.height - SEASON.height / 2;
+  const monthName = new Intl.DateTimeFormat('ru-RU', { month: 'long', timeZone: 'UTC' });
+
+  let previous = '';
+  for (let day = 0; day <= maxDay; day += 1) {
+    const date = dateOf(archive, day);
+    const name = monthName.format(date);
+    if (name === previous) continue;
+    previous = name;
+    out.push({
+      id: `month-${name}`,
+      world: [-SEASON.radius - 7, yOf(day), 0],
+      title: name,
+      meta: date.toISOString().slice(0, 10),
+    });
+  }
+
+  const span = (src: 0 | 1) => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < archive.count; i += 1) {
+      if (archive.src[i] !== src) continue;
+      lo = Math.min(lo, archive.day[i]);
+      hi = Math.max(hi, archive.day[i]);
+    }
+    return { lo, hi };
+  };
+
+  const acoustic = span(0);
+  const camera = span(1);
+  out.push(
+    {
+      id: 'season-audio',
+      world: [SEASON.radius + 6, yOf((acoustic.lo + acoustic.hi) / 2), 0],
+      title: 'Акустика',
+      meta: `${acoustic.hi - acoustic.lo + 1} дней`,
+      tone: 'accent',
+    },
+    {
+      id: 'season-camera',
+      world: [SEASON.radius + 6, yOf((camera.lo + camera.hi) / 2) - 6, 0],
+      title: 'Фотоловушки',
+      meta: `${camera.hi - camera.lo + 1} дней`,
+    }
+  );
+  return out;
+}
+
+/** Names the head of the rank curve and marks where the tail begins. */
+function tailLabels(archive: Archive): LabelAnchor[] {
+  const maxCount = Math.max(...archive.species.map((s) => s.count), 1);
+  const barOf = (count: number) =>
+    1.5 + TAIL.height * (Math.log(count + 1) / Math.log(maxCount + 1)) - TAIL.height * 0.42;
+
+  const out: LabelAnchor[] = archive.species.slice(0, 4).map((s) => ({
+    id: `tail-${s.id}`,
+    world: [tailColumn(archive, s.rank), barOf(s.count) + 1.6, 0] as [number, number, number],
+    title: s.ru,
+    meta: String(s.count),
+    species: s.id,
+  }));
+
+  const once = archive.species.find((s) => s.count === 1);
+  if (once) {
+    out.push({
+      id: 'tail-once',
+      world: [tailColumn(archive, once.rank), barOf(1) + 3.2, 0],
+      title: `${archive.species.filter((s) => s.count === 1).length} вида — по одной записи`,
+      meta: 'дальше только единичные',
+      tone: 'accent',
+    });
+  }
+  return out;
 }
 
 /**
