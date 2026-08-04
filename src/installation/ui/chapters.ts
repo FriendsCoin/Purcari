@@ -18,4 +18,5 @@ export const CHAPTERS: ChapterEntry[] = [
   { id: 'species', numeral: 'III', name: 'Esp\u00e8ces' },
   { id: 'flux', numeral: 'IV', name: 'Flux' },
   { id: 'overlap', numeral: 'V', name: 'Chevauchement' },
+  { id: 'passages', numeral: 'VI', name: 'Passages' },
 ];

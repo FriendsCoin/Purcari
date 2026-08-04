@@ -1,7 +1,14 @@
 import type { PerspectiveCamera, Scene, Vector3 } from 'three';
 import type { Pointer } from './Pointer';
 
-export type ChapterId = 'chorus' | 'terroir' | 'circadian' | 'species' | 'flux' | 'overlap';
+export type ChapterId =
+  | 'chorus'
+  | 'terroir'
+  | 'circadian'
+  | 'species'
+  | 'flux'
+  | 'overlap'
+  | 'passages';
 
 /** What the WebGL layer wants the DOM overlay to display right now. */
 export interface Readout {
@@ -36,6 +43,13 @@ export interface Readout {
    * width it spans. Set by chapters that show real ground.
    */
   scale?: { metres: number; fraction: number };
+  /**
+   * Labelled ticks along the top edge, positioned in 0..1 of the viewport width.
+   * Set by chapters whose horizontal axis carries a unit a visitor has to be
+   * able to name — the eighty-night wall is unreadable without knowing where
+   * midnight is. Positions are recomputed every frame, so they track the camera.
+   */
+  axis?: { label: string; x: number }[];
 }
 
 export interface FrameContext {

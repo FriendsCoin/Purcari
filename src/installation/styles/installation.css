@@ -233,6 +233,45 @@ body {
   stroke-width: 0.5;
 }
 
+/* -------------------------------------------------------------------- axis -- */
+
+/* Hour labels for the chapters whose horizontal axis is a clock. The eighty-night
+   wall of Chapter VI is unreadable without knowing where midnight is, and the
+   labels have to move with the camera, so the engine positions them in viewport
+   pixels every frame — the same treatment as the marker and the scale bar. */
+.axis {
+  /* Out of the grid flow: the ticks are positioned in viewport pixels, and a
+     child that wide would stretch the column and push the masthead and the
+     chapter list off the panel. The offset is the page edge plus a fixed drop
+     in rem, which clears the masthead on a wide panel and a tall one alike —
+     the masthead is set in rem, so the gap does not move with the viewport. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--edge) + 4.2rem);
+  height: 1rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.axis--visible {
+  opacity: 1;
+}
+
+.axis__tick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Centred on its own tick: the box is fixed and the label sits in the middle
+     of it, so a two-character hour and a five-character one land identically. */
+  width: 5rem;
+  margin-left: -2.5rem;
+  text-align: center;
+  font-size: clamp(0.5rem, 0.62vw, 0.62rem);
+  letter-spacing: 0.24em;
+  color: var(--mist);
+}
+
 /* ---------------------------------------------------------------- chapters -- */
 
 .chapters {
@@ -254,9 +293,10 @@ body {
   align-items: baseline;
   justify-content: flex-end;
   gap: 0.9rem;
-  /* Sized for a fingertip on a wall panel, not a mouse. */
-  padding: 0.85rem 0 0.85rem 3rem;
-  min-height: 3rem;
+  /* Sized for a fingertip on a wall panel, not a mouse: comfortably past the
+     44 px minimum even with eight chapters stacked on a 720p panel. */
+  padding: 0.7rem 0 0.7rem 3rem;
+  min-height: 2.8rem;
   text-align: right;
   opacity: 0.4;
   transition: opacity 420ms ease;
@@ -561,7 +601,7 @@ body {
   }
 
   .chapter {
-    padding: 0.85rem 0;
+    padding: 0.7rem 0;
     gap: 0.55rem;
   }
 

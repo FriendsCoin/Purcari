@@ -6,6 +6,7 @@ import { ChorusScene } from './scenes/ChorusScene';
 import { CircadianScene } from './scenes/CircadianScene';
 import { FluxScene } from './scenes/FluxScene';
 import { OverlapScene } from './scenes/OverlapScene';
+import { PassagesScene } from './scenes/PassagesScene';
 import { SpeciesScene } from './scenes/SpeciesScene';
 import { TerroirScene } from './scenes/TerroirScene';
 import { atlas } from './data/atlas';
@@ -31,6 +32,7 @@ export function Installation(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
   const scalebarRef = useRef<HTMLDivElement>(null);
+  const axisRef = useRef<HTMLDivElement>(null);
   const hintRef = useRef<HTMLParagraphElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const lastReadout = useRef<ReadoutData>(EMPTY_READOUT);
@@ -62,6 +64,7 @@ export function Installation(): JSX.Element {
         // held when the chapter was entered.
         positionMarker(markerRef.current, next.marker);
         updateScalebar(scalebarRef.current, next.scale);
+        updateAxis(axisRef.current, next.axis);
       },
       onChapterChange: setChapter,
     });
@@ -72,6 +75,7 @@ export function Installation(): JSX.Element {
     instance.register(new SpeciesScene());
     instance.register(new FluxScene());
     instance.register(new OverlapScene());
+    instance.register(new PassagesScene());
     instance.setHome('chorus');
     instance.goTo('chorus', true);
     instance.start();
@@ -142,6 +146,11 @@ export function Installation(): JSX.Element {
           </div>
         </header>
 
+        {/* Hour labels for chapters whose horizontal axis is a clock. Written
+            straight to the DOM every frame, like the marker, because the ticks
+            move with the camera. */}
+        <div ref={axisRef} className="axis" aria-hidden="true" />
+
         <div className="stagebody">
           <Readout data={readout} />
           <ChapterNav active={chapter} onSelect={handleSelect} />
@@ -198,6 +207,31 @@ function positionMarker(element: HTMLDivElement | null, marker?: { x: number; y:
   }
   element.style.transform = `translate(${marker.x * window.innerWidth}px, ${marker.y * window.innerHeight}px)`;
   element.classList.add('marker--visible');
+}
+
+function updateAxis(element: HTMLDivElement | null, axis?: { label: string; x: number }[]): void {
+  if (!element) return;
+  if (!axis || axis.length === 0) {
+    element.classList.remove('axis--visible');
+    return;
+  }
+  // Ticks are reused rather than rebuilt: this runs sixty times a second, and
+  // replacing the children would thrash the DOM for text that rarely changes.
+  while (element.childElementCount > axis.length) element.lastElementChild?.remove();
+  while (element.childElementCount < axis.length) {
+    const tick = document.createElement('span');
+    tick.className = 'axis__tick';
+    element.appendChild(tick);
+  }
+  axis.forEach((tick, i) => {
+    const node = element.children[i] as HTMLElement;
+    if (node.textContent !== tick.label) node.textContent = tick.label;
+    node.style.transform = `translateX(${tick.x * window.innerWidth}px)`;
+    // A tick pushed off the panel by a zoom is hidden rather than clamped to the
+    // edge, where it would sit under a label that means something else.
+    node.style.opacity = tick.x < -0.02 || tick.x > 1.02 ? '0' : '1';
+  });
+  element.classList.add('axis--visible');
 }
 
 function updateScalebar(element: HTMLDivElement | null, scale?: { metres: number; fraction: number }): void {
