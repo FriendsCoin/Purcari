@@ -1,21 +1,33 @@
 /**
  * Chapter — "Refuge".
  *
- * Every chapter before this one describes the estate. This one makes the survey's
- * argument: Purcari holds far more life than the farmland around it, and not one
- * hectare of it is protected.
+ * Every chapter before this one describes the estate. This one asks what the
+ * estate's own choices do to it.
  *
- * One luminous column per land use, in a row, like cores drawn from the ground or
- * bottles standing in a cellar. Height is how much diversity the land carries;
- * the count of motes inside is how many species were found there, so a column's
- * total light is both readings at once. The estate's own column is gold and
- * stands on a ring; the rest are parchment fading to ash. Industrial land is a
- * stub. That contrast is the whole chapter.
+ * The row is the estate and nothing else: one column per habitat inside its own
+ * boundary — woodland, hedgerow, grassland, ravine, pond margin, tree line, the
+ * worked vineyard block, the château grounds. Height is the effective number of
+ * species that ground carries; the count of motes inside is how many species
+ * were found there, so a column's total light is both readings at once. Warm
+ * gold marks the ground the estate keeps out of production, cool marks what is
+ * worked and what is built — a statement of what each hectare *is*, not a
+ * ranking of it.
  *
- * `metric` cross-fades the row between the two surveys — camera-trap mammals and
- * BirdNET birds — in place, without reordering: the mammal reading is a jagged
- * skyline, the bird reading a high plateau with the estate on top, and industrial
- * land (which the bird survey never visited) fades out rather than pops.
+ * The two readings genuinely disagree, which is the reason to have both:
+ * grassland leads for mammals and woodland for birds, and the order of the
+ * middle of the row changes completely between them.
+ *
+ * The row is a colonnade: each reading stands on a plinth, rises through a
+ * fluted shaft and ends in a capital sitting exactly at its number. The
+ * architecture is the reading.
+ *
+ * `metric` cross-fades between the two surveys — camera-trap mammals and BirdNET
+ * birds — in place, without reordering: a fixed set of habitats rising and
+ * falling as you change who you ask.
+ *
+ * `mode` switches the row to the second reading: the three pillars the estate's
+ * published ecosystem score stands on, with the overall score drawn across as
+ * the datum they are measured against.
  *
  * Beneath everything runs the protection line: a cold sheet whose filled height
  * is `protection.protConn` of the tallest column. That figure is 0.0%, so the
@@ -27,23 +39,34 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 
-import { PALETTE, toRGB } from '../core/palette';
+import { HABITAT_LABELS, PALETTE, toRGB } from '../core/palette';
 import type { InstallationData } from '../core/types';
 import { DITHER, SIMPLEX_3D, SPRITE, TONEMAP } from './chunks';
 
 /* ------------------------------------------------------------------ layout */
 
 /**
- * Compile-time bound on the per-column uniform arrays. The survey ships seven
- * land uses; anything beyond this is dropped rather than silently overflowing
- * the arrays, which on some drivers is a black screen instead of an error.
+ * Compile-time bound on the per-column uniform arrays. The estate's twelve
+ * stations fall into ten habitats; anything beyond this is dropped rather than
+ * silently overflowing the arrays, which on some drivers is a black screen
+ * instead of an error.
  */
-const MAX_COLUMNS = 8;
+const MAX_COLUMNS = 10;
 
 /** Capacity of one column. The density gate lights a fraction of these. */
 const MOTES_PER_COLUMN = 300;
 
-const COLUMN_GAP = 1.74;
+/**
+ * Total width the row is allowed. Ten habitats have to fit the frame seven land
+ * uses did, so the gap is fitted to the count rather than fixed — capped, so a
+ * short row does not stretch into a picket fence.
+ */
+const ROW_WIDTH = 13.2;
+const MAX_COLUMN_GAP = 1.74;
+
+function columnGap(count: number): number {
+  return Math.min(MAX_COLUMN_GAP, ROW_WIDTH / Math.max(1, count - 1));
+}
 const COLUMN_RADIUS = 0.32;
 const MAX_HEIGHT = 5.0;
 /** Mote size in WORLD units — the vertex shader converts to pixels by depth. */
@@ -143,62 +166,118 @@ function reading(heightNorm: number, richness: number, maxRichness: number): Rea
   };
 }
 
-function buildColumns(data: InstallationData): ColumnLayout[] {
-  const bench = data.narrative.benchmark;
-  const birds = data.narrative.birdBenchmark;
+/**
+ * Ground the estate works or has built on. Everything else it keeps.
+ *
+ * This is a statement of what each hectare *is*, and it is deliberately not a
+ * ranking. The worked block is not the poorest ground in either reading — it
+ * outscores the tree line for mammals and both the tree line and the pond margin
+ * for birds — so colouring production as "poor" would be an argument the survey
+ * does not support. The heights do the ranking; the colour only says which
+ * ground is in production and which the estate keeps.
+ */
+const WORKED_HABITATS = new Set(['vineyard']);
+const BUILT_HABITATS = new Set(['chateau']);
+
+/** Shannon over a pooled count vector. */
+function shannon(counts: number[]): number {
+  const total = counts.reduce((sum, n) => sum + n, 0);
+  if (total <= 0) return 0;
+  let h = 0;
+  for (const n of counts) {
+    if (n <= 0) continue;
+    const p = n / total;
+    h -= p * Math.log(p);
+  }
+  return h;
+}
+
+/**
+ * One column per habitat inside the estate.
+ *
+ * Detections are pooled across every station of a habitat and the indices are
+ * computed from the pooled vector. Averaging each station's own richness would
+ * be wrong in the other direction: the two woodland stations share most of their
+ * species, so summing double-counts and averaging throws away the half of the
+ * woodland community that only one of them saw.
+ *
+ * A species the survey recorded by both methods counts in both readings. Its
+ * per-station totals are not split by method in the export, and inventing a
+ * split would be worse than counting it once in each of two separate answers.
+ */
+function buildHabitats(data: InstallationData): ColumnLayout[] {
+  const stationsByHabitat = new Map<string, string[]>();
+  for (const site of data.sites) {
+    const ids = stationsByHabitat.get(site.habitat) ?? [];
+    ids.push(site.id);
+    stationsByHabitat.set(site.habitat, ids);
+  }
+
+  interface Pooled {
+    habitat: string;
+    camera: number[];
+    sound: number[];
+  }
+
+  const pooled: Pooled[] = [];
+  for (const [habitat, ids] of stationsByHabitat) {
+    const camera: number[] = [];
+    const sound: number[] = [];
+    for (const species of data.species) {
+      let count = 0;
+      for (const id of ids) count += species.sites[id] ?? 0;
+      if (count <= 0) continue;
+      if (species.modality !== 'sound') camera.push(count);
+      if (species.modality !== 'camera') sound.push(count);
+    }
+    pooled.push({ habitat, camera, sound });
+  }
+
+  const effective = (counts: number[]) => Math.exp(shannon(counts));
+  const maxCameraEffective = Math.max(...pooled.map(p => effective(p.camera)), 1);
+  const maxSoundEffective = Math.max(...pooled.map(p => effective(p.sound)), 1);
+  const maxCameraRichness = Math.max(...pooled.map(p => p.camera.length), 1);
+  const maxSoundRichness = Math.max(...pooled.map(p => p.sound.length), 1);
 
   /**
-   * Shannon is converted to its effective number of species (exp H, the Hill
-   * number N1) before it becomes a height. This is not decoration: a Shannon of
-   * 1.00 is land behaving like 2.7 equally common species and 2.32 is land
-   * behaving like 10, and only the exponential says so. Mapping the raw index
-   * would put industrial land at 43% of the vineyard's height, which is not what
-   * the survey found. It also puts both metrics in the same unit — species — so
-   * the cross-fade compares like with like.
-   */
-  const effective = new Map(bench.map(entry => [entry.landUse, Math.exp(entry.shannon)]));
-  const maxEffective = Math.max(...effective.values(), 1);
-  const maxCameraRichness = Math.max(...bench.map(entry => entry.richness), 1);
-  const maxBirdRichness = Math.max(...birds.map(entry => entry.richness), 1);
-
-  const cameraByUse = new Map(bench.map(entry => [entry.landUse, entry]));
-  const birdByUse = new Map(birds.map(entry => [entry.landUse, entry]));
-
-  /**
-   * Row order is the camera survey's own ranking, richest first, and it never
+   * Row order is the camera reading's own ranking, richest first, and it never
    * changes with `metric`. Re-sorting on the cross-fade would slide every column
    * sideways and destroy the one thing the row is for — watching a fixed set of
-   * places rise and fall as you change who you ask. The cost is that the bird
-   * reading is not monotonic left to right, which is honest: wooded park is
-   * fourth for mammals and last for birds.
+   * places rise and fall as you change who you ask.
    */
-  const order = [...bench].sort((a, b) => b.shannon - a.shannon).map(entry => entry.landUse);
-  for (const entry of birds) if (!order.includes(entry.landUse)) order.push(entry.landUse);
+  const ordered = [...pooled]
+    .sort((a, b) => effective(b.camera) - effective(a.camera))
+    .slice(0, MAX_COLUMNS);
 
-  const kept = order.slice(0, MAX_COLUMNS);
-  const span = (kept.length - 1) * COLUMN_GAP;
+  const gap = columnGap(ordered.length);
+  const span = (ordered.length - 1) * gap;
 
-  const hero = hexColor(PALETTE.foil);
-  const rich = hexColor(PALETTE.parchment);
-  const poor = hexColor(PALETTE.ash);
+  const kept = hexColor(PALETTE.foil);
+  const worked = hexColor(PALETTE.parchment);
+  const built = hexColor(PALETTE.ash);
 
-  return kept.map((landUse, i) => {
-    const cam = cameraByUse.get(landUse);
-    const bird = birdByUse.get(landUse);
-    const self = cam?.self ?? bird?.self ?? false;
-    return {
-      landUse,
-      self,
-      x: i * COLUMN_GAP - span / 2,
-      camera: cam
-        ? reading((effective.get(landUse) ?? 1) / maxEffective, cam.richness, maxCameraRichness)
-        : null,
-      bird: bird ? reading(bird.richness / maxBirdRichness, bird.richness, maxBirdRichness) : null,
-      // Everything that is not the estate is drained toward ash down the row, so
-      // the gold column is legible in the first half-second.
-      color: self ? hero.clone() : rich.clone().lerp(poor, i / Math.max(1, kept.length - 1)),
-    };
-  });
+  return ordered.map((entry, i) => ({
+    landUse: HABITAT_LABELS[entry.habitat] ?? entry.habitat,
+    // `self` is what the caption renders in the estate's own gold; here that is
+    // every hectare the estate keeps rather than works.
+    self: !WORKED_HABITATS.has(entry.habitat) && !BUILT_HABITATS.has(entry.habitat),
+    x: i * gap - span / 2,
+    camera: reading(
+      effective(entry.camera) / maxCameraEffective,
+      entry.camera.length,
+      maxCameraRichness
+    ),
+    bird: reading(
+      effective(entry.sound) / maxSoundEffective,
+      entry.sound.length,
+      maxSoundRichness
+    ),
+    color: BUILT_HABITATS.has(entry.habitat)
+      ? built.clone()
+      : WORKED_HABITATS.has(entry.habitat)
+        ? worked.clone()
+        : kept.clone(),
+  }));
 }
 
 /**
@@ -326,7 +405,7 @@ function buildMoteGeometry(
   // Every mote's stored position sits on the baseline; the rise happens in the
   // shader, so an automatic bounding sphere would be a flat line and the row
   // would cull itself away the moment the camera looked slightly down.
-  const half = (columns.length - 1) * COLUMN_GAP * 0.5 + COLUMN_RADIUS;
+  const half = (columns.length - 1) * columnGap(columns.length) * 0.5 + COLUMN_RADIUS;
   geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
     Math.hypot(half, MAX_HEIGHT * 0.5) + 1
@@ -394,7 +473,7 @@ function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(colors, 3));
   // Heights are resolved in the shader, so the stored geometry is a flat line and
   // an automatic bounding sphere would cull the thread the moment it lifted.
-  const half = (columns.length - 1) * COLUMN_GAP * 0.5 + SKYLINE_TICK;
+  const half = (columns.length - 1) * columnGap(columns.length) * 0.5 + SKYLINE_TICK;
   geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
     Math.hypot(half, MAX_HEIGHT * 0.5) + 1
@@ -519,14 +598,15 @@ function buildShaftGeometry(
   // would be a point and the whole row would cull itself.
   geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
-    MAX_COLUMNS * COLUMN_GAP + MAX_HEIGHT
+    ROW_WIDTH + MAX_HEIGHT
   );
   return geometry;
 }
 
 /** Row half-width, including the margin the baseline and sheet run out to. */
 function rowExtent(columns: ColumnLayout[]): number {
-  return (columns.length - 1) * COLUMN_GAP * 0.5 + COLUMN_GAP * 0.85;
+  const gap = columnGap(columns.length);
+  return (columns.length - 1) * gap * 0.5 + gap * 0.85;
 }
 
 /**
@@ -1206,7 +1286,7 @@ export function Refuge({
   const focusRef = useRef(0);
   const { camera, size } = useThree();
 
-  const columns = useMemo(() => buildColumns(data), [data]);
+  const columns = useMemo(() => buildHabitats(data), [data]);
   const pillars = useMemo(() => buildPillars(data), [data]);
   const overall = data.narrative.ecosystemScore.overall;
   const hero = useMemo(() => columns.find(column => column.self) ?? null, [columns]);

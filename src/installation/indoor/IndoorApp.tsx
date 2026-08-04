@@ -40,7 +40,11 @@ interface RefugeMark {
   value: number;
 }
 
-/** The three questions the Refuge row can answer. */
+/**
+ * The three questions the Refuge row can answer. All three are about this estate
+ * and nothing outside it: what its own ground carries as the cameras see it, as
+ * the recorders hear it, and what its published ecosystem score stands on.
+ */
 const REFUGE_READINGS = [
   { label: 'Mammals', mode: 'land' as const, metric: 0 },
   { label: 'Birds', mode: 'land' as const, metric: 1 },
@@ -65,6 +69,8 @@ interface Chapter {
   lookAt: [number, number, number];
   /** Width ÷ height of the subject, so narrow viewports pull back only when needed. */
   subjectAspect: number;
+  /** Optional override of how far the camera may pull back to fit it. */
+  maxPull?: number;
 }
 
 const CHAPTERS: Chapter[] = [
@@ -103,12 +109,17 @@ const CHAPTERS: Chapter[] = [
   {
     id: 'refuge',
     label: 'Refuge',
-    title: 'Richer than\nthe fields around it',
-    lede: 'Every1Counts monitors the same way across Europe. Set beside ordinary farmland and industrial land, this estate holds far more life — and not one hectare of it is protected.',
+    title: 'A third of it\nis not a vineyard',
+    lede: 'Sixty-three hectares in every hundred are worked. The rest the estate keeps. One column per habitat inside its own boundary, and what each of them holds.',
     dwell: 38,
-    camera: [0, 2.6, 15],
+    // A wider row than the seven land uses it replaced, so the camera stands off
+    // far enough that ten capitals are in frame at once.
+    camera: [0, 2.6, 16.5],
     lookAt: [0, 1.9, 0],
-    subjectAspect: 1.9,
+    subjectAspect: 2.3,
+    // A ten-column colonnade is genuinely three times wider than it is tall, and
+    // on a phone in portrait the default limit left it running off both edges.
+    maxPull: 3.1,
   },
 ];
 
@@ -148,9 +159,9 @@ export default function IndoorApp() {
   const [flagshipOnly, setFlagshipOnly] = useState(false);
   const [refugeMetric, setRefugeMetric] = useState(0);
   /**
-   * Which question the Refuge row answers. The first two compare this estate
-   * with the land around it; the third turns the row into the three pillars the
-   * estate's own ecosystem score stands on.
+   * Which question the Refuge row answers. The first two read the estate's own
+   * habitats by each survey method; the third turns the row into the three
+   * pillars its published ecosystem score stands on.
    */
   const [refugeMode, setRefugeMode] = useState<'land' | 'ecosystem'>('land');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
@@ -170,16 +181,20 @@ export default function IndoorApp() {
   /**
    * The Refuge captions, with collisions removed.
    *
-   * Seven land-use names is about 300 px of type; on a phone in portrait the row
-   * is only 430 px wide and they overlap into an unreadable smear. Shrinking the
-   * face further would make it unreadable on the kiosk too, so instead the ones
-   * that collide are dropped — in priority order, so the label that survives is
-   * always the one that matters: the estate's own first, then whatever the
-   * visitor has selected, then left to right.
+   * Ten habitat names is well over 300 px of type; on a phone in portrait the
+   * row is only 430 px wide and they overlap into an unreadable smear. Shrinking
+   * the face further would make it unreadable on the kiosk too, so instead the
+   * ones that collide are dropped — in priority order, so the label that
+   * survives is always the one that matters: ground the estate keeps first, then
+   * whatever the visitor has selected, then left to right.
    */
   const refugeLabels = useMemo(() => {
+    // Worked and built ground outranks kept ground here, and deliberately: only
+    // two of the ten columns are in production, and dropping *those* two labels
+    // to fit the rest leaves a row that looks entirely like habitat. The rare
+    // case is the informative one.
     const rank = (mark: RefugeMark) =>
-      mark.self ? 0 : refugeSelected === mark.landUse ? 1 : 2;
+      refugeSelected === mark.landUse ? 0 : mark.self ? 2 : 1;
     const ordered = [...refugeMarks].sort((a, b) => rank(a) - rank(b) || a.x - b.x);
     const taken: { left: number; right: number }[] = [];
     const kept: RefugeMark[] = [];
@@ -411,6 +426,17 @@ export default function IndoorApp() {
 
   const lensMeta = LENSES.find((l) => l.id === lens) ?? LENSES[0];
 
+  /**
+   * The share of the estate that is not farmed and not built, straight from the
+   * published land-cover split rather than from one minus the agricultural
+   * share — the four classes are measured separately and need not sum to 1.
+   */
+  const notInProduction = data
+    ? data.narrative.landCover
+        .filter((entry) => entry.label !== 'Agricultural' && entry.label !== 'Built')
+        .reduce((sum, entry) => sum + entry.share, 0) * 100
+    : 0;
+
   return (
     <div className="inst-root inst-cursor-visible" onPointerDown={touch}>
       {data && (
@@ -426,6 +452,7 @@ export default function IndoorApp() {
             position={chapter.camera}
             lookAt={chapter.lookAt}
             subjectAspect={chapter.subjectAspect}
+            maxPull={chapter.maxPull}
             /*
               Fast enough that the camera lands with the dissolve rather than
               still gliding a second after the new chapter is fully lit — which
@@ -670,8 +697,8 @@ export default function IndoorApp() {
               {(refugeMode === 'ecosystem'
                 ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
                 : refugeMetric === 0
-                  ? 'SHANNON DIVERSITY, CAMERA TRAPS'
-                  : 'BIRD SPECIES HEARD PER SITE'
+                  ? 'EFFECTIVE SPECIES PER HABITAT · CAMERA TRAPS'
+                  : 'EFFECTIVE SPECIES PER HABITAT · RECORDERS'
               ).toUpperCase()}
             </p>
 
@@ -701,16 +728,30 @@ export default function IndoorApp() {
                 </p>
               </>
             ) : (
-              /* The tension the whole survey leaves unresolved. */
+              /*
+                What the estate does, and what the survey concludes about doing
+                it. The figure is the estate's own land cover — the share it is
+                not farming — and the practices under it are its own investment,
+                not a comparison with anybody.
+              */
               <>
                 <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
-                  {data.narrative.protection.protConn.toFixed(1)}%
+                  {notInProduction.toFixed(1)}%
                 </p>
-                <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem' }}>
-                  {data.narrative.protection.text}
+                <p className="inst-mono">OF THE ESTATE IS NOT IN PRODUCTION</p>
+                <p
+                  className="inst-body"
+                  style={{ maxWidth: '38ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
+                >
+                  {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha drip-irrigated
+                  at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
+                  {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water;{' '}
+                  {formatNumber(data.narrative.estate.organicConversionHectares)} ha converting to
+                  organic; treatments down{' '}
+                  {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%.
                 </p>
                 <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
-                  {data.narrative.protection.policy.toUpperCase()}
+                  HABITAT MOSAICS AND STRUCTURAL COMPLEXITY — EVERY1COUNTS
                 </p>
               </>
             )}

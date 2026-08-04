@@ -558,12 +558,25 @@
     display: none;
   }
 
-  /* Chapter controls stack above the totals row. */
+  /*
+   * Chapter controls stack above the totals row.
+   *
+   * In portrait there is no gutter to put them in — they sit directly over the
+   * scene, which on a chapter as wide as the colonnade means over the subject
+   * itself. A scrim rising from the bottom keeps them legible without hiding
+   * what is behind them, mirroring the title band at the top of the frame.
+   */
   .inst-corner--bl {
     bottom: calc(var(--touch) + 3.1rem + env(safe-area-inset-bottom));
     left: 0;
     right: 0;
-    padding: 0 1.1rem;
+    padding: 1.2rem 1.1rem 0;
+    background: linear-gradient(
+      0deg,
+      rgba(5, 4, 10, 0.93) 0%,
+      rgba(5, 4, 10, 0.86) 62%,
+      transparent 100%
+    );
   }
 
   /* Wall credits and the touch prompt are gallery furniture; a phone has neither. */

@@ -281,6 +281,13 @@ export function CameraRig({
    */
   subjectAspect = 1,
   /**
+   * How far the camera may be pushed back to fit a wide subject on a narrow
+   * viewport. The default stops a portrait phone from flying the camera to the
+   * far clip plane over a subject that was never going to fit anyway; a chapter
+   * whose subject genuinely is that wide — a ten-column colonnade — raises it.
+   */
+  maxPull = 2.2,
+  /**
    * 0..1 through a chapter dissolve. The camera eases back along its own axis and
    * settles again — the small pull that makes two scenes read as one continuous
    * move rather than as a cut with a cross-fade painted over it. Cinema does the
@@ -293,6 +300,7 @@ export function CameraRig({
   lookAt?: [number, number, number];
   speed?: number;
   subjectAspect?: number;
+  maxPull?: number;
   dissolve?: number;
 }) {
   const { size } = useThree();
@@ -314,9 +322,9 @@ export function CameraRig({
     desired.current
       .copy(base.current)
       .sub(target.current)
-      .multiplyScalar(Math.min(pull, 2.2))
+      .multiplyScalar(Math.min(pull, maxPull))
       .add(target.current);
-  }, [size.width, size.height, subjectAspect, position, lookAt]);
+  }, [size.width, size.height, subjectAspect, maxPull, position, lookAt]);
 
   useFrame((state, delta) => {
     const k = Math.min(1, delta * speed);
