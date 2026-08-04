@@ -74,6 +74,8 @@ export class Pointer {
   private readonly raycaster = new Raycaster();
   private readonly plane = new Plane(new Vector3(0, 0, 1), 0);
   private readonly scratch = new Vector3();
+  /** Last camera the frame loop handed in; lets a release project itself. */
+  private camera: Camera | null = null;
   private nextRipple = 0;
   private primaryId: number | null = null;
   private disposed = false;
@@ -173,12 +175,25 @@ export class Pointer {
     touch.down = false;
     // Short press that barely moved: the visitor meant to select something.
     if (touch.travel < TAP_SLOP && touch.age < TAP_TIME) {
+      // Projected here rather than trusted from the last frame. A tap released
+      // before the next frame runs — trivial on a mouse, and on a panel any time
+      // the framerate dips — would otherwise carry the origin as its world
+      // position, and every chapter that picks in world space would read that
+      // as a tap dead in the centre of itself.
+      this.projectToPlane(touch.ndc, touch.world);
       this.pendingTaps.push({ ndc: touch.ndc.clone(), world: touch.world.clone() });
       this.spawnRipple(touch.world);
     }
     if (this.primaryId === event.pointerId) this.primaryId = null;
     this.idleTime = 0;
   };
+
+  /** Ray from an NDC point onto the interaction plane. Leaves `out` alone on a miss. */
+  private projectToPlane(ndc: Vector2, out: Vector3): void {
+    if (!this.camera) return;
+    this.raycaster.setFromCamera(ndc, this.camera);
+    if (this.raycaster.ray.intersectPlane(this.plane, this.scratch)) out.copy(this.scratch);
+  }
 
   private spawnRipple(world: Vector3): void {
     this.ripples[this.nextRipple].set(world.x, world.y, world.z, 0);
@@ -195,6 +210,7 @@ export class Pointer {
 
   update(delta: number, camera: Camera): void {
     if (this.disposed) return;
+    this.camera = camera;
 
     this.drag.set(0, 0);
     let activeCount = 0;
@@ -204,10 +220,7 @@ export class Pointer {
       touch.age += delta;
 
       // Project onto the interaction plane so shaders can work in world space.
-      this.raycaster.setFromCamera(touch.ndc, camera);
-      if (this.raycaster.ray.intersectPlane(this.plane, this.scratch)) {
-        touch.world.copy(this.scratch);
-      }
+      this.projectToPlane(touch.ndc, touch.world);
 
       if (touch.down) {
         activeCount += 1;
@@ -270,6 +283,7 @@ export class Pointer {
 
   dispose(): void {
     this.disposed = true;
+    this.camera = null;
     this.element.removeEventListener('pointerdown', this.onDown);
     this.element.removeEventListener('pointermove', this.onMove);
     this.element.removeEventListener('pointerup', this.onUp);
