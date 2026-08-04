@@ -45,6 +45,8 @@ export class CircadianScene extends ChapterBase {
   /** Continuous position of the hand, 0..24. */
   private hour = 4.5;
   private scrubHold = 0;
+  /** True while a tap is holding the hand on one hour. */
+  private pinned = false;
   /** 0 on entering, 1 once the opening move has landed. */
   private flight = 0;
   private cachedReadout: Readout;
@@ -152,6 +154,8 @@ export class CircadianScene extends ChapterBase {
     this.uniforms.uReveal.value = 0;
     this.hour = peakHour - 1.5;
     this.scrubHold = 0;
+    this.pinned = false;
+    this.readoutHour = -1;
     this.flight = 0;
   }
 
@@ -160,11 +164,29 @@ export class CircadianScene extends ChapterBase {
     this.uniforms.uTime.value = ctx.time;
     this.uniforms.uReveal.value = damp(this.uniforms.uReveal.value, 1, 1.0, ctx.delta);
 
+    // Pointing at a spike is the obvious thing to do in front of a dial, so it
+    // does the obvious thing: the hand goes to that hour and stays there until
+    // it is released. The middle of the dial is the release — it is the one
+    // place on screen that carries no hour and no detections.
+    for (const tap of ctx.pointer.consumeTaps()) {
+      const radius = Math.hypot(tap.world.x, tap.world.y);
+      if (radius < R_INNER * 0.8) {
+        this.pinned = false;
+      } else {
+        this.hour = angleToHour(Math.atan2(tap.world.y, tap.world.x));
+        this.scrubHold = 0;
+        this.pinned = true;
+      }
+    }
+
     // Horizontal drag scrubs the hand; a full screen width is a bit over a day.
     const drag = ctx.pointer.dragWithInertia;
     if (Math.abs(drag.x) > 1e-5) {
       this.hour += drag.x * 14;
       this.scrubHold = RESUME_DELAY;
+      this.pinned = false;
+    } else if (this.pinned) {
+      // Held by a tap: neither the sweep nor the resume timer runs.
     } else if (this.scrubHold > 0) {
       this.scrubHold -= ctx.delta;
     } else {
@@ -173,7 +195,12 @@ export class CircadianScene extends ChapterBase {
     this.hour = ((this.hour % 24) + 24) % 24;
 
     this.uniforms.uHour.value = this.hour;
-    this.uniforms.uScrub.value = damp(this.uniforms.uScrub.value, this.scrubHold > 0 ? 1 : 0, 3, ctx.delta);
+    this.uniforms.uScrub.value = damp(
+      this.uniforms.uScrub.value,
+      this.scrubHold > 0 || this.pinned ? 1 : 0,
+      3,
+      ctx.delta
+    );
 
     this.flight = Math.min(1, this.flight + ctx.delta / 4.2);
     this.frameCamera(ctx);
@@ -209,16 +236,21 @@ export class CircadianScene extends ChapterBase {
 
   private refreshReadout(): void {
     const current = Math.floor(this.hour) % 24;
-    if (current === this.readoutHour) return;
-    this.readoutHour = current;
+    // Pinning is part of the key: holding an hour is what earns the longer list,
+    // and the readout has to change the moment the hand is held or released.
+    const key = current + (this.pinned ? 24 : 0);
+    if (key === this.readoutHour) return;
+    this.readoutHour = key;
 
     const count = atlas.hourly[current];
-    const top = speciesAtHour(current, 3);
+    // A held hour is being studied rather than watched, so it names more of what
+    // was singing in it.
+    const top = speciesAtHour(current, this.pinned ? 6 : 3);
     const isNight = current >= 21 || current < 5;
     const share = ((count / atlas.meta.total) * 100).toFixed(1);
 
     this.cachedReadout = {
-      eyebrow: 'Chapitre II · Cycle circadien',
+      eyebrow: this.pinned ? 'Chapitre II · Heure maintenue' : 'Chapitre II · Cycle circadien',
       title: formatHour(current),
       body:
         top.length > 0
@@ -257,6 +289,11 @@ function createUniforms(hour: number, touch: TouchUniforms) {
 }
 
 /** Midnight at the top, hours running clockwise — the way a visitor reads a clock. */
+/** Inverse of hourToAngle: where on the clock a finger landed, in hours. */
+function angleToHour(angle: number): number {
+  return ((((Math.PI / 2 - angle) / (Math.PI * 2)) * 24) % 24 + 24) % 24;
+}
+
 function hourToAngle(hour: number): number {
   return Math.PI / 2 - (hour / 24) * Math.PI * 2;
 }

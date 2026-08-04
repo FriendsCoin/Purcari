@@ -18,10 +18,11 @@ npm run build        # emits dist/index.html and dist/installation.html
 
 ## What is on screen
 
-Six chapters, each a full-screen realtime composition. Chapters I–IV and the
-attract state are drawn from the 2,665 detections recorded between 31 July and
-16 August 2025 by five acoustic recorders across 121 species; Chapter V comes
-from a separate camera-trap survey and says so on screen.
+Eight chapters, each a full-screen realtime composition. Chapters I–IV, VII and
+the attract state are drawn from the 2,665 detections recorded between 31 July
+and 16 August 2025 by five acoustic recorders across 121 species; Chapters V and
+VI come from the camera traps — a different survey, a different method — and say
+so on screen.
 
 | | Chapter | What it shows | Touch |
 |---|---|---|---|
@@ -31,6 +32,8 @@ from a separate camera-trap survey and says so on screen.
 | III | **Espèces** | 121 species positioned by *when* they sing — the angle of each node is the circular mean of its 24-hour profile, so the dawn chorus gathers on one side and the owls and nightjars drift to the other. Distance from the centre is inverse abundance. Links join species with similar daily rhythms. | Drag to rotate, tap a node to select it |
 | IV | **Flux** | The seventeen days of the survey as a river of light, thinning from 347 detections on 4 August to one on the last three days. | Drag left/right to scrub the day |
 | V | **Chevauchement** | Eighteen camera-trap species and the correlation between their daily rhythms, as a ring of chords. Warm means two species are out at the same hours, cool means they avoid each other. The highlight walks the ring on its own. | Tap a species to hold it |
+| VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
+| VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
 
 ### What Chapter I is made of
 
@@ -91,9 +94,18 @@ Geographics), free to use with attribution, which the footer carries. For a
 permanent commercial installation this should be licensed imagery — or better,
 the estate's own drone orthophoto. Only `TILE_URL` in the fetch script changes.
 
-Two ideas run through all six so a visitor keeps their bearings: **midnight is
+Two ideas run through all eight so a visitor keeps their bearings: **midnight is
 up and hours run clockwise** everywhere a clock appears, and **colour always
-means ecological guild** (the legend in the footer is the only key needed).
+means ecological guild** (the legend in the footer is the only key needed). The
+two camera-trap chapters have no guilds to colour by, so they swap the legend for
+wild mammals / birds / domestic animals — and they use the same three hues as
+each other, because they are the same fifteen animals.
+
+A species picked in one chapter stays picked in the next. The selection is a
+French vernacular name held in `engine/selection.ts`, which is the only thing the
+three datasets have in common; a chapter that has never heard of the animal simply
+opens unselected. Holding the red fox in VI and walking to V is the intended way
+to read the two camera-trap chapters against each other.
 
 ### What Chapter V is made of, and where its numbers come from
 
@@ -140,6 +152,28 @@ the birds, because dogs are walked in daylight. Neighbours on the ring share
 their hours; opposite sides never meet. The strongest relationships in the whole
 matrix are avoidances: pheasant/wild boar -0.85, badger/pheasant -0.85.
 
+### What Chapter VI is made of
+
+The camera-trap export: 350 records, 367 passages (fourteen records carry more
+than one animal), 15 species, 8 traps, 29 May to 16 August 2025. Sixty-nine of
+the eighty days carry a passage; the other eleven are drawn as the empty rows
+they are, because nothing walking past a lens is data too.
+
+Timestamps carry no timezone and are used as written, the same conclusion the
+acoustic atlas reached for the same site. Read raw, the badger comes out 91 %
+nocturnal with a peak at 02:00 and the pheasant 4 % nocturnal with a peak at
+14:00 — both exactly right. Shifting by Moldova's +3 would put the badger's peak
+around sunrise, back at the sett.
+
+The night band is not drawn from those timestamps but from the sun: NOAA's solar
+position equations, evaluated per day at the survey origin (`data/solar.ts`).
+It is the one part of the chapter that is not measurement, and it is what makes
+the measurement legible — 8 h 10 of dark at the solstice, 9 h 50 by mid-August.
+
+```
+npm run passages   # camera traps  20251110_100018.csv -> passages.json (14 KB)
+```
+
 ### A note on the decline in Chapter IV
 
 The daily counts fall away across the survey. That is the listening effort
@@ -157,6 +191,15 @@ Designed for a wall panel with no cursor, no keyboard and no scroll:
   waiting for the full tap reads as an unresponsive interface.
 - Up to six simultaneous touches push and light the particle fields in every
   chapter; a tap that barely moves also spawns an expanding ripple.
+- A tap is projected onto the chapter's interaction plane **at the moment it is
+  released**, not read from the last frame. A tap released between two frames —
+  routine on a mouse, and on the panel whenever the framerate dips — would
+  otherwise arrive carrying the world origin, which every chapter that picks in
+  world space reads as a tap dead in its own centre.
+- Where something plays on its own — the circadian hand, the river of days — a
+  tap **holds it**: the hand goes to the hour you pointed at and stays. Tapping
+  the middle of the dial, or the day already held, hands it back. A held hour
+  also names more of what was singing in it.
 - A flick keeps spinning after release, then the framing eases back toward a
   composed one — so a visitor who spins the camera and walks away leaves the
   piece looking intentional for the next person.
@@ -189,6 +232,7 @@ scripts/build-installation-atlas.mjs   bakes data.geojson -> atlas.json
 scripts/fetch-basemap.mjs              stitches map tiles -> basemap*.jpg
 scripts/fetch-terrain.mjs              fetches SRTM       -> terrain.json
 scripts/extract-overlap-matrix.mjs     reads the deck     -> overlap.json
+scripts/build-passages-atlas.mjs       bakes the CT export -> passages.json
 public/installation/                   the two basemap layers
 src/installation/
   main.tsx                        bootstrap (deliberately no StrictMode)
@@ -198,6 +242,7 @@ src/installation/
     PostFX.ts                     bloom chain + composite grade (the look)
     Pointer.ts                    multi-touch, taps, ripples, inertia, idle clock
     Scene.ts                      Chapter and Readout contracts
+    selection.ts                  the species held across chapters
     glsl.ts                       shared GLSL chunks
     blending.ts                   true additive blending
     palette.ts                    colours and ecological guilds
@@ -205,11 +250,15 @@ src/installation/
     ChapterBase.ts                camera rig + touch uniform plumbing
     ChorusScene.ts  TerroirScene.ts  CircadianScene.ts
     SpeciesScene.ts FluxScene.ts  OverlapScene.ts
+    PassagesScene.ts              the eighty-night actogram
+    TailScene.ts                  the abundance ranking
   data/
     atlas.ts / atlas.json         the baked detections
     basemap.ts / basemap.json     the aerial layers: bounds, projection, extent
     terrain.ts / terrain.json     elevations, now only quoted as figures
     overlap.ts / overlap.json     the camera-trap correlation matrix
+    passages.ts / passages.json   the camera-trap records, one row per passage
+    solar.ts                      sunrise and sunset, for the night band in VI
   ui/                             Readout, ChapterNav, Sparkline, Diagnostics
   styles/installation.css         overlay chrome (no Tailwind in this bundle)
 ```
@@ -225,6 +274,7 @@ npm run atlas      # detections   data.geojson (3.4 MB) -> atlas.json   (51 KB)
 npm run basemap    # aerial       380 map tiles         -> basemap*.jpg (3.1 MB)
 npm run terrain    # elevation    SRTM via opentopodata -> terrain.json (17 KB)
 npm run overlap -- <heatmap.png>   # chapter V matrix   -> overlap.json  (7 KB)
+npm run passages   # camera traps 20251110_100018.csv    -> passages.json (14 KB)
 ```
 
 `npm run basemap` needs a raster library that the project deliberately does not

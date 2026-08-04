@@ -9,6 +9,7 @@ import {
 import { ADDITIVE } from '../engine/blending';
 import { EASING, HASH, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, TOUCH_UNIFORMS } from '../engine/glsl';
 import { color, guildColorArray, guildCss, guildIndex, PALETTE } from '../engine/palette';
+import { speciesSelection } from '../engine/selection';
 import type { FrameContext, Readout } from '../engine/Scene';
 import { atlas, formatHour, normalisedHourly, type AtlasSpecies } from '../data/atlas';
 import { ChapterBase, clamp, damp, type TouchUniforms } from './ChapterBase';
@@ -260,10 +261,14 @@ export class SpeciesScene extends ChapterBase {
   enter(): void {
     super.enter();
     this.uniforms.uReveal.value = 0;
-    this.selected = null;
     this.selectStrength = 0;
     this.flight = 0;
     this.desired.radius = this.restSpherical.radius * 1.3;
+
+    // Whatever was held elsewhere, if this survey heard it.
+    const carried = speciesSelection.name;
+    const index = carried ? atlas.species.findIndex(s => s.name === carried) : -1;
+    this.selected = index >= 0 ? index : null;
   }
 
   update(ctx: FrameContext): void {
@@ -274,6 +279,7 @@ export class SpeciesScene extends ChapterBase {
     for (const tap of ctx.pointer.consumeTaps()) {
       const hit = this.pickNode(tap.ndc.x, tap.ndc.y);
       this.selected = hit === this.selected ? null : hit;
+      speciesSelection.set(this.selected === null ? null : atlas.species[this.selected].name);
     }
 
     this.selectStrength = damp(this.selectStrength, this.selected === null ? 0 : 1, 2.6, ctx.delta);

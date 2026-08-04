@@ -11,8 +11,9 @@ The repository holds two front ends built from the same survey:
 
 - **The dashboard** (`/`) — analysis, maps, hypothesis testing, exports.
 - **Le Chœur** (`/installation.html`) — a media-art installation for the
-  touchscreen in the château. Five WebGL chapters driven by the real detections,
-  built on Three.js with hand-written GLSL. See
+  touchscreen in the château. Seven WebGL chapters and an attract state, driven
+  by the real detections and the camera-trap records, built on Three.js with
+  hand-written GLSL. See
   [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Features

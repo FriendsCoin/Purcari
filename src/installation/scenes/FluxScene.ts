@@ -46,6 +46,8 @@ export class FluxScene extends ChapterBase {
   /** Continuous playhead across the record, 0..dayCount. */
   private day = 0;
   private scrubHold = 0;
+  /** True while a tap is holding the playhead on one day. */
+  private pinned = false;
   private cachedReadout: Readout;
   private readoutDay = -1;
 
@@ -195,6 +197,8 @@ export class FluxScene extends ChapterBase {
     this.uniforms.uReveal.value = 0;
     this.day = 0;
     this.scrubHold = 0;
+    this.pinned = false;
+    this.readoutDay = -1;
   }
 
   update(ctx: FrameContext): void {
@@ -203,10 +207,26 @@ export class FluxScene extends ChapterBase {
     this.uniforms.uReveal.value = damp(this.uniforms.uReveal.value, 1, 0.85, ctx.delta);
 
     const lastDay = atlas.days.length - 1;
+
+    // Tapping the river stops it on that day, which is the only way to read a
+    // day that lasts a second and a half. Tapping the held day lets it run.
+    for (const tap of ctx.pointer.consumeTaps()) {
+      const target = clamp((tap.world.x / SPAN + 0.5) * lastDay, 0, lastDay);
+      const sameDay = this.pinned && Math.abs(target - this.day) < 0.75;
+      this.pinned = !sameDay;
+      if (this.pinned) {
+        this.day = target;
+        this.scrubHold = 0;
+      }
+    }
+
     const drag = ctx.pointer.dragWithInertia;
     if (Math.abs(drag.x) > 1e-5) {
       this.day = clamp(this.day + drag.x * atlas.days.length * 0.6, 0, lastDay);
       this.scrubHold = RESUME_DELAY;
+      this.pinned = false;
+    } else if (this.pinned) {
+      // Held by a tap: the record waits.
     } else if (this.scrubHold > 0) {
       this.scrubHold -= ctx.delta;
     } else {
@@ -216,7 +236,12 @@ export class FluxScene extends ChapterBase {
     }
 
     this.uniforms.uDay.value = Math.min(this.day, lastDay);
-    this.uniforms.uScrub.value = damp(this.uniforms.uScrub.value, this.scrubHold > 0 ? 1 : 0, 3, ctx.delta);
+    this.uniforms.uScrub.value = damp(
+      this.uniforms.uScrub.value,
+      this.scrubHold > 0 || this.pinned ? 1 : 0,
+      3,
+      ctx.delta
+    );
 
     this.frameCamera(ctx);
     this.refreshReadout();
@@ -249,14 +274,15 @@ export class FluxScene extends ChapterBase {
 
   private refreshReadout(): void {
     const index = clamp(Math.round(this.day), 0, atlas.days.length - 1);
-    if (index === this.readoutDay) return;
-    this.readoutDay = index;
+    const key = index + (this.pinned ? atlas.days.length : 0);
+    if (key === this.readoutDay) return;
+    this.readoutDay = key;
 
     const day = atlas.days[index];
     const share = ((day.count / maxDaily) * 100).toFixed(0);
 
     this.cachedReadout = {
-      eyebrow: 'Chapitre IV · Flux',
+      eyebrow: this.pinned ? 'Chapitre IV · Jour maintenu' : 'Chapitre IV · Flux',
       title: formatDay(day.date),
       body:
         index === 0

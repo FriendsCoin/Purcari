@@ -2,6 +2,7 @@ import { BufferAttribute, BufferGeometry, DoubleSide, MathUtils, Mesh, Points, S
 import { ADDITIVE } from '../engine/blending';
 import { EASING, HASH, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, TOUCH_UNIFORMS } from '../engine/glsl';
 import { color, PALETTE } from '../engine/palette';
+import { speciesSelection } from '../engine/selection';
 import type { FrameContext, Readout } from '../engine/Scene';
 import {
   overlap,
@@ -235,11 +236,17 @@ export class OverlapScene extends ChapterBase {
   enter(): void {
     super.enter();
     this.uniforms.uReveal.value = 0;
-    this.selected = null;
-    this.held = false;
     this.cycleIndex = 0;
     this.cycleTimer = 0;
     this.flight = 0;
+
+    // A species held in another chapter carries over. Ten of these eighteen are
+    // also in Chapter VI, so walking between the two keeps the same animal lit.
+    const carried = speciesSelection.name;
+    const index = carried ? overlapSpecies.findIndex(s => s.fr === carried) : -1;
+    this.selected = index >= 0 ? index : null;
+    this.held = index >= 0;
+    if (index >= 0) this.cycleIndex = this.slotOf[index];
   }
 
   update(ctx: FrameContext): void {
@@ -260,6 +267,7 @@ export class OverlapScene extends ChapterBase {
         this.held = true;
         this.cycleTimer = 0;
       }
+      speciesSelection.set(this.selected === null ? null : overlapSpecies[this.selected].fr);
     }
 
     if (!this.held) {
