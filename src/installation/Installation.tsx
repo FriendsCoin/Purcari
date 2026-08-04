@@ -8,6 +8,7 @@ import { FluxScene } from './scenes/FluxScene';
 import { OverlapScene } from './scenes/OverlapScene';
 import { PassagesScene } from './scenes/PassagesScene';
 import { SpeciesScene } from './scenes/SpeciesScene';
+import { TailScene } from './scenes/TailScene';
 import { TerroirScene } from './scenes/TerroirScene';
 import { atlas } from './data/atlas';
 import { ChapterNav } from './ui/ChapterNav';
@@ -76,6 +77,7 @@ export function Installation(): JSX.Element {
     instance.register(new FluxScene());
     instance.register(new OverlapScene());
     instance.register(new PassagesScene());
+    instance.register(new TailScene());
     instance.setHome('chorus');
     instance.goTo('chorus', true);
     instance.start();

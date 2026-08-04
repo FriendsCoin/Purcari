@@ -8,7 +8,8 @@ export type ChapterId =
   | 'species'
   | 'flux'
   | 'overlap'
-  | 'passages';
+  | 'passages'
+  | 'tail';
 
 /** What the WebGL layer wants the DOM overlay to display right now. */
 export interface Readout {
