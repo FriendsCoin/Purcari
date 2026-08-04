@@ -184,7 +184,7 @@ export const CHRONOS_RINGS = { inner: CHRONOS_INNER, outer: CHRONOS_OUTER };
 // ---------------------------------------------------------------------------
 // SEASON — the chronos dial extruded through eighty days
 // ---------------------------------------------------------------------------
-export const SEASON = { radius: 21, height: 46 };
+export const SEASON = { radius: 18, height: 56 };
 
 /**
  * Same angular mapping as the dial, so the morph out of act III is a lift
@@ -218,13 +218,18 @@ export function layoutSeason(ctx: LayoutContext): Layout {
 // ---------------------------------------------------------------------------
 // TAIL — rank abundance, built out of the detections themselves
 // ---------------------------------------------------------------------------
-export const TAIL = { width: 74, height: 26 };
+export const TAIL = { near: 22, far: -74, height: 24 };
 
 /**
  * One column per species, ordered by abundance, each column made of that
  * species' own grains. The height is log-scaled or the 255 of the commonest
  * would flatten the 33 species heard exactly once into the floor — and those
  * are the point.
+ *
+ * The rank axis runs away from the camera rather than across it. A row 136
+ * columns wide will not fit a frame that also holds a readout panel, and
+ * perspective does something the flat version cannot: the rare end genuinely
+ * recedes, trailing off toward a vanishing point.
  */
 export function layoutTail(ctx: LayoutContext): Layout {
   const { archive, base } = ctx;
@@ -241,22 +246,23 @@ export function layoutTail(ctx: LayoutContext): Layout {
     const species = archive.species[spId];
     const rank = species.rank;
 
-    const x = (rank / Math.max(total - 1, 1) - 0.5) * TAIL.width;
+    const z = tailColumn(archive, rank);
     const bar = 1.5 + TAIL.height * (Math.log(species.count + 1) / Math.log(maxCount + 1));
     const k = seen[spId]++ / Math.max(species.count, 1);
 
-    out.position[i * 3] = x + (rnd() - 0.5) * 0.32;
-    out.position[i * 3 + 1] = k * bar - TAIL.height * 0.42;
-    out.position[i * 3 + 2] = (rnd() - 0.5) * 0.9;
+    out.position[i * 3] = (rnd() - 0.5) * 1.1;
+    out.position[i * 3 + 1] = k * bar - 6;
+    out.position[i * 3 + 2] = z + (rnd() - 0.5) * 0.3;
     out.size[i] = base.size[i];
   }
   out.color.set(base.color);
   return out;
 }
 
-/** Where a species' column stands, for labels and guides. */
+/** Depth of a species' column along the rank axis, for labels and guides. */
 export function tailColumn(archive: Archive, rank: number): number {
-  return (rank / Math.max(archive.species.length - 1, 1) - 0.5) * TAIL.width;
+  const t = rank / Math.max(archive.species.length - 1, 1);
+  return TAIL.near + t * (TAIL.far - TAIL.near);
 }
 
 // ---------------------------------------------------------------------------

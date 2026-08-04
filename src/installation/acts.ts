@@ -124,7 +124,7 @@ export const ACTS: ActDefinition[] = [
         `Плотный воротник наверху не всплеск жизни, а включённый микрофон.`
       );
     },
-    camera: { position: [0, 6, 92], target: [0, 0, 0], fov: 38 },
+    camera: { position: [0, 48, 92], target: [0, 0, 0], fov: 38 },
     orbit: 0.05,
     drift: 0.26,
     build: layoutSeason,
@@ -164,8 +164,10 @@ export const ACTS: ActDefinition[] = [
         `а первая десятка — ${Math.round((top / all) * 100)} % всего архива. Хвост и есть разнообразие.`
       );
     },
-    camera: { position: [4, 12, 62], target: [0, -1, 0], fov: 36 },
-    orbit: 0.012,
+    camera: { position: [38, 21, 57], target: [0, 2, -20], fov: 40 },
+    // A rank curve is a chart: the orbit accumulates session time, so any
+    // non-zero value would eventually swing it round and read as nonsense.
+    orbit: 0,
     drift: 0.22,
     build: layoutTail,
     panel: 'tail',

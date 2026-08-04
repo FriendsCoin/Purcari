@@ -99,11 +99,11 @@ function seasonLabels(archive: Archive): LabelAnchor[] {
 function tailLabels(archive: Archive): LabelAnchor[] {
   const maxCount = Math.max(...archive.species.map((s) => s.count), 1);
   const barOf = (count: number) =>
-    1.5 + TAIL.height * (Math.log(count + 1) / Math.log(maxCount + 1)) - TAIL.height * 0.42;
+    1.5 + TAIL.height * (Math.log(count + 1) / Math.log(maxCount + 1)) - 6;
 
   const out: LabelAnchor[] = archive.species.slice(0, 4).map((s) => ({
     id: `tail-${s.id}`,
-    world: [tailColumn(archive, s.rank), barOf(s.count) + 1.6, 0] as [number, number, number],
+    world: [0, barOf(s.count) + 1.8, tailColumn(archive, s.rank)] as [number, number, number],
     title: s.ru,
     meta: String(s.count),
     species: s.id,
@@ -113,7 +113,7 @@ function tailLabels(archive: Archive): LabelAnchor[] {
   if (once) {
     out.push({
       id: 'tail-once',
-      world: [tailColumn(archive, once.rank), barOf(1) + 3.2, 0],
+      world: [0, barOf(1) + 5, tailColumn(archive, once.rank)],
       title: `${archive.species.filter((s) => s.count === 1).length} вида — по одной записи`,
       meta: 'дальше только единичные',
       tone: 'accent',

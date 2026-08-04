@@ -73,9 +73,12 @@
   color: inherit;
   background: none;
   border: 0;
-  padding: 0;
   cursor: none;
 }
+
+/* Deliberately no `padding: 0` above: `.inst button` outranks single-class
+   component selectors like `.pill`, and silently flattened every button in the
+   transport bar into bare text. Components set their own padding. */
 
 /* ---------------------------------------------------------------- masthead */
 
@@ -426,11 +429,26 @@
 
 .transport {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(14px, 2.4vw, 40px);
+  gap: 14px clamp(16px, 2.4vw, 36px);
   padding-top: 16px;
   border-top: 1px solid var(--hair);
+}
+
+/* Eight acts plus a scrubber plus the controls do not fit on one line, so the
+   time slider takes a row of its own and gets the full width it needs. */
+.acts {
+  grid-area: 1 / 1 / 2 / -1;
+}
+
+.scrub {
+  grid-area: 2 / 1;
+}
+
+.controls {
+  grid-area: 2 / 2;
+  justify-content: flex-end;
 }
 
 .acts {
@@ -471,7 +489,7 @@
   text-transform: uppercase;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
   .acts__name {
     display: none;
   }
