@@ -27,6 +27,7 @@ export interface ActDefinition {
   subtitle: string;
   caption: (a: Archive) => string;
   camera: { position: [number, number, number]; target: [number, number, number]; fov: number };
+  /** Sway amplitude in radians — bounded, never a full revolution. */
   orbit: number;
   drift: number;
   build: (ctx: LayoutContext) => Layout;
@@ -47,7 +48,7 @@ export const ACTS: ActDefinition[] = [
       `${nf.format(a.meta.counts.detections)} регистраций · ${a.meta.counts.species} видов · ` +
       `${a.meta.counts.stations} станций · ${a.meta.window.days} дней`,
     camera: { position: [0, 5, 78], target: [0, 0, 0], fov: 42 },
-    orbit: 0.018,
+    orbit: 0.5,
     drift: 0.85,
     build: layoutDormant,
     panel: 'summary',
@@ -67,7 +68,7 @@ export const ACTS: ActDefinition[] = [
       );
     },
     camera: { position: [34, 88, 88], target: [-8, 8, 8], fov: 36 },
-    orbit: 0.03,
+    orbit: 0.32,
     drift: 0.4,
     build: layoutTerrain,
     panel: 'stations',
@@ -82,7 +83,7 @@ export const ACTS: ActDefinition[] = [
       `${a.meta.counts.stationsActive} станции работают, ${a.meta.counts.stationsLost} замолчали — ` +
       `оборудование потеряно летом 2025 года.`,
     camera: { position: [38, 92, 90], target: [-8, 18, 8], fov: 36 },
-    orbit: 0.034,
+    orbit: 0.3,
     drift: 0.28,
     build: layoutStations,
     panel: 'network',
@@ -104,7 +105,7 @@ export const ACTS: ActDefinition[] = [
       );
     },
     camera: { position: [0, 68, 56], target: [0, 3, 0], fov: 38 },
-    orbit: 0.02,
+    orbit: 0.45,
     drift: 0.22,
     build: layoutChronos,
     panel: 'clock',
@@ -125,7 +126,7 @@ export const ACTS: ActDefinition[] = [
       );
     },
     camera: { position: [0, 48, 92], target: [0, 0, 0], fov: 38 },
-    orbit: 0.05,
+    orbit: 0.6,
     drift: 0.26,
     build: layoutSeason,
     panel: 'season',
@@ -141,7 +142,7 @@ export const ACTS: ActDefinition[] = [
       return `${a.meta.counts.species} вида. В центре — массовые, по краю — ${once} видов, записанных единственный раз.`;
     },
     camera: { position: [2, 26, 56], target: [0, 0, 0], fov: 42 },
-    orbit: 0.038,
+    orbit: 0.42,
     drift: 0.3,
     build: layoutVoices,
     panel: 'species',
@@ -167,7 +168,7 @@ export const ACTS: ActDefinition[] = [
     camera: { position: [38, 21, 57], target: [0, 2, -20], fov: 40 },
     // A rank curve is a chart: the orbit accumulates session time, so any
     // non-zero value would eventually swing it round and read as nonsense.
-    orbit: 0,
+    orbit: 0.1,
     drift: 0.22,
     build: layoutTail,
     panel: 'tail',
@@ -185,7 +186,7 @@ export const ACTS: ActDefinition[] = [
       return `Индекс Шеннона: ${best.site} ${best.shannon.toFixed(2)} против ${worst.shannon.toFixed(2)} в зоне «${worst.site}».`;
     },
     camera: { position: [14, 10, 84], target: [14, -2, 0], fov: 40 },
-    orbit: 0.05,
+    orbit: 0.14,
     drift: 0.5,
     build: layoutBloom,
     panel: 'diversity',

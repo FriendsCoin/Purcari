@@ -33,6 +33,9 @@ interface Props {
   seconds?: number;
 }
 
+/** One sway every ninety seconds or so — slow enough to read as drift. */
+const SWAY_RATE = 0.07;
+
 const EASE = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 export function Rig({ act, pointer, pointerWorld, transition, enabled = true, seconds = 2.8 }: Props) {
@@ -69,14 +72,23 @@ export function Rig({ act, pointer, pointerWorld, transition, enabled = true, se
     travel.current = 0;
   }, [act]);
 
-  /** Where an act's camera rests, carried around its own subject by the orbit. */
+  /**
+   * Where an act's camera rests, swayed slowly around its own subject.
+   *
+   * The sway is bounded rather than accumulating. An orbit that simply adds up
+   * looks fine for a minute and then quietly ruins every act that is a
+   * comparison — after half an hour the four diversity blooms are edge-on and
+   * the rank curve faces backwards. An installation runs for hours, so the
+   * composition has to survive hour three as well as minute one.
+   */
   function resting(definition: ActDefinition, out: Vector3): Vector3 {
     const [px, py, pz] = definition.camera.position;
     const [tx, , tz] = definition.camera.target;
     const relX = px - tx;
     const relZ = pz - tz;
     const radius = Math.hypot(relX, relZ);
-    const phase = Math.atan2(relZ, relX) + orbit.current * definition.orbit;
+    const phase =
+      Math.atan2(relZ, relX) + Math.sin(orbit.current * SWAY_RATE) * definition.orbit;
     return out.set(tx + Math.cos(phase) * radius, py, tz + Math.sin(phase) * radius);
   }
 

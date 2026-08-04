@@ -11,8 +11,8 @@ An interactive data visualization dashboard for analyzing biodiversity monitorin
 
 The front door of the app is **Живой архив**, a WebGL installation piece built on
 the same monitoring data. It renders one particle per real detection — 3 015 of
-them — as a single cloud of light that reorganises itself into six readings of
-the 2025 season. It is meant to run unattended on a wall or projector as much as
+them — as a single cloud of light that reorganises itself into eight readings of
+the 2025 season, and any grain of it can be clicked and read back. It is meant to run unattended on a wall or projector as much as
 in a browser tab, so it plays itself when nobody is driving.
 
 Open it at `/`; the analytical dashboard lives at `/#dashboard`.
@@ -41,16 +41,21 @@ A project site is served from a subdirectory, so the build takes its prefix from
 For any other static host, build with the prefix that host uses — `VITE_BASE_PATH=/
 npm run build` for a domain root — and upload `dist/`.
 
-### The six acts
+### The eight acts
+
+They run in four pairs — place, time, community, measure — so the landscape
+stays on stage across two consecutive acts instead of appearing twice.
 
 | # | Act | What the cloud becomes |
 |---|-----|------------------------|
 | 00 | Пролог | A dormant shell of grains behind the title |
 | I | Земля | Plumes of light at the ten stations' true coordinates, over the real relief of the estate |
-| II | Хронос | A 24-hour dial — acoustic inside, camera traps outside |
-| III | Голоса | 136 species as a spiral galaxy, common at the core, single records at the rim, linked where they share a station |
-| IV | Станции | Helical columns per station; the five silenced ones burn down to ember and ash |
-| V | Индекс | Four land uses as blooms, sized and shaped by their Shannon and Simpson indices |
+| II | Станции | Helical columns per station; the five silenced ones burn down to ember and ash |
+| III | Хронос | A 24-hour dial — acoustic inside, camera traps outside |
+| IV | Сезон | The same dial extruded through 80 days: hour around, day up the axis |
+| V | Голоса | 136 species as a spiral galaxy, common at the core, single records at the rim, linked where they share a station |
+| VI | Хвост | Rank abundance running away from the camera, each column built from that species' own grains |
+| VII | Индекс | Four land uses as blooms, sized and shaped by their Shannon and Simpson indices |
 
 ### The place is the real one
 
@@ -85,18 +90,32 @@ the geometry uses the DEM so nothing floats.
   networks, and the piece says so rather than smoothing it away.
 - Five of ten stations fell silent in June and August 2025. The gap is rendered,
   not hidden.
+- The two networks did not cover the same season at all: the camera traps ran 69
+  days, the microphones 14. August looks like an explosion of life only because
+  that is when the microphone was switched on, and Сезон says so on its face.
+- **69 of 136 species were recorded five times or fewer**, 33 exactly once, while
+  the top ten account for half the archive. That long tail is what the Shannon
+  and Simpson indices are measuring.
 
 ### Controls
 
 | Input | Action |
 |-------|--------|
 | `←` `→`, scroll, swipe | Previous / next act |
-| `0`–`5` | Jump to an act |
+| `0`–`7` | Jump to an act |
+| Click a grain | Read that detection back: species, station, date, minute, instrument |
 | Space | Toggle autoplay |
 | `P` | Play the season back day by day |
 | Drag the 24 h track | Narrow the cloud to a slice of the day |
-| Click the track / `Esc` | Reset to the full day |
+| Птицы / Звери / Домашние | Keep one group, dim the rest |
+| `Esc` | Peel back one layer: selection, then filter, then the time slice |
+| `?` | Controls overlay |
 | Hover a panel row | Focus those grains in the cloud |
+
+Picking projects the act's layout positions and takes the nearest to the pointer
+rather than raycasting — GL points have no geometry to hit, and a two-pixel
+sprite is a cruel target. Drags never select, and picking waits for the cloud to
+settle rather than chasing a moving grain.
 
 Left idle for 45 seconds the piece resumes autoplay on its own.
 
@@ -113,6 +132,13 @@ The camera never cuts. Between acts it flies a bowed Bézier around the subject
 while bloom, exposure and lens aberration lift on a `sin(πt)` bell, so a move
 reads as travel rather than a dissolve. Nothing is mounted or unmounted mid-
 transition — every layer cross-fades.
+
+At rest the camera sways rather than orbits. An orbit that accumulates looks
+fine for a minute and then quietly ruins every act that is a comparison: after
+half an hour the four diversity blooms are edge-on and the rank curve faces
+backwards. A bounded sway keeps the frame alive and the composition intact at
+hour three as well as minute one — which is the case that matters for a piece
+left running on a wall.
 
 Terrain, parcels and buildings are triangulated and draped at load time by
 `landscapeGeometry.ts`, including an ear-clipping triangulator and a scanline row
