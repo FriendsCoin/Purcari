@@ -15,6 +15,8 @@ import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
 import { Refuge, type RefugeMode } from '../gl/Refuge';
+import { Unseen } from '../gl/Unseen';
+import { buildRings } from '../gl/unseenRings';
 import '../ui/installation.css';
 
 /**
@@ -29,7 +31,7 @@ import '../ui/installation.css';
  * animals living on top of it, and calls the result the estate's other harvest.
  */
 
-type ChapterId = 'estate' | 'year' | 'choir' | 'refuge';
+type ChapterId = 'estate' | 'year' | 'choir' | 'unseen' | 'refuge';
 
 /** Where one Refuge column's foot sits on screen, reported by the scene itself. */
 interface RefugeMark {
@@ -109,6 +111,18 @@ const CHAPTERS: Chapter[] = [
     subjectAspect: 1.7,
   },
   {
+    id: 'unseen',
+    label: 'The Unseen',
+    title: 'What a year\nstill missed',
+    lede: 'Chao1 estimates a place’s true richness from how many species were caught only once or twice. One ring per station, filled as far as the count got and then broken. The estate closes furthest — because what one station missed, another caught.',
+    dwell: 36,
+    // Standing off far enough that the outermost ring has air around it: the
+    // spiral of open ends is the figure, and it needs somewhere to be seen.
+    camera: [0, 0, 16.8],
+    lookAt: [0, 0, 0],
+    subjectAspect: 1.0,
+  },
+  {
     id: 'refuge',
     label: 'Refuge',
     title: 'What the estate\ndoes to it',
@@ -168,6 +182,8 @@ export default function IndoorApp() {
   const [refugeMode, setRefugeMode] = useState<RefugeMode>('practices');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
+  /** Which ring of The Unseen is chosen — a station id, 'ESTATE', or null. */
+  const [unseenSelected, setUnseenSelected] = useState<string | null>(null);
   /**
    * The hour the estate is shown at. Starts at the château's real local time,
    * so a visitor first meets the estate as it is right now, and can then scrub
@@ -212,6 +228,9 @@ export default function IndoorApp() {
     }
     return kept;
   }, [refugeMarks, refugeSelected]);
+
+  /** The Unseen's rings, in the same order the scene draws them. */
+  const rings = useMemo(() => (data ? buildRings(data) : []), [data]);
 
   const idleTimer = useRef<number | null>(null);
   const chapter = CHAPTERS[chapterIndex];
@@ -400,6 +419,23 @@ export default function IndoorApp() {
             onLayout={interactive ? setRefugeMarks : undefined}
           />
         );
+      case 'unseen':
+        return (
+          <Unseen
+            key="unseen"
+            data={data}
+            reveal={reveal}
+            selected={unseenSelected}
+            onSelect={
+              interactive
+                ? (id) => {
+                    touch();
+                    setUnseenSelected((current) => (current === id ? null : id));
+                  }
+                : undefined
+            }
+          />
+        );
       case 'choir':
         return (
           <Choir
@@ -427,6 +463,7 @@ export default function IndoorApp() {
   }
 
   const lensMeta = LENSES.find((l) => l.id === lens) ?? LENSES[0];
+  const chosenRing = rings.find((ring) => ring.id === unseenSelected) ?? null;
 
   /**
    * The share of the estate that is not farmed and not built, straight from the
@@ -788,6 +825,71 @@ export default function IndoorApp() {
               </>
             )}
           </div>
+        )}
+
+        {chapter.id === 'unseen' && data && (
+          <div className="inst-corner inst-corner--bl">
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              {chosenRing ? 'Selected' : 'Least counted first'}
+            </p>
+            <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+              {chosenRing
+                ? `${Math.round(chosenRing.completeness * 100)}%`
+                : `${Math.round(
+                    (data.meta.totalSpecies / data.meta.chao1) * 100
+                  )}%`}
+            </p>
+            <p className="inst-mono">
+              {chosenRing
+                ? `${chosenRing.observed} SEEN · ${Math.round(
+                    chosenRing.estimated
+                  )} ESTIMATED · ${Math.round(
+                    chosenRing.estimated - chosenRing.observed
+                  )} MISSED`
+                : `${data.meta.totalSpecies} SEEN · ${Math.round(
+                    data.meta.chao1
+                  )} ESTIMATED ACROSS THE ESTATE`}
+            </p>
+            <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem', marginTop: '0.7rem' }}>
+              {chosenRing
+                ? chosenRing.estate
+                  ? 'Every station pooled. The estate closes furthest of all — what one station missed, another caught.'
+                  : `${chosenRing.label}. The open arc is a count, not a list: Chao1 says how many are still out there, never which.`
+                : 'Touch any ring.'}
+            </p>
+          </div>
+        )}
+
+        {/*
+          The ring list. Every row is the same reading as the ring it names, and
+          touching either selects both — the figure is legible on a wall from
+          across the room, and the list is what makes it legible from arm's
+          length, where the inner rings are only a couple of centimetres apart.
+        */}
+        {chapter.id === 'unseen' && data && (
+          <aside className="inst-panel inst-panel--right inst-rise inst-ringlist">
+            <p className="inst-label" style={{ marginBottom: '0.7rem' }}>
+              Counted
+            </p>
+            {rings.map((ring) => (
+              <button
+                key={ring.id}
+                className="inst-ring-row"
+                data-active={unseenSelected === ring.id}
+                data-estate={ring.estate}
+                onClick={() => {
+                  touch();
+                  setUnseenSelected((current) => (current === ring.id ? null : ring.id));
+                }}
+              >
+                <span className="inst-ring-name">{ring.label}</span>
+                <span className="inst-ring-bar">
+                  <span style={{ transform: `scaleX(${ring.completeness})` }} />
+                </span>
+                <span className="inst-ring-value">{Math.round(ring.completeness * 100)}%</span>
+              </button>
+            ))}
+          </aside>
         )}
 
         {chapter.id === 'year' && data && (
