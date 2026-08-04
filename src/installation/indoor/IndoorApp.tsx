@@ -14,7 +14,7 @@ import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
-import { Refuge } from '../gl/Refuge';
+import { Refuge, type RefugeMode } from '../gl/Refuge';
 import '../ui/installation.css';
 
 /**
@@ -41,14 +41,16 @@ interface RefugeMark {
 }
 
 /**
- * The three questions the Refuge row can answer. All three are about this estate
- * and nothing outside it: what its own ground carries as the cameras see it, as
- * the recorders hear it, and what its published ecosystem score stands on.
+ * The four questions the Refuge row can answer. All four are about this estate
+ * and nothing outside it: what it does, what its own ground carries as the
+ * cameras see it and as the recorders hear it, and what its published ecosystem
+ * score stands on.
  */
-const REFUGE_READINGS = [
-  { label: 'Mammals', mode: 'land' as const, metric: 0 },
-  { label: 'Birds', mode: 'land' as const, metric: 1 },
-  { label: 'Ecosystem', mode: 'ecosystem' as const, metric: 0 },
+const REFUGE_READINGS: { label: string; mode: RefugeMode; metric: number }[] = [
+  { label: 'Practices', mode: 'practices', metric: 0 },
+  { label: 'Mammals', mode: 'habitat', metric: 0 },
+  { label: 'Birds', mode: 'habitat', metric: 1 },
+  { label: 'Ecosystem', mode: 'ecosystem', metric: 0 },
 ];
 
 /**
@@ -109,11 +111,11 @@ const CHAPTERS: Chapter[] = [
   {
     id: 'refuge',
     label: 'Refuge',
-    title: 'A third of it\nis not a vineyard',
-    lede: 'Sixty-three hectares in every hundred are worked. The rest the estate keeps. One column per habitat inside its own boundary, and what each of them holds.',
+    title: 'What the estate\ndoes to it',
+    lede: 'One column per stage of the estate\u2019s own programme, standing at how far it has been rolled out, with the same living community rising inside all of them.',
     dwell: 38,
-    // A wider row than the seven land uses it replaced, so the camera stands off
-    // far enough that ten capitals are in frame at once.
+    // The widest row in the piece — ten habitat columns — so the camera stands
+    // off far enough that every capital is in frame at once.
     camera: [0, 2.6, 16.5],
     lookAt: [0, 1.9, 0],
     subjectAspect: 2.3,
@@ -159,11 +161,11 @@ export default function IndoorApp() {
   const [flagshipOnly, setFlagshipOnly] = useState(false);
   const [refugeMetric, setRefugeMetric] = useState(0);
   /**
-   * Which question the Refuge row answers. The first two read the estate's own
-   * habitats by each survey method; the third turns the row into the three
-   * pillars its published ecosystem score stands on.
+   * Which question the Refuge row answers: what the estate does, what its own
+   * ground carries under each survey method, or what its published ecosystem
+   * score stands on.
    */
-  const [refugeMode, setRefugeMode] = useState<'land' | 'ecosystem'>('land');
+  const [refugeMode, setRefugeMode] = useState<RefugeMode>('practices');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
   /**
@@ -677,14 +679,14 @@ export default function IndoorApp() {
                   key={entry.label}
                   className="inst-nav-item"
                   data-active={
-                    entry.mode === 'ecosystem'
-                      ? refugeMode === 'ecosystem'
-                      : refugeMode === 'land' && refugeMetric === entry.metric
+                    entry.mode === 'habitat'
+                      ? refugeMode === 'habitat' && refugeMetric === entry.metric
+                      : refugeMode === entry.mode
                   }
                   onClick={() => {
                     touch();
                     setRefugeMode(entry.mode);
-                    if (entry.mode === 'land') setRefugeMetric(entry.metric);
+                    if (entry.mode === 'habitat') setRefugeMetric(entry.metric);
                     setRefugeSelected(null);
                   }}
                   style={{ minHeight: 56, padding: '0.9rem 1.1rem' }}
@@ -694,17 +696,47 @@ export default function IndoorApp() {
               ))}
             </div>
             <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
-              {(refugeMode === 'ecosystem'
-                ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
-                : refugeMetric === 0
-                  ? 'EFFECTIVE SPECIES PER HABITAT · CAMERA TRAPS'
-                  : 'EFFECTIVE SPECIES PER HABITAT · RECORDERS'
+              {(refugeMode === 'practices'
+                ? 'LEFT: SHARE ACHIEVED · RIGHT: HECTARES — TWO SCALES, NOT ONE'
+                : refugeMode === 'ecosystem'
+                  ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
+                  : refugeMetric === 0
+                    ? 'EFFECTIVE SPECIES PER HABITAT · CAMERA TRAPS'
+                    : 'EFFECTIVE SPECIES PER HABITAT · RECORDERS'
               ).toUpperCase()}
             </p>
 
             <div className="inst-rule" style={{ maxWidth: 380 }} />
 
-            {refugeMode === 'ecosystem' ? (
+            {refugeMode === 'practices' ? (
+              /*
+                The stages, in their own units, and the reason the row carries
+                two scales at once. Saying so is the point: the estate's total
+                area is not published anywhere in the survey, so there is no
+                honest conversion between a hectare figure and a share.
+              */
+              <>
+                <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+                  {notInProduction.toFixed(1)}%
+                </p>
+                <p className="inst-mono">OF THE ESTATE IS NOT IN PRODUCTION</p>
+                <p
+                  className="inst-body"
+                  style={{ maxWidth: '40ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
+                >
+                  {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha drip-irrigated
+                  at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
+                  {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water;{' '}
+                  {formatNumber(data.narrative.estate.organicConversionHectares)} ha converting to
+                  organic; treatments down{' '}
+                  {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%. The two
+                  hectare stages stand open-topped: their share of the estate is not published.
+                </p>
+                <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
+                  SAME COMMUNITY IN EVERY STAGE · ONE YEAR, NO BEFORE-AND-AFTER
+                </p>
+              </>
+            ) : refugeMode === 'ecosystem' ? (
               /*
                 What the pillars hold up. The overall score is not an average of
                 the three — it is published as its own figure — so it is given as
