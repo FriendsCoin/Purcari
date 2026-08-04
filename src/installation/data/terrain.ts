@@ -149,6 +149,19 @@ export function createHeightTexture(): DataTexture {
   return texture;
 }
 
+/**
+ * Elevation in metres at a coordinate.
+ *
+ * The landform is no longer drawn — Chapter I is aerial imagery now — but the
+ * numbers are still worth quoting: the difference between a recorder at 157 m on
+ * the plateau and one at 27 m by the water is the whole reason their species
+ * lists differ.
+ */
+export function elevationAtLonLat(lon: number, lat: number): number {
+  const m = lonLatToMetres(lon, lat);
+  return elevationAt(m.x * METRES_TO_SCENE, m.z * METRES_TO_SCENE);
+}
+
 /** Scene position of a lon/lat, sitting on the ground. */
 export function siteToScene(lon: number, lat: number): { x: number; y: number; z: number } {
   const m = lonLatToMetres(lon, lat);

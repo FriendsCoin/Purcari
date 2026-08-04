@@ -27,20 +27,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   51 KB atlas so the panel draws its first frame immediately (`npm run atlas`).
 - Documentation in `docs/INSTALLATION.md`.
 
-#### Chapter I rebuilt on the real landform
-- `scripts/fetch-terrain.mjs` bakes a 72x72 grid of NASA SRTM 30 m elevations
-  covering the survey area into a 17 KB heightfield (`npm run terrain`). The
-  terrain mesh, the contour lines, the shoreline and the vineyard mask are all
-  derived from it, so the ground on screen is the ground at Purcari.
-- The elevation data reframed the chapter: the site is a vineyard plateau at
-  ~155 m breaking 150 m down to the Dniester floodplain, and the two recorders
-  that logged more than the other three combined — along with every heron,
-  bittern, crake and crane in the dataset — stand at the foot of that break.
-- Château Purcari added at its real coordinates, drawn as an architectural line
-  model with lit windows and the tree alley, and selectable like the stations.
-  Its readout gives its altitude and its distance to the nearest recorder.
-- Floodplain water masked to the DEM shoreline, valley mist, and a cinematic
-  establishing flight with a slow arc replacing the constant turntable.
+#### Chapter I — the estate as a map
+- Chapter I is an aerial map of the estate with the recorders marked where they
+  actually stand: drag to pan, pinch to zoom, tap a marker to fly to it, and a
+  scale bar in the masthead that tracks the zoom.
+- `scripts/fetch-basemap.mjs` stitches Esri World Imagery into two levels
+  (`npm run basemap`): a wide 1.64 m/px layer covering everything the camera can
+  reach, and a 0.82 m/px layer over the station corridor laid on top of it and
+  feathered at its edges. Both are committed, so a clone runs offline.
+- The map mesh carries a texture coordinate per layer per vertex computed from
+  the real Web Mercator projection, so the imagery lands exactly where the
+  coordinates say it should and the two layers land on each other.
+- `scripts/fetch-terrain.mjs` still bakes a 72x72 grid of NASA SRTM 30 m
+  elevations (`npm run terrain`); the figures are quoted in the readouts, which
+  is where they are honest.
+- Château Purcari added at its real coordinates and selectable like the
+  stations. Its readout gives its altitude and its distance to the nearest
+  recorder.
+- The imagery corrected the chapter's own story. ct47, the recorder that logged
+  more than any other, stands at the two ponds in the estate park about 120 m
+  from the château — not on the Dniester floodplain three kilometres north, as
+  the elevation model alone had suggested. That is where the herons, bitterns,
+  crakes and little bitterns come from.
 
 #### Chapter V — Chevauchement
 - New chapter built from the Every1Counts ten-month camera-trap analysis: 18
@@ -66,14 +74,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Vite now builds two entry points; Three.js is split into its own vendor chunk.
+- Five chapters became six.
+- A soft scrim behind the masthead and the readout. The abstract chapters fall
+  away to black at their own edges, but the map puts a lit winery roof wherever
+  it likes and the type has to stay legible over it.
+
+### Removed
+- The three-dimensional landform in Chapter I, and with it the procedural line
+  model of the château. The elevation data was right — the ground does fall
+  about 130 m from the vineyard plateau to the river — but that is over 3.1 km,
+  a four percent grade, and the chapter drew it with seven times vertical
+  exaggeration, which turned a gentle slope into a cliff with the château
+  perched on it. The building's footprint was exaggerated six times to
+  compensate. A photograph cannot misrepresent the ground that way.
 
 ### Fixed
 - Chapter dissolves run on wall-clock time rather than the clamped simulation
   delta; on a machine rendering at two frames a second the 1.4 s crossfade was
   stretching to twenty seconds, with both chapters drawing throughout.
-- Terrain drawn opaque and held below the bloom threshold: as a bright
-  full-frame transparent layer it was tripping the bright-pass and smearing the
-  escarpment into soft cells.
+- The scale bar tracks the camera. It came through React state, which only
+  re-renders when the readout's identity changes, so it froze at whatever the
+  altitude was when the chapter was entered — and the rule was drawn at a fixed
+  length that did not match its own label. It is now written straight to the DOM
+  each frame, like the selection marker, and drawn at its true length.
+- The camera cannot pan or zoom off the imagery: the altitude ceiling and the
+  pan limits are derived from the same frustum reach, so clamping one no longer
+  lets the other run past the edge of the map.
 
 ## [2.0.0] - 2025-11-09
 

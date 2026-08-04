@@ -31,6 +31,11 @@ export interface Readout {
   source?: string;
   /** Replaces the guild legend when a chapter colours by something else. */
   legend?: { label: string; color: string }[];
+  /**
+   * Map scale bar: a round number of metres, and the fraction of the viewport
+   * width it spans. Set by chapters that show real ground.
+   */
+  scale?: { metres: number; fraction: number };
 }
 
 export interface FrameContext {

@@ -30,6 +30,7 @@ const EMPTY_READOUT: ReadoutData = { eyebrow: '', title: '' };
 export function Installation(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
+  const scalebarRef = useRef<HTMLDivElement>(null);
   const hintRef = useRef<HTMLParagraphElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const lastReadout = useRef<ReadoutData>(EMPTY_READOUT);
@@ -55,9 +56,12 @@ export function Installation(): JSX.Element {
           lastReadout.current = next;
           setReadout(next);
         }
-        // The marker tracks the camera every frame; it is written straight to the
-        // DOM rather than through state for the same reason.
+        // The marker and the scale bar both track the camera every frame, so
+        // they are written straight to the DOM rather than through state — the
+        // reference gate above would otherwise freeze them at the value they
+        // held when the chapter was entered.
         positionMarker(markerRef.current, next.marker);
+        updateScalebar(scalebarRef.current, next.scale);
       },
       onChapterChange: setChapter,
     });
@@ -129,6 +133,12 @@ export function Installation(): JSX.Element {
           <div className="masthead__meta">
             <div>{readout.period ?? '31 juillet — 16 août 2025'}</div>
             <div>46.52° N · 29.87° E</div>
+            {/* Drawn at its true length: a scale bar whose rule does not match
+                its label is decoration, not a scale bar. Filled in per frame. */}
+            <div ref={scalebarRef} className="scalebar" aria-hidden="true">
+              <span className="scalebar__bar" />
+              <span className="scalebar__label" />
+            </div>
           </div>
         </header>
 
@@ -188,6 +198,20 @@ function positionMarker(element: HTMLDivElement | null, marker?: { x: number; y:
   }
   element.style.transform = `translate(${marker.x * window.innerWidth}px, ${marker.y * window.innerHeight}px)`;
   element.classList.add('marker--visible');
+}
+
+function updateScalebar(element: HTMLDivElement | null, scale?: { metres: number; fraction: number }): void {
+  if (!element) return;
+  if (!scale) {
+    element.classList.remove('scalebar--visible');
+    return;
+  }
+  const bar = element.firstElementChild as HTMLElement | null;
+  const label = element.lastElementChild as HTMLElement | null;
+  if (bar) bar.style.width = `${Math.round(scale.fraction * window.innerWidth)}px`;
+  const text = scale.metres >= 1000 ? `${scale.metres / 1000} km` : `${scale.metres} m`;
+  if (label && label.textContent !== text) label.textContent = text;
+  element.classList.add('scalebar--visible');
 }
 
 /**

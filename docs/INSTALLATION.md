@@ -18,14 +18,15 @@ npm run build        # emits dist/index.html and dist/installation.html
 
 ## What is on screen
 
-Five chapters, each a full-screen realtime composition. Everything is drawn from
-the 2,665 detections recorded between 31 July and 16 August 2025 by four acoustic
-recorders and a short camera-trap line, across 121 species.
+Six chapters, each a full-screen realtime composition. Chapters I–IV and the
+attract state are drawn from the 2,665 detections recorded between 31 July and
+16 August 2025 by five acoustic recorders across 121 species; Chapter V comes
+from a separate camera-trap survey and says so on screen.
 
 | | Chapter | What it shows | Touch |
 |---|---|---|---|
 | — | **Le chœur** | Attract state. All 2,665 detections held in a ring whose azimuth is time of day, with a wave of light sweeping it in clock order. Because the dawn chorus is almost a third of the record, the wave arrives as a visible swell every half minute and goes quiet overnight. | Drag to turn, tap to push the cloud |
-| I | **Terroir** | The real landform, drawn as a three-dimensional contour map: the vineyard plateau at ~155 m breaking and falling 150 m to the Dniester floodplain. The château stands at the foot of that break, the five recorders at their true coordinates and elevations, each a shaft of light scaled to what it heard. | Drag to orbit, tap a beacon or the château |
+| I | **Terroir** | The estate from above, on aerial imagery, with the five recorders marked where they actually stand and a plume of light over each one carrying its detections. It behaves like a map: drag to pan, pinch to zoom, and a scale bar in the masthead tracks the zoom. | Drag to pan, pinch to zoom, tap a marker |
 | II | **Circadien** | Every detection on a 24-hour dial: angle from the minute it was recorded, distance from the centre from its rank within that hour. The spikes *are* the hourly histogram, and the tallest by a wide margin is the dawn chorus at 04:00–07:00. | Drag left/right to scrub the hour |
 | III | **Espèces** | 121 species positioned by *when* they sing — the angle of each node is the circular mean of its 24-hour profile, so the dawn chorus gathers on one side and the owls and nightjars drift to the other. Distance from the centre is inverse abundance. Links join species with similar daily rhythms. | Drag to rotate, tap a node to select it |
 | IV | **Flux** | The seventeen days of the survey as a river of light, thinning from 347 detections on 4 August to one on the last three days. | Drag left/right to scrub the day |
@@ -33,16 +34,35 @@ recorders and a short camera-trap line, across 121 species.
 
 ### What Chapter I is made of
 
-The terrain is **not** procedural. `scripts/fetch-terrain.mjs` pulls a 72 x 72 grid
-of NASA SRTM 30 m elevations covering 3.5 x 5.5 km around the survey area and
-bakes it to `src/installation/data/terrain.json` (17 KB). The mesh displaces
-against that as a half-float texture; the contour lines, the shoreline and the
-vineyard mask are all derived from it, so the shape of the ground on screen is
-the shape of the ground at Purcari.
+Aerial imagery, in two levels, fetched by `npm run basemap` and committed:
 
-That elevation data turned out to explain the survey. The site is bimodal —
-a plateau at 150–160 m and a floodplain around 0 m, with a steep escarpment
-between:
+| Layer | Zoom | Size | Covers |
+|---|---|---|---|
+| `basemap-context.jpg` | 16 | 3840 x 3072 px, 1.64 m/px | 6.3 x 5.0 km — everything the camera can reach |
+| `basemap.jpg` | 17 | 2560 x 5120 px, 0.82 m/px | 2.1 x 4.2 km — the station corridor and the estate |
+
+The sharp layer is laid over the wide one and feathered out at its own edges, for
+the same reason a slippy map has a tile pyramid: one image cannot be both wide
+enough to pinch out to the whole survey and sharp enough to read vine rows at the
+estate without becoming a texture no GPU wants.
+
+The tiles are Web Mercator and the scene is equirectangular, so the two disagree
+slightly across five kilometres of latitude. Rather than ignore it, the map mesh
+carries a **UV per layer per vertex** computed from the real projection, which
+makes the imagery land exactly where the coordinates say it should — and makes
+the two layers land on each other.
+
+**This replaced a three-dimensional landform**, and the reason is worth keeping.
+The elevation model was right: the ground really does fall about 130 m from the
+vineyard plateau to the river. But that is over 3.1 km — a four percent grade you
+would barely notice walking it — and the chapter drew it with **seven times
+vertical exaggeration**, which turned a gentle slope into a cliff face with the
+château perched on top of it. The estate was a procedural line model with its
+footprint exaggerated six times to compensate. Both are gone. A photograph cannot
+misrepresent the shape of the ground that way.
+
+`scripts/fetch-terrain.mjs` and `terrain.json` are still here, and the elevations
+are still quoted in the readouts, where they are honest:
 
 | Station | Elevation | Detections | Species |
 |---|---|---|---|
@@ -54,18 +74,24 @@ between:
 
 The two recorders at the bottom of the drop logged more than the other three
 combined, and every heron, bittern, little bittern, crake, swan and crane in the
-dataset came from them. Château Purcari itself (46.5295 N, 29.8719 E, from
-OpenStreetMap) sits about 120 m from ct47. The richest listening point in the
-survey is on the château's doorstep, at the ecotone where the vines meet the
-water — which is the same edge effect the dashboard's hypotheses test for.
+dataset came from them.
 
-The estate is drawn as an architectural line model: massing, roofs, lit windows
-and the tree alley. Its **position is exact**; its **footprint is exaggerated
-six times**, for the same reason the relief is exaggerated seven times — a 44 m
-building on a 5.5 km landscape is a third of a scene unit and vanishes. It is a
-portrait of the estate's massing, not a survey of the building.
+The imagery also **corrected the story**. ct47, the recorder that logged more than
+any other, does not stand on the Dniester floodplain three kilometres north, as
+the elevation model alone had suggested — it stands at the **two ponds in the
+estate park**, about 120 m from the château, and they are plainly visible in the
+picture. That is where the herons, bitterns, crakes and little bitterns come from.
+The richest listening point in the survey is on the château's doorstep.
 
-Two ideas run through all five so a visitor keeps their bearings: **midnight is
+Château Purcari itself is at 46.5295 N, 29.8719 E, from OpenStreetMap; in the
+imagery that lands on the manor range beside those ponds.
+
+**Licensing.** The imagery is Esri World Imagery (Esri, Maxar, Earthstar
+Geographics), free to use with attribution, which the footer carries. For a
+permanent commercial installation this should be licensed imagery — or better,
+the estate's own drone orthophoto. Only `TILE_URL` in the fetch script changes.
+
+Two ideas run through all six so a visitor keeps their bearings: **midnight is
 up and hours run clockwise** everywhere a clock appears, and **colour always
 means ecological guild** (the legend in the footer is the only key needed).
 
@@ -160,8 +186,10 @@ through state.
 ```
 installation.html                 kiosk entry point
 scripts/build-installation-atlas.mjs   bakes data.geojson -> atlas.json
-scripts/fetch-terrain.mjs              fetches SRTM     -> terrain.json
-scripts/extract-overlap-matrix.mjs     reads the deck   -> overlap.json
+scripts/fetch-basemap.mjs              stitches map tiles -> basemap*.jpg
+scripts/fetch-terrain.mjs              fetches SRTM       -> terrain.json
+scripts/extract-overlap-matrix.mjs     reads the deck     -> overlap.json
+public/installation/                   the two basemap layers
 src/installation/
   main.tsx                        bootstrap (deliberately no StrictMode)
   Installation.tsx                shell: overlay, chapter state, service corner
@@ -175,12 +203,12 @@ src/installation/
     palette.ts                    colours and ecological guilds
   scenes/
     ChapterBase.ts                camera rig + touch uniform plumbing
-    chateau.ts                    procedural line model of the estate
     ChorusScene.ts  TerroirScene.ts  CircadianScene.ts
     SpeciesScene.ts FluxScene.ts  OverlapScene.ts
   data/
     atlas.ts / atlas.json         the baked detections
-    terrain.ts / terrain.json     the baked elevation model
+    basemap.ts / basemap.json     the aerial layers: bounds, projection, extent
+    terrain.ts / terrain.json     elevations, now only quoted as figures
     overlap.ts / overlap.json     the camera-trap correlation matrix
   ui/                             Readout, ChapterNav, Sparkline, Diagnostics
   styles/installation.css         overlay chrome (no Tailwind in this bundle)
@@ -188,19 +216,33 @@ src/installation/
 
 ### Rebuilding the data
 
-Both data files are committed, so a clone builds with no network access.
+Every generated file is committed, so a clone builds and runs with no network
+access. None of these need running unless the area of interest or the source
+data changes.
 
 ```
 npm run atlas      # detections   data.geojson (3.4 MB) -> atlas.json   (51 KB)
+npm run basemap    # aerial       380 map tiles         -> basemap*.jpg (3.1 MB)
 npm run terrain    # elevation    SRTM via opentopodata -> terrain.json (17 KB)
 npm run overlap -- <heatmap.png>   # chapter V matrix   -> overlap.json  (7 KB)
 ```
 
-The heatmap for the last one is the third embedded image on slide 7 of the
+`npm run basemap` needs a raster library that the project deliberately does not
+depend on — platform binaries every install would otherwise pay for, for a script
+that runs by hand and rarely:
+
+```
+npm install --no-save sharp
+```
+
+Note that on npm 10 `--no-save` prunes other extraneous packages, so if you also
+installed Playwright by hand, reinstall the two together.
+
+The heatmap for `npm run overlap` is the third embedded image on slide 7 of the
 Every1Counts deck; extract it with any PDF tool that can pull raw images.
 
 `npm run terrain` hits a public endpoint at one request per second and takes
-about a minute. It only needs re-running if the area of interest changes.
+about a minute.
 
 **Timestamps.** The export carries a `Z` suffix, but the hourly histogram peaks
 at 04:00–06:00, which is the dawn chorus for Moldova in August (sunrise ~06:10).
@@ -229,33 +271,32 @@ reintroduce:
    numbers mean something completely different — a 0.02 shadow lift becomes 25%
    of the visible range instead of 2%.
 
-Two more that cost real time during the build:
+Four more that cost real time during the build:
 
-4. **Anything that covers the frame must stay under the bloom threshold.** The
-   contour lines were originally bright enough to trip the bright-pass, and the
-   five-level mip chain smeared the whole escarpment into soft cells that looked
-   exactly like a bug in a particle system. Broad coverage plus any brightness is
-   a bloom problem; only the beacons, the windows and the water are meant to glow.
+4. **Anything that covers the frame must stay under the bloom threshold.** A
+   full-frame layer with any brightness at all is a bloom problem — the
+   five-level mip chain smears it into soft cells that look exactly like a bug in
+   a particle system. Chapter I's photographic grade ends in a shoulder for this
+   reason: the winery roofs are already clipped in the source imagery, and
+   without the roll-off they drive the bright-pass on their own.
 5. **Animation timing runs on wall-clock, simulation on the clamped delta.** The
    frame loop clamps delta to 1/20 s so a stall cannot slingshot the motion. The
    chapter dissolve deliberately does *not* use that clamp: driving a 1.4 s
    crossfade off it stretched the transition to twenty seconds on a machine
    rendering at two frames a second — while it was drawing two chapters at once.
+6. **Anything that changes per frame has to bypass the readout gate.** React only
+   re-renders when the readout object's *identity* changes, which is what keeps
+   the DOM out of the frame budget — but it also means the scale bar froze at the
+   value it held when the chapter was entered. The marker and the scale bar are
+   both written straight to the DOM from the frame callback instead.
+7. **A map with edges needs the frustum clamped, not the centre.** Clamping the
+   look-at point to the imagery still lets the corners of a tilted frustum run off
+   it. `clampToMap` derives both the altitude ceiling and the pan limits from the
+   same reach constants, so the two cannot disagree.
 
 Also: `active`, `filter`, `input`, `output` and `sample` are reserved words in
 GLSL ES and will fail to compile. And a backtick inside a shader comment ends the
 template literal.
-
-### Isolating a layer
-
-Chapter I stacks eleven layers, and a shader misbehaving in one of them is very
-hard to attribute by eye. Any of them can be switched off from the URL:
-
-```
-/installation.html?hide=mist,water,canopies
-```
-
-Names: `terrain water vines mass edges windows trunks canopies shaft halo motes mist`.
 
 ### Performance
 
