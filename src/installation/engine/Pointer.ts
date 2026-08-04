@@ -58,6 +58,15 @@ export class Pointer {
   /** Seconds since the last touch of any kind — drives the idle attract mode. */
   idleTime = 0;
 
+  /**
+   * Accumulated wheel notches since the last read, positive to zoom in.
+   *
+   * The panel in the château has no wheel and never will. This is here so the
+   * piece can be reviewed on a laptop, where pinching is not available and a map
+   * you cannot zoom is a map you cannot judge.
+   */
+  private wheel = 0;
+
   /** True on the frame a tap is recognised. */
   private pendingTaps: TapEvent[] = [];
 
@@ -79,6 +88,7 @@ export class Pointer {
     element.addEventListener('contextmenu', this.preventDefault);
     element.addEventListener('touchstart', this.preventDefault, { passive: false });
     element.addEventListener('touchmove', this.preventDefault, { passive: false });
+    element.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
   /**
@@ -93,6 +103,22 @@ export class Pointer {
   private preventDefault = (event: Event): void => {
     event.preventDefault();
   };
+
+  private onWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    // Trackpads report pixels and mice report lines; normalising to notches keeps
+    // one gesture from zooming a hundred times further than the other.
+    const notches = event.deltaMode === 0 ? event.deltaY / 100 : event.deltaY;
+    this.wheel -= Math.max(-3, Math.min(3, notches));
+    this.idleTime = 0;
+  };
+
+  /** Reads and clears the accumulated wheel input. */
+  consumeWheel(): number {
+    const value = this.wheel;
+    this.wheel = 0;
+    return value;
+  }
 
   private toNdc(event: PointerEvent, out: Vector2): Vector2 {
     const rect = this.element.getBoundingClientRect();
@@ -252,6 +278,7 @@ export class Pointer {
     this.element.removeEventListener('contextmenu', this.preventDefault);
     this.element.removeEventListener('touchstart', this.preventDefault);
     this.element.removeEventListener('touchmove', this.preventDefault);
+    this.element.removeEventListener('wheel', this.onWheel);
     this.touches.clear();
   }
 }

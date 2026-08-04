@@ -344,6 +344,13 @@ export class TerroirScene extends ChapterBase {
     } else {
       this.pinchPrevious = 0;
 
+      // Wheel is the laptop stand-in for a pinch; the panel never sends one.
+      const wheel = ctx.pointer.consumeWheel();
+      if (wheel !== 0) {
+        this.altitudeTarget *= Math.pow(0.82, wheel);
+        this.focus = null;
+      }
+
       const drag = ctx.pointer.dragWithInertia;
       if (drag.lengthSq() > 1e-9) {
         // NDC to ground units at the current altitude.
