@@ -9,6 +9,7 @@ import {
   PALETTE,
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
+import { Spectrogram } from '../ui/Spectrogram';
 import { useChapterTransition } from '../core/useChapterTransition';
 import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
@@ -454,72 +455,24 @@ export default function IndoorApp() {
     }
   };
 
-  if (error) {
-    return (
-      <div className="inst-root" style={{ display: 'grid', placeItems: 'center' }}>
-        <p className="inst-body">Could not load the survey data: {error}</p>
-      </div>
-    );
-  }
-
-  const lensMeta = LENSES.find((l) => l.id === lens) ?? LENSES[0];
-  const chosenRing = rings.find((ring) => ring.id === unseenSelected) ?? null;
-
   /**
-   * The share of the estate that is not farmed and not built, straight from the
-   * published land-cover split rather than from one minus the agricultural
-   * share — the four classes are measured separately and need not sum to 1.
+   * One chapter's overlay: its title band and its own controls.
+   *
+   * Rendered twice through a dissolve, exactly as the 3D scenes are. Before
+   * this, the canvas cross-faded while the type hard-cut — the largest thing on
+   * the screen changing on a single frame, which is precisely the seam the
+   * dissolve exists to remove. The outgoing copy takes no touches, so a fading
+   * control cannot steal a tap meant for the arriving one.
    */
-  const notInProduction = data
-    ? data.narrative.landCover
-        .filter((entry) => entry.label !== 'Agricultural' && entry.label !== 'Built')
-        .reduce((sum, entry) => sum + entry.share, 0) * 100
-    : 0;
-
-  return (
-    <div className="inst-root inst-cursor-visible" onPointerDown={touch}>
-      {data && (
-        <Stage
-          className="inst-canvas"
-          cameraPosition={chapter.camera}
-          bloomStrength={0.95}
-          bloomRadius={0.75}
-          bloomThreshold={0.12}
-          swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
-        >
-          <CameraRig
-            position={chapter.camera}
-            lookAt={chapter.lookAt}
-            subjectAspect={chapter.subjectAspect}
-            maxPull={chapter.maxPull}
-            /*
-              Fast enough that the camera lands with the dissolve rather than
-              still gliding a second after the new chapter is fully lit — which
-              was what made the old transition read as a cut followed by a drift.
-            */
-            speed={1.15}
-            dissolve={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
-          />
-
-          {/*
-            Both chapters are on stage during a dissolve. The outgoing one keeps
-            rendering at a falling `reveal` but stops accepting touches, so a
-            fading scene cannot steal a tap meant for the arriving one.
-          */}
-          <ChapterFrame reveal={transition.reveal}>
-            {renderScene(transition.current, transition.reveal, true)}
-          </ChapterFrame>
-          {transition.previous !== null && (
-            <ChapterFrame reveal={transition.fade} leaving>
-              {renderScene(transition.previous, transition.fade, false)}
-            </ChapterFrame>
-          )}
-        </Stage>
-      )}
-
-      {/* ------------------------------------------------------------ text */}
-      <div className="inst-layer">
-        <div className="inst-corner inst-corner--tl inst-pass" key={chapter.id}>
+  const chapterOverlay = (id: ChapterId, opacity: number, interactive: boolean) => {
+    const chapter = CHAPTERS.find((entry) => entry.id === id) ?? CHAPTERS[0];
+    return (
+      <div
+        className="inst-chapter-layer"
+        key={id}
+        style={{ opacity, pointerEvents: interactive ? undefined : 'none' }}
+      >
+        <div className="inst-corner inst-corner--tl inst-pass" >
           <p className="inst-subtitle inst-rise">{chapter.label}</p>
           <h1
             className="inst-title inst-rise inst-delay-1"
@@ -531,7 +484,7 @@ export default function IndoorApp() {
         </div>
 
         {/* ------------------------------------------------ chapter controls */}
-        {chapter.id === 'estate' && (
+        {id === 'estate' && (
           <div
             className="inst-corner inst-corner--bl"
             style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}
@@ -592,7 +545,7 @@ export default function IndoorApp() {
           </div>
         )}
 
-        {chapter.id === 'choir' && data && (
+        {id === 'choir' && data && (
           <div className="inst-corner inst-corner--bl">
             {/*
               The clock. Native range input on purpose: it is the one control a
@@ -688,7 +641,7 @@ export default function IndoorApp() {
           </div>
         )}
 
-        {chapter.id === 'refuge' &&
+        {id === 'refuge' &&
           refugeLabels.map((mark) => (
             <span
               key={mark.landUse}
@@ -705,7 +658,7 @@ export default function IndoorApp() {
             </span>
           ))}
 
-        {chapter.id === 'refuge' && data && (
+        {id === 'refuge' && data && (
           <div className="inst-corner inst-corner--bl">
             <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
               Compare by
@@ -827,7 +780,7 @@ export default function IndoorApp() {
           </div>
         )}
 
-        {chapter.id === 'unseen' && data && (
+        {id === 'unseen' && data && (
           <div className="inst-corner inst-corner--bl">
             <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
               {chosenRing ? 'Selected' : 'Least counted first'}
@@ -866,7 +819,7 @@ export default function IndoorApp() {
           across the room, and the list is what makes it legible from arm's
           length, where the inner rings are only a couple of centimetres apart.
         */}
-        {chapter.id === 'unseen' && data && (
+        {id === 'unseen' && data && (
           <aside className="inst-panel inst-panel--right inst-rise inst-ringlist">
             <p className="inst-label" style={{ marginBottom: '0.7rem' }}>
               Counted
@@ -892,7 +845,7 @@ export default function IndoorApp() {
           </aside>
         )}
 
-        {chapter.id === 'year' && data && (
+        {id === 'year' && data && (
           <div className="inst-corner inst-corner--bl">
             <p className="inst-label" style={{ marginBottom: '0.6rem' }}>
               Dawn chorus
@@ -911,6 +864,78 @@ export default function IndoorApp() {
             )}
           </div>
         )}
+      </div>
+    );
+  };
+
+  if (error) {
+    return (
+      <div className="inst-root" style={{ display: 'grid', placeItems: 'center' }}>
+        <p className="inst-body">Could not load the survey data: {error}</p>
+      </div>
+    );
+  }
+
+  const lensMeta = LENSES.find((l) => l.id === lens) ?? LENSES[0];
+  const chosenRing = rings.find((ring) => ring.id === unseenSelected) ?? null;
+
+  /**
+   * The share of the estate that is not farmed and not built, straight from the
+   * published land-cover split rather than from one minus the agricultural
+   * share — the four classes are measured separately and need not sum to 1.
+   */
+  const notInProduction = data
+    ? data.narrative.landCover
+        .filter((entry) => entry.label !== 'Agricultural' && entry.label !== 'Built')
+        .reduce((sum, entry) => sum + entry.share, 0) * 100
+    : 0;
+
+  return (
+    <div className="inst-root inst-cursor-visible" onPointerDown={touch}>
+      {data && (
+        <Stage
+          className="inst-canvas"
+          cameraPosition={chapter.camera}
+          bloomStrength={0.95}
+          bloomRadius={0.75}
+          bloomThreshold={0.12}
+          swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
+        >
+          <CameraRig
+            position={chapter.camera}
+            lookAt={chapter.lookAt}
+            subjectAspect={chapter.subjectAspect}
+            maxPull={chapter.maxPull}
+            /*
+              Fast enough that the camera lands with the dissolve rather than
+              still gliding a second after the new chapter is fully lit — which
+              was what made the old transition read as a cut followed by a drift.
+            */
+            speed={1.15}
+            dissolve={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
+          />
+
+          {/*
+            Both chapters are on stage during a dissolve. The outgoing one keeps
+            rendering at a falling `reveal` but stops accepting touches, so a
+            fading scene cannot steal a tap meant for the arriving one.
+          */}
+          <ChapterFrame reveal={transition.reveal}>
+            {renderScene(transition.current, transition.reveal, true)}
+          </ChapterFrame>
+          {transition.previous !== null && (
+            <ChapterFrame reveal={transition.fade} leaving>
+              {renderScene(transition.previous, transition.fade, false)}
+            </ChapterFrame>
+          )}
+        </Stage>
+      )}
+
+      {/* ------------------------------------------------------------ text */}
+      <div className="inst-layer">
+        {transition.previous !== null &&
+          chapterOverlay(transition.previous, transition.fade, false)}
+        {chapterOverlay(transition.current, transition.reveal, true)}
 
         {/* ----------------------------------------------------- detail panel */}
         {site && (
@@ -991,6 +1016,20 @@ export default function IndoorApp() {
                 <p className="inst-body" style={{ fontSize: '0.86rem' }}>{selectedSpecies.note}</p>
               </>
             )}
+
+            {/*
+              The voice, seen. This is the master bus after the limiter, so it is
+              exactly the sound in the room — and it is a synthesis, not a
+              recording, which the caption under it says every time.
+            */}
+            <div className="inst-rule" />
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              Its voice
+            </p>
+            <Spectrogram active={chapter.id === 'choir'} height={78} />
+            <p className="inst-mono" style={{ marginTop: '0.4rem' }}>
+              SYNTHESISED FROM THIS SPECIES&rsquo; OWN MEASURES — NOT A RECORDING
+            </p>
 
             <div className="inst-rule" />
             <dl style={{ margin: 0 }}>

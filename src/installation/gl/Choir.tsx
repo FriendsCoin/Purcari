@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import type { InstallationData, Species } from '../core/types';
 import { logScale } from '../core/data';
 import { GUILD_COLORS, PALETTE, toRGB } from '../core/palette';
-import { SIMPLEX_3D } from './chunks';
+import { SIMPLEX_3D, SPRITE } from './chunks';
+import { glyphFor, sampleOutline } from './silhouettes';
 
 /**
  * "The Choir" — every species recorded at Purcari, at once.
@@ -130,7 +131,7 @@ void main(){
   color += vec3(1.0, 0.93, 0.78) * core * (0.4 + vSelected * 0.9);
 
   float a = (core * 0.95 + halo * 0.55);
-  a *= mix(1.0, 0.16, vDimmed);
+  a *= mix(1.0, 0.3, vDimmed);
   a *= (0.55 + vAwake * 0.45);
 
   // The passing shockwave lifts a mark toward the candle white and back.
@@ -273,6 +274,74 @@ varying float vAlpha;
 void main(){
   if (vAlpha <= 0.002) discard;
   gl_FragColor = vec4(vColor * vAlpha, vAlpha);
+}
+`;
+
+/**
+ * The ghost the swarm gathers when an animal is chosen.
+ *
+ * Marks fly out of the cloud and settle onto the contour of a pictogram — a bird
+ * or a quadruped, chosen by the species' own guild — hold there, and scatter
+ * again when the selection clears. It is the one figurative moment in a piece
+ * made entirely of abstract marks, and it earns its place by being what a
+ * visitor actually asks of a species list: *what is it?*
+ *
+ * Deliberately a pictogram and not a portrait. See `silhouettes.ts`.
+ */
+const GLYPH_POINTS = 620;
+
+const GLYPH_VERT = /* glsl */ `
+${SIMPLEX_3D}
+attribute vec2 aBird;
+attribute vec2 aMammal;
+attribute vec3 aScatter;
+attribute float aSeed;
+
+uniform float uTime;
+uniform float uForm;    // 0 = dispersed in the cloud, 1 = settled on the contour
+uniform float uGlyph;   // 0 = bird, 1 = quadruped
+uniform float uScale;
+uniform float uSize;
+
+varying float vAlpha;
+
+void main(){
+  vec2 shape = mix(aBird, aMammal, uGlyph) * uScale;
+
+  // The contour breathes and drifts a little even when fully formed. A silhouette
+  // pinned to exact coordinates reads as clip art; one that is still made of
+  // living marks reads as the swarm holding a shape, which is what it is.
+  float t = uTime * 0.25 + aSeed * 30.0;
+  vec2 breath = vec2(snoise(vec3(shape * 0.6, t)), snoise(vec3(shape.yx * 0.6, t + 11.0)));
+  vec3 target = vec3(shape + breath * 0.16, 0.0);
+
+  // Each mark arrives on its own beat, so the form assembles rather than snaps.
+  float lag = 1.0 - aSeed * 0.45;
+  float form = clamp(uForm * 1.45 * lag, 0.0, 1.0);
+  form = form * form * (3.0 - 2.0 * form);
+
+  vec3 p = mix(aScatter, target, form);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_PointSize = uSize * (0.45 + form * 0.55) * (300.0 / -mv.z);
+  gl_Position = projectionMatrix * mv;
+
+  vAlpha = form;
+}
+`;
+
+const GLYPH_FRAG = /* glsl */ `
+${SPRITE}
+uniform vec3 uColor;
+
+varying float vAlpha;
+
+void main(){
+  float mask = spriteAlpha(gl_PointCoord, 0.5);
+  // Kept low: this sits behind two hundred marks and a caption, and a bright
+  // pictogram would out-shout the animal it is labelling.
+  float a = mask * vAlpha * 0.72;
+  if (a <= 0.003) discard;
+  gl_FragColor = vec4((uColor + vec3(0.35, 0.31, 0.24) * vAlpha) * a, a);
 }
 `;
 
@@ -592,6 +661,51 @@ export function Choir({
    * uploads only the uniforms a given program actually declares, so the extras
    * cost nothing.
    */
+  /**
+   * The pictogram layer. Both outlines are baked into one buffer so the shader
+   * can hold either — or morph between them if the visitor jumps from a bird to
+   * a mammal — without rebuilding anything.
+   */
+  const glyphGeometry = useMemo(() => {
+    const bird = sampleOutline('bird', GLYPH_POINTS);
+    const mammal = sampleOutline('mammal', GLYPH_POINTS);
+    const scatter = new Float32Array(GLYPH_POINTS * 3);
+    const seeds = new Float32Array(GLYPH_POINTS);
+    for (let i = 0; i < GLYPH_POINTS; i++) {
+      // Where a mark waits when nothing is chosen: a loose cloud the size of the
+      // swarm, so the form gathers out of the same space the animals live in.
+      const theta = (i * 2.399963) % (Math.PI * 2);
+      const radius = 3 + ((i * 0.7548776662466927) % 1) * 6;
+      scatter[i * 3] = Math.cos(theta) * radius;
+      scatter[i * 3 + 1] = (((i * 0.5698402909980532) % 1) - 0.5) * 6;
+      scatter[i * 3 + 2] = Math.sin(theta) * radius * 0.4;
+      seeds[i] = (i * 0.6180339887498949) % 1;
+    }
+
+    const g = new THREE.BufferGeometry();
+    // `position` is unused by the glyph shader but three.js needs one to bound
+    // the draw; the scattered cloud is the honest extent.
+    g.setAttribute('position', new THREE.BufferAttribute(scatter.slice(), 3));
+    g.setAttribute('aBird', new THREE.BufferAttribute(bird, 2));
+    g.setAttribute('aMammal', new THREE.BufferAttribute(mammal, 2));
+    g.setAttribute('aScatter', new THREE.BufferAttribute(scatter, 3));
+    g.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 14);
+    return g;
+  }, []);
+
+  const glyphUniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uForm: { value: 0 },
+      uGlyph: { value: 0 },
+      uScale: { value: 5.6 },
+      uSize: { value: 0.5 },
+      uColor: { value: new THREE.Color(PALETTE.foil) },
+    }),
+    [],
+  );
+
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -740,6 +854,23 @@ export function Choir({
       if (isNewAnimal) pulseRef.current = selected ? 0 : 2;
     }
 
+    /* ---- the pictogram ---- */
+    glyphUniforms.uTime.value = t;
+    // Only ever holds a form while something is chosen, and it takes its time
+    // both ways: gathering is the point, and a form that snapped would read as
+    // an overlay rather than as the swarm doing something.
+    glyphUniforms.uForm.value +=
+      ((selected ? 1 : 0) - glyphUniforms.uForm.value) * Math.min(1, delta * 1.5);
+    if (selected) {
+      // Held until the next selection rather than eased back: with nothing
+      // chosen there is no form on screen to be wrong about, and morphing the
+      // ghost to a bird as it disperses looks like an error.
+      glyphUniforms.uGlyph.value +=
+        ((glyphFor(selected.guild) === 'mammal' ? 1 : 0) - glyphUniforms.uGlyph.value) *
+        Math.min(1, delta * 2.2);
+      glyphUniforms.uColor.value.set(GUILD_COLORS[selected.guild] ?? PALETTE.foil);
+    }
+
     // A little over half a second from the mark to the far edge of the swarm.
     if (pulseRef.current <= 1) pulseRef.current = Math.min(1.2, pulseRef.current + delta * 1.6);
     uniforms.uPulse.value = pulseRef.current;
@@ -761,6 +892,21 @@ export function Choir({
 
   return (
     <group>
+      {/*
+        Behind everything, and outside the swarm's rotation: the ghost is a label
+        held up beside the constellation, not a member of it.
+      */}
+      <points geometry={glyphGeometry} position={[0, 0, -3.5]} renderOrder={-1}>
+        <shaderMaterial
+          vertexShader={GLYPH_VERT}
+          fragmentShader={GLYPH_FRAG}
+          uniforms={glyphUniforms}
+          transparent
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </points>
+
       <group ref={swarmRef}>
         {/* Drawn before the marks so the marks always sit on top of their own web. */}
         <lineSegments geometry={filamentGeometry} renderOrder={0}>

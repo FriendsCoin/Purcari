@@ -68,6 +68,27 @@
   pointer-events: auto;
 }
 
+/*
+ * A whole chapter's overlay, held on stage while it fades. Absolute and inert
+ * itself so it does not disturb the corners it contains, which keep their own
+ * positioning and their own touches.
+ *
+ * Not called `.inst-fade`: that name was already taken by the entrance
+ * animation below, and giving every element carrying it `position: absolute;
+ * inset: 0` stretched the totals corner and the outdoor title band across the
+ * whole frame.
+ */
+.inst-chapter-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.inst-chapter-layer > * {
+  pointer-events: auto;
+}
+
 /* Anything that should not eat touches. */
 .inst-pass {
   pointer-events: none !important;

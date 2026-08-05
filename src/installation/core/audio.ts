@@ -173,6 +173,7 @@ export interface PlayOptions {
 
 export class SoundField {
   private ctx: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
   private master: GainNode | null = null;
   private voiceBus: GainNode | null = null;
   private reverb: ConvolverNode | null = null;
@@ -192,6 +193,15 @@ export class SoundField {
    */
   private lastVoiceAt = -Infinity;
   private maxPolyphony = 14;
+
+  /**
+   * The output tap, or null before the visitor has started the audio. Callers
+   * read it every frame and must tolerate null: the browser will not give this
+   * piece an AudioContext until someone touches the screen.
+   */
+  get spectrum(): AnalyserNode | null {
+    return this.analyser;
+  }
 
   get ready(): boolean {
     return this.ctx !== null && this.ctx.state === 'running';
@@ -227,6 +237,27 @@ export class SoundField {
     limiter.release.value = 0.18;
 
     master.connect(limiter);
+
+    /**
+     * A tap on the finished signal, for the spectrogram.
+     *
+     * Deliberately after the limiter and before the destination, so what the
+     * spectrogram draws is exactly what leaves the speakers — not the voices
+     * before they were summed, and not a second synthesis run alongside the
+     * first. The one thing this piece must never do is show a picture of a
+     * sound that is not the sound being played.
+     *
+     * 2048 is a ~46 ms window at 44.1 kHz: fine enough in frequency to separate
+     * the formants that give each voice its character, short enough that a
+     * 90 ms call still occupies several columns rather than smearing into one.
+     */
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.35;
+    analyser.minDecibels = -96;
+    analyser.maxDecibels = -12;
+    limiter.connect(analyser);
+
     limiter.connect(ctx.destination);
 
     const voiceBus = ctx.createGain();
@@ -241,6 +272,7 @@ export class SoundField {
     wet.connect(master);
 
     this.ctx = ctx;
+    this.analyser = analyser;
     this.master = master;
     this.voiceBus = voiceBus;
     this.reverb = reverb;
