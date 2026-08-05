@@ -85,8 +85,9 @@ export class Pointer {
     element.addEventListener('pointerdown', this.onDown, { passive: false });
     element.addEventListener('pointermove', this.onMove, { passive: false });
     element.addEventListener('pointerup', this.onUp, { passive: false });
-    element.addEventListener('pointercancel', this.onUp, { passive: false });
-    element.addEventListener('pointerleave', this.onUp, { passive: false });
+    // Cancel and leave are not releases; see onCancel.
+    element.addEventListener('pointercancel', this.onCancel, { passive: false });
+    element.addEventListener('pointerleave', this.onCancel, { passive: false });
     element.addEventListener('contextmenu', this.preventDefault);
     element.addEventListener('touchstart', this.preventDefault, { passive: false });
     element.addEventListener('touchmove', this.preventDefault, { passive: false });
@@ -170,7 +171,10 @@ export class Pointer {
 
   private onUp = (event: PointerEvent): void => {
     const touch = this.touches.get(event.pointerId);
-    if (!touch) return;
+    // A pointer is released once. The guard matters because a touchscreen sends
+    // pointerout and pointerleave immediately after pointerup for the same
+    // finger, and a second pass through here would turn one tap into two.
+    if (!touch || !touch.down) return;
     event.preventDefault();
     touch.down = false;
     // Short press that barely moved: the visitor meant to select something.
@@ -186,6 +190,29 @@ export class Pointer {
     }
     if (this.primaryId === event.pointerId) this.primaryId = null;
     this.idleTime = 0;
+  };
+
+  /**
+   * The pointer is gone rather than released.
+   *
+   * Three things arrive here: a cancel, when the system takes the gesture away
+   * mid-stroke; a leave, when a held mouse button travels off the canvas; and —
+   * on every touchscreen — the leave that follows each finger's own release,
+   * because a finger that is no longer touching is by definition no longer over
+   * anything.
+   *
+   * None of them is a tap. Wiring the leave to the release is what made a tap on
+   * the panel count twice: the first selected a species and the second, at the
+   * same coordinates a millisecond later, read as a second tap on the same thing
+   * and let it go again. Nothing could be selected by finger at all, and with a
+   * mouse — which does not leave the canvas when a click ends — nothing looked
+   * wrong.
+   */
+  private onCancel = (event: PointerEvent): void => {
+    const touch = this.touches.get(event.pointerId);
+    if (!touch) return;
+    touch.down = false;
+    if (this.primaryId === event.pointerId) this.primaryId = null;
   };
 
   /** Ray from an NDC point onto the interaction plane. Leaves `out` alone on a miss. */
@@ -287,8 +314,8 @@ export class Pointer {
     this.element.removeEventListener('pointerdown', this.onDown);
     this.element.removeEventListener('pointermove', this.onMove);
     this.element.removeEventListener('pointerup', this.onUp);
-    this.element.removeEventListener('pointercancel', this.onUp);
-    this.element.removeEventListener('pointerleave', this.onUp);
+    this.element.removeEventListener('pointercancel', this.onCancel);
+    this.element.removeEventListener('pointerleave', this.onCancel);
     this.element.removeEventListener('contextmenu', this.preventDefault);
     this.element.removeEventListener('touchstart', this.preventDefault);
     this.element.removeEventListener('touchmove', this.preventDefault);
