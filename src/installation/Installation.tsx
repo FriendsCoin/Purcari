@@ -19,6 +19,16 @@ import { Readout } from './ui/Readout';
 const SERVICE_TAPS = 4;
 const SERVICE_WINDOW = 2500;
 
+/**
+ * Below this the piece is on a phone rather than on the panel.
+ *
+ * The wall has a left third for type and two thirds for the picture. A phone has
+ * no left third, so the same layout puts eight lines of French across the middle
+ * of the artwork. Under this width the type collapses to a title on a scrim and
+ * opens on demand; the short-viewport clause catches a phone held sideways.
+ */
+const COMPACT_QUERY = '(max-width: 620px), (max-height: 480px)';
+
 const EMPTY_READOUT: ReadoutData = { eyebrow: '', title: '' };
 
 /**
@@ -43,6 +53,8 @@ export function Installation(): JSX.Element {
   const [booted, setBooted] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [engine, setEngine] = useState<Engine | null>(null);
+  const compact = useCompactLayout();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const serviceTaps = useRef<number[]>([]);
 
@@ -63,9 +75,13 @@ export function Installation(): JSX.Element {
         // they are written straight to the DOM rather than through state — the
         // reference gate above would otherwise freeze them at the value they
         // held when the chapter was entered.
-        positionMarker(markerRef.current, next.marker);
-        updateScalebar(scalebarRef.current, next.scale);
-        updateAxis(axisRef.current, next.axis);
+        // Measured against the canvas rather than the window: on a phone the
+        // two differ by the browser chrome, and an overlay anchored to the
+        // window drifts off whatever it is pointing at.
+        const frame = { width: canvas.clientWidth, height: canvas.clientHeight };
+        positionMarker(markerRef.current, frame, next.marker);
+        updateScalebar(scalebarRef.current, frame, next.scale);
+        updateAxis(axisRef.current, frame, next.axis);
       },
       onChapterChange: setChapter,
     });
@@ -108,7 +124,16 @@ export function Installation(): JSX.Element {
 
   const handleSelect = useCallback((id: ChapterId) => {
     engineRef.current?.goTo(id);
+    // Changing chapter closes the sheet: the first thing anyone wants from a new
+    // chapter is to look at it.
+    setSheetOpen(false);
   }, []);
+
+  // A chapter the engine changed on its own — the idle return to the prologue —
+  // has to close the sheet too, or the panel comes back to a wall of text.
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [chapter]);
 
   /** Four taps in the corner within a few seconds opens the service panel. */
   const handleServiceTap = useCallback(() => {
@@ -122,8 +147,16 @@ export function Installation(): JSX.Element {
 
   useFullscreenOnFirstTouch();
 
+  const stageClass = [
+    'stage',
+    compact ? 'stage--compact' : '',
+    compact && sheetOpen ? 'stage--sheet' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="stage">
+    <div className={stageClass}>
       <canvas ref={canvasRef} className="stage__canvas" />
 
       <div className={booted ? 'splash splash--done' : 'splash'} aria-hidden={booted}>
@@ -138,7 +171,7 @@ export function Installation(): JSX.Element {
           </div>
           <div className="masthead__meta">
             <div>{readout.period ?? '31 juillet — 16 août 2025'}</div>
-            <div>46.52° N · 29.87° E</div>
+            <div className="masthead__coords">46.52° N · 29.87° E</div>
             {/* Drawn at its true length: a scale bar whose rule does not match
                 its label is decoration, not a scale bar. Filled in per frame. */}
             <div ref={scalebarRef} className="scalebar" aria-hidden="true">
@@ -154,7 +187,19 @@ export function Installation(): JSX.Element {
         <div ref={axisRef} className="axis" aria-hidden="true" />
 
         <div className="stagebody">
-          <Readout data={readout} />
+          <div className="sheet">
+            <Readout data={readout} />
+            {compact && (
+              <button
+                type="button"
+                className="sheet__toggle"
+                aria-expanded={sheetOpen}
+                onPointerDown={() => setSheetOpen(open => !open)}
+              >
+                {sheetOpen ? 'Fermer' : 'En savoir plus'}
+              </button>
+            )}
+          </div>
           <ChapterNav active={chapter} onSelect={handleSelect} />
         </div>
 
@@ -201,17 +246,30 @@ export function Installation(): JSX.Element {
   );
 }
 
-function positionMarker(element: HTMLDivElement | null, marker?: { x: number; y: number }): void {
+interface Frame {
+  width: number;
+  height: number;
+}
+
+function positionMarker(
+  element: HTMLDivElement | null,
+  frame: Frame,
+  marker?: { x: number; y: number }
+): void {
   if (!element) return;
   if (!marker) {
     element.classList.remove('marker--visible');
     return;
   }
-  element.style.transform = `translate(${marker.x * window.innerWidth}px, ${marker.y * window.innerHeight}px)`;
+  element.style.transform = `translate(${marker.x * frame.width}px, ${marker.y * frame.height}px)`;
   element.classList.add('marker--visible');
 }
 
-function updateAxis(element: HTMLDivElement | null, axis?: { label: string; x: number }[]): void {
+function updateAxis(
+  element: HTMLDivElement | null,
+  frame: Frame,
+  axis?: { label: string; x: number }[]
+): void {
   if (!element) return;
   if (!axis || axis.length === 0) {
     element.classList.remove('axis--visible');
@@ -225,10 +283,36 @@ function updateAxis(element: HTMLDivElement | null, axis?: { label: string; x: n
     tick.className = 'axis__tick';
     element.appendChild(tick);
   }
+  // The label box is a fixed width set in CSS, and reading it back is a forced
+  // layout, so it is measured only when the frame changes rather than every
+  // frame.
+  const boxKey = `${frame.width}`;
+  if (element.dataset.frame !== boxKey) {
+    element.dataset.frame = boxKey;
+    element.dataset.box = String((element.firstElementChild as HTMLElement).offsetWidth);
+  }
+  const half = Number(element.dataset.box ?? 0) / 2;
+
   axis.forEach((tick, i) => {
     const node = element.children[i] as HTMLElement;
     if (node.textContent !== tick.label) node.textContent = tick.label;
-    node.style.transform = `translateX(${tick.x * window.innerWidth}px)`;
+
+    // Midnight sits on the frame edge in the chapters that use this, and on a
+    // phone the label would be cut in half by the screen. A tick that close to
+    // an edge is pinned inside it and aligned outward — the reading is the same
+    // and it is legible, which a half-drawn label is not.
+    const x = tick.x * frame.width;
+    if (x < half) {
+      node.style.transform = 'translateX(0px)';
+      node.style.textAlign = 'left';
+    } else if (x > frame.width - half) {
+      node.style.transform = `translateX(${frame.width - half * 2}px)`;
+      node.style.textAlign = 'right';
+    } else {
+      node.style.transform = `translateX(${x - half}px)`;
+      node.style.textAlign = 'center';
+    }
+
     // A tick pushed off the panel by a zoom is hidden rather than clamped to the
     // edge, where it would sit under a label that means something else.
     node.style.opacity = tick.x < -0.02 || tick.x > 1.02 ? '0' : '1';
@@ -236,7 +320,11 @@ function updateAxis(element: HTMLDivElement | null, axis?: { label: string; x: n
   element.classList.add('axis--visible');
 }
 
-function updateScalebar(element: HTMLDivElement | null, scale?: { metres: number; fraction: number }): void {
+function updateScalebar(
+  element: HTMLDivElement | null,
+  frame: Frame,
+  scale?: { metres: number; fraction: number }
+): void {
   if (!element) return;
   if (!scale) {
     element.classList.remove('scalebar--visible');
@@ -244,10 +332,34 @@ function updateScalebar(element: HTMLDivElement | null, scale?: { metres: number
   }
   const bar = element.firstElementChild as HTMLElement | null;
   const label = element.lastElementChild as HTMLElement | null;
-  if (bar) bar.style.width = `${Math.round(scale.fraction * window.innerWidth)}px`;
+  if (bar) bar.style.width = `${Math.round(scale.fraction * frame.width)}px`;
   const text = scale.metres >= 1000 ? `${scale.metres / 1000} km` : `${scale.metres} m`;
   if (label && label.textContent !== text) label.textContent = text;
   element.classList.add('scalebar--visible');
+}
+
+/**
+ * True while the piece is on a phone-sized screen.
+ *
+ * A media query rather than a user-agent test: what the layout needs to know is
+ * how much room it has, and a phone in a desktop-mode browser still has a phone's
+ * width. It is watched rather than read once, so a rotation lands the right
+ * layout without a reload.
+ */
+function useCompactLayout(): boolean {
+  const [compact, setCompact] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(COMPACT_QUERY).matches
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia(COMPACT_QUERY);
+    const update = (): void => setCompact(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
 }
 
 /**

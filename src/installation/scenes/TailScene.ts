@@ -336,18 +336,30 @@ export class TailScene extends ChapterBase {
    * Off to one side and slightly above, looking a few ranks ahead — the view
    * down a colonnade rather than at a bar chart. Standing back widens the
    * offset and lifts the eye, so the whole tail comes into frame at once.
+   *
+   * How far off to the side depends on the shape of the screen. A wall is wide
+   * and can hold the colonnade side-on; a phone is tall, and the same viewpoint
+   * crops the frame through the first dozen filaments — which are the ones the
+   * chapter is about. As the frame narrows the eye slides toward the axis of the
+   * ranking and rises, until the composition is a corridor running away from the
+   * viewer rather than a row passing in front of them.
    */
   private updateCamera(ctx: FrameContext): void {
     this.travel = damp(this.travel, this.travelTarget, 2.6, ctx.delta);
     this.spread = damp(this.spread, this.spreadTarget, 2.2, ctx.delta);
 
+    const narrow = clamp((1.4 - ctx.aspect) / 0.95, 0, 1);
+    const lateral = 13 * (1 - narrow * 0.62);
+    const lift = 5.2 * (1 + narrow * 0.5);
+    const back = 15 * (1 + narrow * 0.55);
+
     const z = TailScene.zForRank(this.travel);
-    const sway = Math.sin(ctx.time * 0.11) * 0.6;
+    const sway = Math.sin(ctx.time * 0.11) * 0.6 * (1 - narrow * 0.6);
 
     this.camera.position.set(
-      13 * this.spread + sway + ctx.pointer.centroid.x * 2.4,
-      5.2 * this.spread + ctx.pointer.centroid.y * 1.6,
-      z + 15 * this.spread
+      lateral * this.spread + sway + ctx.pointer.centroid.x * 2.4,
+      lift * this.spread + ctx.pointer.centroid.y * 1.6,
+      z + back * this.spread
     );
     this.camera.lookAt(0, MAX_HEIGHT * 0.34, z - 7 * this.spread);
 

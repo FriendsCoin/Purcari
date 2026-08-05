@@ -196,6 +196,15 @@ Designed for a wall panel with no cursor, no keyboard and no scroll:
   routine on a mouse, and on the panel whenever the framerate dips — would
   otherwise arrive carrying the world origin, which every chapter that picks in
   world space reads as a tap dead in its own centre.
+- **`pointerup` is a release; `pointercancel` and `pointerleave` are not.** They
+  end the touch and produce nothing. This is not a detail: a touchscreen fires
+  `pointerout` and `pointerleave` for a finger immediately after its `pointerup`,
+  because a finger that has stopped touching is no longer over anything. With
+  leave wired to the same handler as up, every tap counted twice — the first
+  selected, the second, a millisecond later at the same coordinates, read as a
+  tap on the same thing and let it go. Nothing could be selected by finger at
+  all, and a mouse, which does not leave the canvas when a click ends, showed
+  none of it.
 - Where something plays on its own — the circadian hand, the river of days — a
   tap **holds it**: the hand goes to the hour you pointed at and stays. Tapping
   the middle of the dial, or the day already held, hands it back. A held hour
@@ -207,6 +216,35 @@ Designed for a wall panel with no cursor, no keyboard and no scroll:
 - Text selection, context menus, pinch-zoom, overscroll and tap highlights are
   all disabled. The first touch requests fullscreen if the kiosk shell has not
   already done it.
+
+### On a phone
+
+The piece is made for a panel, but it is also the only way most people will ever
+see it, so under 620 px wide — or under 480 px tall, which is a phone held
+sideways — the overlay changes shape rather than shrinking:
+
+- The **type becomes a sheet** along the bottom edge: the chapter's name over a
+  scrim, and *En savoir plus* opens the note, the figures and the sparkline over
+  a near-solid ground. Changing chapter closes it again, including when the idle
+  timer returns to the prologue on its own. The panel layout's left column of
+  type would otherwise print eight lines of French across the middle of the
+  artwork, which on a 390 px screen is the artwork.
+- The **chapter list becomes one scrolling rail** across the bottom, faded at
+  both ends, scrolled so whatever is playing is centred.
+- The masthead drops to a single line — the estate and the survey dates. The
+  subtitle and the coordinates are wall-label copy.
+- The hour axis of Chapter VI keeps its labels inside the screen: a tick within
+  half a label of an edge is pinned and aligned outward, because midnight sits
+  exactly on the frame edge and a half-drawn label is not a label.
+- Chapter VII slides its viewpoint toward the axis of the ranking as the frame
+  narrows, so a tall screen shows a corridor running away from the viewer rather
+  than a row cropped through the first dozen species.
+- Overlay anchors — the marker, the scale bar, the hour ticks — are measured
+  against the canvas rather than the window, because on a phone the two differ by
+  the browser chrome.
+
+Everything else is unchanged: same chapters, same data, same gestures. Drag,
+pinch and tap already were the whole vocabulary.
 
 ### Service panel
 

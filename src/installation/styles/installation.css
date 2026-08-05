@@ -71,6 +71,11 @@ body {
   pointer-events: none;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* Capped at the panel width. Without the minmax, the phone layout's single
+     scrolling row of chapters sizes the column to its own content — eight
+     chapters wide — and every right-aligned thing in the overlay, the survey
+     dates included, is laid out past the edge of the screen. */
+  grid-template-columns: minmax(0, 1fr);
   padding: var(--edge);
   gap: 1rem;
 }
@@ -262,10 +267,9 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  /* Centred on its own tick: the box is fixed and the label sits in the middle
-     of it, so a two-character hour and a five-character one land identically. */
+  /* A fixed box the engine places by its left edge, so a label at the frame's
+     own edge can be pinned inside the screen instead of drawn half off it. */
   width: 5rem;
-  margin-left: -2.5rem;
   text-align: center;
   font-size: clamp(0.5rem, 0.62vw, 0.62rem);
   letter-spacing: 0.24em;
@@ -621,6 +625,268 @@ body {
   .hint {
     top: calc(var(--edge) * 4.5);
     bottom: auto;
+  }
+}
+
+/* ------------------------------------------------------------------- phone -- */
+
+/*
+ * The phone layout.
+ *
+ * Everything above assumes the wall: a left third of type beside two thirds of
+ * picture. A phone has no left third, so the same rules print eight lines of
+ * French across the middle of the artwork and wrap the masthead into the hour
+ * axis. Here the type stops being a column and becomes a sheet along the bottom
+ * edge — the chapter's name over a scrim, everything else one tap away — and the
+ * chapter list becomes a single scrolling row. The picture keeps the screen.
+ *
+ * The short-viewport clause catches a phone turned sideways, where the height is
+ * the scarce dimension rather than the width.
+ */
+@media (max-width: 620px), (max-height: 480px) {
+  :root {
+    --edge: 1rem;
+  }
+
+  .overlay {
+    gap: 0.5rem;
+  }
+
+  /* One line of masthead. The subtitle and the coordinates are wall-label copy:
+     they belong beside the panel in the château, not on a screen this size. */
+  .masthead__sub,
+  .masthead__coords {
+    display: none;
+  }
+
+  .masthead__mark {
+    /* The masthead lines are paragraphs, and a paragraph's default margin is an
+       em top and bottom — a third of the masthead's height on a phone, spent on
+       nothing. */
+    margin: 0;
+    font-size: 0.82rem;
+    letter-spacing: 0.2em;
+  }
+
+  .masthead__meta {
+    font-size: 0.48rem;
+    letter-spacing: 0.1em;
+    line-height: 1.4;
+    /* One line, or the survey dates wrap under the mark and push the hour axis
+       down into the picture. */
+    white-space: nowrap;
+  }
+
+  /* The masthead is one line now, so the ticks sit right under it. */
+  .axis {
+    top: calc(var(--edge) + 1.6rem);
+  }
+
+  .axis__tick {
+    width: 3.4rem;
+    font-size: 0.48rem;
+    letter-spacing: 0.1em;
+  }
+
+  .stagebody {
+    gap: 0.8rem;
+  }
+
+  /* The sheet. Its scrim bleeds past the page edge so the type has a floor to
+     stand on whatever the chapter happens to be drawing behind it. */
+  .sheet {
+    margin: 0 calc(var(--edge) * -1) calc(var(--edge) * -0.4);
+    padding: 1.1rem var(--edge) 0.5rem;
+    background: linear-gradient(to top, rgba(6, 6, 8, 0.94) 45%, rgba(6, 6, 8, 0));
+    transition: background 420ms ease;
+  }
+
+  /* Open, the sheet is being read rather than glanced at, so it stops being a
+     fade over the picture and becomes a page: eight lines of French set over a
+     field of moving lights is not something anyone finishes. */
+  .stage--sheet .sheet {
+    background: linear-gradient(to top, rgba(6, 6, 8, 0.97) 78%, rgba(6, 6, 8, 0.88));
+  }
+
+  .readout {
+    gap: 0.5rem;
+  }
+
+  .readout__title {
+    font-size: clamp(1.7rem, 8.5vw, 2.6rem);
+    line-height: 1;
+  }
+
+  .readout__eyebrow {
+    font-size: 0.5rem;
+    letter-spacing: 0.3em;
+  }
+
+  /* Collapsed: the name of what is on screen, and nothing else. */
+  .stage--compact .readout__body,
+  .stage--compact .readout__stats,
+  .stage--compact .spark {
+    display: none;
+  }
+
+  .sheet__toggle {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0.7rem 0 0.2rem;
+    margin: 0;
+    pointer-events: auto;
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.52rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  /* Open: the full readout, scrollable on its own so a long chapter note cannot
+     push the chapter list off the bottom of the screen. */
+  .stage--sheet .readout__body,
+  .stage--sheet .readout__stats,
+  .stage--sheet .spark {
+    display: revert;
+  }
+
+  .stage--sheet .readout__stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1.2rem;
+  }
+
+  .stage--sheet .readout {
+    max-height: 46vh;
+    overflow-y: auto;
+    /* The canvas swallows touches everywhere else; this one element gets to
+       scroll, and only along its own axis. */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+  }
+
+  .stage--sheet .readout__body {
+    font-size: 0.76rem;
+    line-height: 1.65;
+    max-width: none;
+  }
+
+  .stage--sheet .readout__stat dd {
+    font-size: 1.15rem;
+  }
+
+  .stage--sheet .spark {
+    width: 100%;
+    height: 2.6rem;
+  }
+
+  /* One scrolling row, centred on whatever is playing. */
+  .chapters {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0 1.3rem;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x;
+    margin: 0 calc(var(--edge) * -1);
+    padding: 0 var(--edge);
+  }
+
+  .chapters::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Fades at both ends, so a row that continues past the edge looks like one. */
+  .chapters {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent);
+  }
+
+  .chapter {
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+    gap: 0.45rem;
+    padding: 0.6rem 0;
+    min-height: 2.6rem;
+  }
+
+  .chapter__name {
+    font-size: 1.15rem;
+  }
+
+  .chapter__rule {
+    display: none;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+    font-size: 0.52rem;
+    letter-spacing: 0.16em;
+  }
+
+  .footer__legend {
+    gap: 0.3rem 0.9rem;
+  }
+
+  /* The prompt moves to the top: the bottom of a phone screen is the sheet. */
+  .hint {
+    top: calc(var(--edge) + 3.4rem);
+    bottom: auto;
+    font-size: 0.52rem;
+    letter-spacing: 0.32em;
+  }
+
+  /* Nothing to prompt while the sheet is open — the visitor is reading. */
+  .stage--sheet .hint {
+    opacity: 0;
+  }
+
+  .service-corner {
+    width: 64px;
+    height: 64px;
+  }
+
+  /* The chapter list is a bottom rail in the phone layout, so the body stacks
+     even where the portrait rule above does not reach — a phone held sideways
+     is 390 px tall and cannot afford a column of type beside the picture with a
+     second column of chapters running through the middle of it. */
+  .stagebody {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+}
+
+/* A phone held sideways: the height is what is scarce, so the type goes back to
+   a narrow column in the corner and the chapter rail keeps the full width. */
+@media (max-height: 480px) and (min-aspect-ratio: 1/1) {
+  .sheet {
+    max-width: 46%;
+    margin-bottom: 0;
+    padding-bottom: 0.2rem;
+  }
+
+  .readout__title {
+    font-size: clamp(1.4rem, 5vw, 2rem);
+  }
+
+  .stage--sheet .readout {
+    max-height: 40vh;
+  }
+
+  .footer {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 1rem;
   }
 }
 
