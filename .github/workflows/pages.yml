@@ -28,8 +28,15 @@ permissions:
 
 # Never run two deployments at once, but let a queued one finish rather than
 # cancelling it — a half-deployed site is worse than a slightly stale one.
+#
+# The group is deliberately NOT called "pages". GitHub's own built-in
+# `pages-build-deployment` workflow occupies that name, and with
+# cancel-in-progress false this job queued behind it and was cancelled without
+# ever being given a runner — every run since 3 August recorded zero steps
+# executed and produced no logs, which reads as a broken workflow when in fact
+# it never started.
 concurrency:
-  group: pages
+  group: installation-preview
   cancel-in-progress: false
 
 jobs:
