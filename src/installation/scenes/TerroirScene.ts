@@ -11,7 +11,8 @@ import {
 } from 'three';
 import { ADDITIVE } from '../engine/blending';
 import { CURL, EASING, HASH, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, SPRITE, TOUCH_UNIFORMS } from '../engine/glsl';
-import { color, guildColorArray, guildIndex, PALETTE } from '../engine/palette';
+import { color, guildColorArray, guildCss, guildIndex, PALETTE } from '../engine/palette';
+import { speciesSelection } from '../engine/selection';
 import type { FrameContext, Readout } from '../engine/Scene';
 import { atlas, maxStationTotal, points, speciesAtStation } from '../data/atlas';
 import {
@@ -38,6 +39,31 @@ const HOME_ALTITUDE = 34;
 
 const TAP_RADIUS = 0.08;
 
+/**
+ * The listening post.
+ *
+ * Touching a recorder does not just frame it — it drops the camera to about
+ * eighty metres above the ground at that exact spot and unfolds the station's
+ * own record around it, standing on the imagery of the ground it was recorded
+ * from. One scene unit is thirty metres, so the instrument below is roughly a
+ * hundred metres across: the size of the clearing a recorder actually listens
+ * over, not a diagram floating in space.
+ */
+const POST_ALTITUDE = 3.4;
+const POST_RADIUS = 1.85;
+/**
+ * Lean, not horizon. Past about forty degrees the frame stops being the clearing
+ * the recorder listens over and becomes the next village, and the instrument —
+ * a hundred and fifty metres across — turns into a speck on a landscape.
+ */
+const POST_TILT_DEGREES = 38;
+const POST_BEADS = 9;
+
+/** Filaments a post shows. Beyond this the ring becomes a hedge. */
+const POST_SPECIES_LIMIT = 34;
+
+const POST_TAP_RADIUS = 0.075;
+
 /** Camera tilt off vertical. Enough that the rising motes have somewhere to go. */
 const TILT_DEGREES = 13;
 
@@ -53,6 +79,18 @@ const TILT_DEGREES = 13;
 const REACH = { side: 1.25, far: 1.55, near: 0.9 };
 
 type Focus = { kind: 'station'; index: number } | { kind: 'chateau' } | null;
+
+/** One species as it was heard at one station. */
+interface PostSpecies {
+  /** Index into atlas.species. */
+  species: number;
+  /** Detections of it at this station — not its total across the survey. */
+  count: number;
+  /** Circular mean of the hours it was heard at, here. */
+  meanHour: number;
+  /** Where its filament stands, for picking and for the marker. */
+  position: Vector3;
+}
 
 interface Marker {
   focus: Focus;
@@ -100,6 +138,20 @@ export class TerroirScene extends ChapterBase {
   private focusStrength = 0;
   private pinchPrevious = 0;
 
+  /** The station whose post is open, or null while the map is the whole chapter. */
+  private post: number | null = null;
+  private postStrength = 0;
+  private postOrbit = 0;
+  private postOrbitTarget = 0;
+  /** Index into postList[post] — the filament being held. */
+  private postSpecies: number | null = null;
+  private postSelectStrength = 0;
+  /** Altitude the map was left at, restored on the way back up. */
+  private mapAltitude = HOME_ALTITUDE;
+
+  /** Every species each station heard, as that station heard it. */
+  private readonly postList: PostSpecies[][] = [];
+
   private cachedReadout: Readout;
   private readoutKey = '';
   private readonly probe = new Vector3();
@@ -120,6 +172,9 @@ export class TerroirScene extends ChapterBase {
     this.buildMap();
     this.buildMarkers();
     this.buildMotes();
+    this.buildPostList();
+    this.buildPostDial();
+    this.buildPostFilaments();
 
     this.cachedReadout = this.overviewReadout();
   }
@@ -282,6 +337,237 @@ export class TerroirScene extends ChapterBase {
     this.scene.add(motes);
   }
 
+  // ------------------------------------------------------------------- post --
+
+  /**
+   * What each station heard, from its own detections.
+   *
+   * The atlas carries a species' total across the survey and the list of
+   * stations that heard it, but not how many times each one did — and that is
+   * exactly what a post is about. Two thousand six hundred rows is nothing to
+   * walk once at boot, so it is counted here rather than baked, and the hours
+   * are averaged on the circle: a bird heard at 23:00 and at 01:00 peaks at
+   * midnight, not at noon.
+   */
+  private buildPostList(): void {
+    const tally = atlas.stations.map(() => new Map<number, { n: number; sx: number; sy: number }>());
+
+    for (let i = 0; i < points.count; i += 1) {
+      const station = points.station[i];
+      const species = points.species[i];
+      let entry = tally[station].get(species);
+      if (!entry) {
+        entry = { n: 0, sx: 0, sy: 0 };
+        tally[station].set(species, entry);
+      }
+      const angle = (points.minute[i] / 1440) * Math.PI * 2;
+      entry.n += 1;
+      entry.sx += Math.cos(angle);
+      entry.sy += Math.sin(angle);
+    }
+
+    atlas.stations.forEach((station, s) => {
+      const site = lonLatToScene(station.lon, station.lat);
+      const list = [...tally[s].entries()]
+        .map(([species, e]) => ({
+          species,
+          count: e.n,
+          meanHour: (((Math.atan2(e.sy, e.sx) / (Math.PI * 2)) * 24 + 24) % 24),
+          position: new Vector3(),
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, POST_SPECIES_LIMIT);
+
+      const loudest = list[0]?.count ?? 1;
+      list.forEach((entry, i) => {
+        // Angle is when it was heard, so the dawn chorus gathers on one side of
+        // the post and the owls on the other — the same clock as every other
+        // chapter. Radius is rank, so the loudest stand nearest the recorder.
+        const angle = Math.PI / 2 - (entry.meanHour / 24) * Math.PI * 2;
+        const radius = POST_RADIUS * (0.46 + (i / Math.max(1, list.length - 1)) * 0.54);
+        entry.position.set(
+          site.x + Math.cos(angle) * radius,
+          (Math.log(entry.count + 1) / Math.log(loudest + 1)) * POST_RADIUS * 1.03,
+          site.z - Math.sin(angle) * radius
+        );
+      });
+
+      this.postList.push(list);
+    });
+  }
+
+  /**
+   * The station's own twenty-four hours, engraved on the ground around it.
+   *
+   * Every post gets its own rhythm rather than the survey's: ct47 at the ponds
+   * spikes through the night, the plateau recorders do not.
+   */
+  private buildPostDial(): void {
+    const position: number[] = [];
+    const station: number[] = [];
+    const along: number[] = [];
+    const share: number[] = [];
+    const hour: number[] = [];
+
+    atlas.stations.forEach((entry, s) => {
+      const site = lonLatToScene(entry.lon, entry.lat);
+      const peak = Math.max(...entry.hourly, 1);
+
+      for (let h = 0; h < 24; h += 1) {
+        const length = POST_RADIUS * (0.12 + Math.pow(entry.hourly[h] / peak, 0.7) * 0.54);
+        const a0 = Math.PI / 2 - ((h + 0.12) / 24) * Math.PI * 2;
+        const a1 = Math.PI / 2 - ((h + 0.88) / 24) * Math.PI * 2;
+        const inner = POST_RADIUS * 0.24;
+
+        const corner = (angle: number, radius: number): [number, number] => [
+          site.x + Math.cos(angle) * radius,
+          site.z - Math.sin(angle) * radius,
+        ];
+
+        const [x0i, z0i] = corner(a0, inner);
+        const [x1i, z1i] = corner(a1, inner);
+        const [x0o, z0o] = corner(a0, inner + length);
+        const [x1o, z1o] = corner(a1, inner + length);
+
+        const quad: [number, number, number][] = [
+          [x0i, z0i, 0],
+          [x1i, z1i, 0],
+          [x1o, z1o, 1],
+          [x0i, z0i, 0],
+          [x1o, z1o, 1],
+          [x0o, z0o, 1],
+        ];
+        for (const [x, z, t] of quad) {
+          position.push(x, 0.012, z);
+          station.push(s);
+          along.push(t);
+          share.push(entry.hourly[h] / peak);
+          hour.push(h);
+        }
+      }
+    });
+
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(new Float32Array(position), 3));
+    geometry.setAttribute('aStation', new BufferAttribute(new Float32Array(station), 1));
+    geometry.setAttribute('aAlong', new BufferAttribute(new Float32Array(along), 1));
+    geometry.setAttribute('aShare', new BufferAttribute(new Float32Array(share), 1));
+    geometry.setAttribute('aHour', new BufferAttribute(new Float32Array(hour), 1));
+
+    const mesh = new Mesh(
+      geometry,
+      new ShaderMaterial({
+        uniforms: this.uniforms,
+        vertexShader: DIAL_VERTEX,
+        fragmentShader: DIAL_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        side: DoubleSide,
+        ...ADDITIVE,
+      })
+    );
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 4;
+    this.scene.add(mesh);
+  }
+
+  /** One filament per species the station heard, standing where it was heard. */
+  private buildPostFilaments(): void {
+    const position: number[] = [];
+    const station: number[] = [];
+    const local: number[] = [];
+    const guild: number[] = [];
+    const up: number[] = [];
+    const weight: number[] = [];
+
+    this.postList.forEach((list, s) => {
+      const loudest = list[0]?.count ?? 1;
+      list.forEach((entry, i) => {
+        const species = atlas.species[entry.species];
+        const beads = Math.max(3, Math.round((entry.count / loudest) * POST_BEADS) + 2);
+        for (let b = 0; b < beads; b += 1) {
+          const t = b / (beads - 1);
+          position.push(entry.position.x, 0.02 + t * entry.position.y, entry.position.z);
+          station.push(s);
+          local.push(i);
+          guild.push(guildIndex(species.guild));
+          up.push(t);
+          weight.push(entry.count / loudest);
+        }
+      });
+    });
+
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(new Float32Array(position), 3));
+    geometry.setAttribute('aStation', new BufferAttribute(new Float32Array(station), 1));
+    geometry.setAttribute('aLocal', new BufferAttribute(new Float32Array(local), 1));
+    geometry.setAttribute('aGuild', new BufferAttribute(new Float32Array(guild), 1));
+    geometry.setAttribute('aUp', new BufferAttribute(new Float32Array(up), 1));
+    geometry.setAttribute('aWeight', new BufferAttribute(new Float32Array(weight), 1));
+
+    const cloud = new Points(
+      geometry,
+      new ShaderMaterial({
+        uniforms: this.uniforms,
+        vertexShader: FILAMENT_VERTEX,
+        fragmentShader: FILAMENT_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        ...ADDITIVE,
+      })
+    );
+    cloud.frustumCulled = false;
+    cloud.renderOrder = 5;
+    this.scene.add(cloud);
+  }
+
+  /** Drops into a station's post, from wherever the map happens to be. */
+  private enterPost(index: number): void {
+    const station = atlas.stations[index];
+    const site = lonLatToScene(station.lon, station.lat);
+    this.mapAltitude = this.altitudeTarget;
+    this.altitudeTarget = POST_ALTITUDE;
+    this.post = index;
+    this.postSpecies = null;
+    this.postOrbit = 0;
+    this.postOrbitTarget = 0;
+    this.centreTarget.set(site.x, 0, site.z);
+    this.focus = { kind: 'station', index };
+  }
+
+  /** Back up to the map, to the altitude it was left at. */
+  private leavePost(): void {
+    this.post = null;
+    this.postSpecies = null;
+    this.altitudeTarget = Math.max(this.mapAltitude, HOME_ALTITUDE * 0.8);
+  }
+
+  private pickFilament(ndcX: number, ndcY: number): number | null {
+    if (this.post === null) return null;
+    const list = this.postList[this.post];
+    let best: number | null = null;
+    let bestDistance = POST_TAP_RADIUS;
+
+    for (let i = 0; i < list.length; i += 1) {
+      // The whole filament is the target, not just its tip.
+      this.probe.copy(list[i].position).project(this.camera);
+      if (this.probe.z > 1) continue;
+      const topX = this.probe.x;
+      const topY = this.probe.y;
+      this.probe.set(list[i].position.x, 0.02, list[i].position.z).project(this.camera);
+      const dx = topX - this.probe.x;
+      const dy = topY - this.probe.y;
+      const lengthSq = dx * dx + dy * dy;
+      const t = lengthSq < 1e-9 ? 0 : clamp(((ndcX - this.probe.x) * dx + (ndcY - this.probe.y) * dy) / lengthSq, 0, 1);
+      const distance = Math.hypot(this.probe.x + dx * t - ndcX, this.probe.y + dy * t - ndcY);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   // ----------------------------------------------------------------- update --
 
   enter(): void {
@@ -290,6 +576,13 @@ export class TerroirScene extends ChapterBase {
     this.focus = null;
     this.focusStrength = 0;
     this.pinchPrevious = 0;
+    this.post = null;
+    this.postStrength = 0;
+    this.postSpecies = null;
+    this.postSelectStrength = 0;
+    this.postOrbit = 0;
+    this.postOrbitTarget = 0;
+    this.mapAltitude = HOME_ALTITUDE;
     const chateau = lonLatToScene(CHATEAU.lon, CHATEAU.lat);
     this.centreTarget.set(chateau.x, 0, chateau.z + 2.2);
     this.altitude = HOME_ALTITUDE * 2.4;
@@ -302,6 +595,26 @@ export class TerroirScene extends ChapterBase {
     this.uniforms.uReveal.value = damp(this.uniforms.uReveal.value, 1, 1.0, ctx.delta);
 
     for (const tap of ctx.pointer.consumeTaps()) {
+      if (this.post !== null) {
+        // Inside a post: a filament is a species, and the ground outside the
+        // instrument is the way back up to the map.
+        const filament = this.pickFilament(tap.ndc.x, tap.ndc.y);
+        if (filament !== null) {
+          this.postSpecies = this.postSpecies === filament ? null : filament;
+          const entry = this.postList[this.post][filament];
+          speciesSelection.set(this.postSpecies === null ? null : atlas.species[entry.species].name);
+        } else {
+          // Anything that is not a filament is the way out. Holding a species
+          // and letting it go is the same filament twice, so this rule costs
+          // nothing and it is the only one a visitor finds without being told —
+          // which matters on a phone, where the sentence that explains it is
+          // folded away behind the title.
+          speciesSelection.clear();
+          this.leavePost();
+        }
+        continue;
+      }
+
       const hit = this.pick(tap.ndc.x, tap.ndc.y);
       this.focus = sameFocus(hit, this.focus) ? null : hit;
       if (this.focus) {
@@ -310,6 +623,10 @@ export class TerroirScene extends ChapterBase {
           this.centreTarget.set(marker.position.x, 0, marker.position.z + this.altitudeTarget * 0.06);
           this.altitudeTarget = this.focus.kind === 'chateau' ? 11 : 13;
         }
+        // A recorder is not a pin on a map, it is a place that listened: touching
+        // one flies down to it and opens its own record on the ground it stands
+        // on.
+        if (this.focus.kind === 'station') this.enterPost(this.focus.index);
       }
     }
 
@@ -333,6 +650,38 @@ export class TerroirScene extends ChapterBase {
    */
   private handleNavigation(ctx: FrameContext): void {
     const active = [...ctx.pointer.touches.values()].filter(t => t.down);
+
+    // Inside a post the map's gestures would make no sense: there is nowhere to
+    // pan to. A drag walks around the instrument instead, and a pinch changes
+    // how close the visitor stands to it.
+    if (this.post !== null) {
+      if (active.length >= 2) {
+        const separation = active[0].ndc.distanceTo(active[1].ndc);
+        if (this.pinchPrevious > 0.001 && separation > 0.001) {
+          this.altitudeTarget = clamp(
+            this.altitudeTarget * (this.pinchPrevious / separation),
+            POST_ALTITUDE * 0.55,
+            POST_ALTITUDE * 2.4
+          );
+        }
+        this.pinchPrevious = separation;
+      } else {
+        this.pinchPrevious = 0;
+        const wheel = ctx.pointer.consumeWheel();
+        if (wheel !== 0) {
+          this.altitudeTarget = clamp(
+            this.altitudeTarget * Math.pow(0.86, wheel),
+            POST_ALTITUDE * 0.55,
+            POST_ALTITUDE * 2.4
+          );
+        }
+        const drag = ctx.pointer.dragWithInertia;
+        if (Math.abs(drag.x) > 1e-6) this.postOrbitTarget -= drag.x * 3.2;
+      }
+      // Left alone, a post turns slowly on its own.
+      this.postOrbitTarget += ctx.delta * ctx.idle * 0.06;
+      return;
+    }
 
     if (active.length >= 2) {
       const separation = active[0].ndc.distanceTo(active[1].ndc);
@@ -399,24 +748,40 @@ export class TerroirScene extends ChapterBase {
    * somewhere to go and the map does not read as a flat texture.
    */
   private updateCamera(ctx: FrameContext): void {
-    this.altitude = damp(this.altitude, this.altitudeTarget, 2.2, ctx.delta);
+    // Entering a post is a fall, not a cut: the map's own altitude keeps going
+    // down and the tilt comes up with it, so the visitor watches the ground rise
+    // instead of arriving somewhere new. One damping, not two — easing a target
+    // that is itself being eased turns a two-second fall into a ten-second one.
+    this.altitude = damp(this.altitude, this.altitudeTarget, this.post === null ? 2.2 : 2.6, ctx.delta);
     this.centre.lerp(this.centreTarget, 1 - Math.exp(-2.6 * ctx.delta));
+    this.postStrength = damp(this.postStrength, this.post === null ? 0 : 1, 2.2, ctx.delta);
+    this.postOrbit = damp(this.postOrbit, this.postOrbitTarget, 3.0, ctx.delta);
+    this.postSelectStrength = damp(this.postSelectStrength, this.postSpecies === null ? 0 : 1, 3, ctx.delta);
 
     // A very slow drift, so an untouched panel is never quite still.
     const driftX = Math.sin(ctx.time * 0.045) * this.altitude * 0.012;
     const driftZ = Math.cos(ctx.time * 0.037) * this.altitude * 0.012;
 
-    const tilt = MathUtils.degToRad(TILT_DEGREES);
+    const eased = this.postStrength * this.postStrength * (3 - 2 * this.postStrength);
+    const tilt = MathUtils.degToRad(MathUtils.lerp(TILT_DEGREES, POST_TILT_DEGREES, eased));
     const back = this.altitude * Math.tan(tilt);
+    // The post turns; the map does not, so its offset stays due south of centre.
+    const swing = this.postOrbit * eased;
 
     this.camera.position.set(
-      this.centre.x + driftX + ctx.pointer.centroid.x * this.altitude * 0.02,
+      this.centre.x + Math.sin(swing) * back + driftX + ctx.pointer.centroid.x * this.altitude * 0.02,
       this.altitude,
-      this.centre.z + back + driftZ - ctx.pointer.centroid.y * this.altitude * 0.02
+      this.centre.z + Math.cos(swing) * back + driftZ - ctx.pointer.centroid.y * this.altitude * 0.02
     );
-    this.camera.lookAt(this.centre.x, 0, this.centre.z);
+    // Looking a little above the ground inside a post, so the filaments stand in
+    // the frame rather than pointing out of the top of it.
+    this.camera.lookAt(this.centre.x, 1.4 * eased, this.centre.z);
 
     this.uniforms.uAltitude.value = this.altitude;
+    this.uniforms.uPost.value = this.post ?? -1;
+    this.uniforms.uPostStrength.value = this.postStrength;
+    this.uniforms.uPostSpecies.value = this.postSpecies ?? -1;
+    this.uniforms.uPostSelect.value = this.postSelectStrength;
   }
 
   private pick(ndcX: number, ndcY: number): Focus {
@@ -436,6 +801,19 @@ export class TerroirScene extends ChapterBase {
 
   /** Screen anchor for the selected marker, and the scale bar length. */
   private updateOverlayAnchors(ctx: FrameContext): void {
+    // Inside a post the marker belongs to the filament being held, not to the
+    // recorder the camera is already standing on.
+    if (this.post !== null) {
+      if (this.postSpecies !== null) {
+        this.probe.copy(this.postList[this.post][this.postSpecies].position).project(this.camera);
+        this.marker = { x: (this.probe.x + 1) / 2, y: (1 - this.probe.y) / 2 };
+      } else {
+        this.marker = undefined;
+      }
+      this.updateScaleBar(ctx);
+      return;
+    }
+
     const marker = this.focus ? this.markers.find(m => sameFocus(m.focus, this.focus)) : undefined;
     if (marker) {
       this.probe.copy(marker.position).project(this.camera);
@@ -444,10 +822,20 @@ export class TerroirScene extends ChapterBase {
       this.marker = undefined;
     }
 
-    // A round number of metres landing near a twelfth of the screen width — the
-    // bar is drawn at its true length, so it has to stay short enough to sit in
-    // the masthead.
-    const groundHalfWidth = Math.tan(MathUtils.degToRad(this.camera.fov) / 2) * this.altitude * ctx.aspect;
+    this.updateScaleBar(ctx);
+  }
+
+  /** A round number of metres, at its true length on screen. */
+  private updateScaleBar(ctx: FrameContext): void {
+    // Measured at the point the camera is looking at, along the distance to it
+    // rather than straight down. Overhead the two are the same; leaning in at a
+    // post they are not, and a scale bar that quietly assumes a plan view would
+    // be reporting a third of the distance it draws.
+    const tilt = MathUtils.degToRad(MathUtils.lerp(TILT_DEGREES, POST_TILT_DEGREES, this.postStrength));
+    const range = this.altitude / Math.cos(tilt);
+    // The bar is drawn at its true length, so it has to stay short enough to sit
+    // in the masthead: a round step near a twelfth of the screen width.
+    const groundHalfWidth = Math.tan(MathUtils.degToRad(this.camera.fov) / 2) * range * ctx.aspect;
     const metresAcross = groundHalfWidth * 2 * METRES_PER_UNIT;
     const wanted = metresAcross / 12;
     const magnitude = 10 ** Math.floor(Math.log10(wanted));
@@ -458,14 +846,26 @@ export class TerroirScene extends ChapterBase {
   // ---------------------------------------------------------------- readout --
 
   private refreshReadout(): void {
-    const key = !this.focus ? 'overview' : this.focus.kind === 'chateau' ? 'chateau' : `station-${this.focus.index}`;
+    const key =
+      this.post !== null
+        ? `post-${this.post}-${this.postSpecies ?? 'all'}`
+        : !this.focus
+          ? 'overview'
+          : this.focus.kind === 'chateau'
+            ? 'chateau'
+            : `station-${this.focus.index}`;
     if (key !== this.readoutKey) {
       this.readoutKey = key;
-      this.cachedReadout = !this.focus
-        ? this.overviewReadout()
-        : this.focus.kind === 'chateau'
-          ? this.chateauReadout()
-          : this.stationReadout(this.focus.index);
+      this.cachedReadout =
+        this.post !== null
+          ? this.postSpecies === null
+            ? this.postReadout(this.post)
+            : this.postSpeciesReadout(this.post, this.postSpecies)
+          : !this.focus
+            ? this.overviewReadout()
+            : this.focus.kind === 'chateau'
+              ? this.chateauReadout()
+              : this.stationReadout(this.focus.index);
     }
     this.cachedReadout.marker = this.marker;
     this.cachedReadout.scale = this.scale;
@@ -538,6 +938,77 @@ export class TerroirScene extends ChapterBase {
     };
   }
 
+  /**
+   * A post, from the inside: what this one recorder heard, in its own hours.
+   */
+  private postReadout(index: number): Readout {
+    const station = atlas.stations[index];
+    const list = this.postList[index];
+    const elevation = Math.round(elevationAtLonLat(station.lon, station.lat));
+    const peak = station.hourly.indexOf(Math.max(...station.hourly));
+    const night = station.hourly.reduce((sum, n, h) => (h >= 21 || h < 5 ? sum + n : sum), 0);
+
+    return {
+      eyebrow: `Poste d’écoute ${station.code.toUpperCase()} · ${elevation} m`,
+      title: `${station.total.toLocaleString('fr-FR')} détections`,
+      body:
+        `Chaque filament est une espèce entendue ici, dressée à l’heure où elle chante ; ` +
+        `les rayons au sol sont les vingt-quatre heures de cette station. ` +
+        `Touchez un filament, ou le sol autour pour remonter à la carte.`,
+      stats: [
+        { label: 'Espèces', value: String(station.species) },
+        { label: 'Heure de pointe', value: `${String(peak).padStart(2, '0')}:00` },
+        { label: 'La nuit', value: `${Math.round((night / Math.max(1, station.total)) * 100)} %` },
+        {
+          label: 'Part du corpus',
+          value: `${((station.total / atlas.meta.total) * 100).toFixed(1)} %`,
+        },
+      ],
+      spark: normalise(station.hourly),
+      accent: PALETTE.gold,
+      source: `Every1Counts & BirdNET · ${list.length} espèces représentées · imagerie ${basemap.attribution}`,
+    };
+  }
+
+  /**
+   * One species as this one recorder heard it.
+   *
+   * The sparkline is the species' hours *here*, not across the survey — which is
+   * the whole reason to stand at a post rather than read the atlas: the same
+   * bird keeps different hours at the ponds and on the plateau.
+   */
+  private postSpeciesReadout(index: number, local: number): Readout {
+    const station = atlas.stations[index];
+    const entry = this.postList[index][local];
+    const species = atlas.species[entry.species];
+
+    const hourly = new Array<number>(24).fill(0);
+    for (let i = 0; i < points.count; i += 1) {
+      if (points.station[i] === index && points.species[i] === entry.species) {
+        hourly[Math.floor(points.minute[i] / 60)] += 1;
+      }
+    }
+    const guild = atlas.guilds.find(g => g.id === species.guild);
+
+    return {
+      eyebrow: `${guild?.label ?? 'Espèce'} · ${station.code.toUpperCase()}`,
+      title: species.name,
+      body:
+        `${entry.count} détection${entry.count > 1 ? 's' : ''} à ce poste, ` +
+        `sur ${species.count} dans tout le relevé. ` +
+        `Ici, son heure moyenne est ${String(Math.round(entry.meanHour) % 24).padStart(2, '0')}:00.`,
+      stats: [
+        { label: 'Ici', value: String(entry.count) },
+        { label: 'Part du poste', value: `${((entry.count / station.total) * 100).toFixed(1)} %` },
+        { label: 'Dans le relevé', value: String(species.count) },
+        { label: 'Stations', value: `${species.stations.length} / ${atlas.meta.stationCount}` },
+      ],
+      spark: normalise(hourly),
+      accent: guildCss(species.guild),
+      source: `Every1Counts & BirdNET · imagerie ${basemap.attribution}`,
+    };
+  }
+
   readout(): Readout {
     return this.cachedReadout;
   }
@@ -556,6 +1027,10 @@ function createUniforms(touch: TouchUniforms) {
     uAltitude: { value: HOME_ALTITUDE },
     uFocus: { value: -1 },
     uFocusStrength: { value: 0 },
+    uPost: { value: -1 },
+    uPostStrength: { value: 0 },
+    uPostSpecies: { value: -1 },
+    uPostSelect: { value: 0 },
     uMap: { value: loadLayerTexture(basemap.context) },
     uDetail: { value: loadLayerTexture(basemap.detail) },
     uMapMin: { value: new Vector2(mapExtent.minX, mapExtent.minZ) },
@@ -581,6 +1056,166 @@ function normalise(values: number[]): number[] {
 }
 
 // ------------------------------------------------------------------ shaders --
+
+/** Which post is open, how far in, and which filament is being held. */
+const POST_UNIFORMS = /* glsl */ `
+uniform float uPost;
+uniform float uPostStrength;
+uniform float uPostSpecies;
+uniform float uPostSelect;
+
+/** 1 for the station whose post is open. */
+float isPost(float station){
+  return uPost < -0.5 ? 0.0 : step(abs(uPost - station), 0.5);
+}
+`;
+
+const DIAL_VERTEX = /* glsl */ `
+uniform float uTime;
+attribute float aStation;
+attribute float aAlong;
+attribute float aShare;
+attribute float aHour;
+varying float vAlong;
+varying float vShare;
+varying float vHour;
+varying float vOpen;
+varying vec3 vWorld;
+
+${POST_UNIFORMS}
+
+void main(){
+  vAlong = aAlong;
+  vShare = aShare;
+  vHour = aHour;
+  vOpen = isPost(aStation) * uPostStrength;
+
+  // The spokes grow out of the ground as the post opens, hour by hour around
+  // the clock, so the dial draws itself while the camera is still falling.
+  vec3 pos = position;
+  vec3 centre = vec3(pos.x, pos.y, pos.z);
+  vWorld = pos;
+
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+}
+`;
+
+const DIAL_FRAGMENT = /* glsl */ `
+uniform float uTime;
+uniform vec3 uGold;
+uniform vec3 uBone;
+uniform vec3 uDusk;
+varying float vAlong;
+varying float vShare;
+varying float vHour;
+varying float vOpen;
+varying vec3 vWorld;
+
+${POST_UNIFORMS}
+${TOUCH_UNIFORMS}
+
+void main(){
+  if (vOpen < 0.01) discard;
+
+  // Each spoke is bright at the recorder and fades outward, with a lit tip that
+  // says how far it reaches — the station's own count for that hour.
+  float body = pow(1.0 - vAlong, 1.4);
+  float tip = exp(-pow((vAlong - 0.94) * 12.0, 2.0));
+
+  // Night hours violet, day hours gold: the same reading as Chapter II, so a
+  // visitor who has seen the crown recognises this ground.
+  float night = step(21.0, vHour) + (1.0 - step(5.0, vHour));
+  vec3 tint = mix(uGold, uDusk * 1.5, clamp(night, 0.0, 1.0));
+
+  // The dial unrolls clockwise as the post opens.
+  float unroll = smoothstep(vHour / 24.0, vHour / 24.0 + 0.35, uPostStrength * 1.35);
+
+  float a = (body * 0.14 + tip * 0.3) * (0.35 + vShare * 0.9) * vOpen * unroll;
+  a += touchGlow(vWorld, 1.1) * 0.08 * vOpen;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(mix(tint, uBone, tip * 0.5) * a, a);
+}
+`;
+
+const FILAMENT_VERTEX = /* glsl */ `
+uniform float uTime;
+uniform vec3 uGuildColors[6];
+uniform vec3 uBone;
+attribute float aStation;
+attribute float aLocal;
+attribute float aGuild;
+attribute float aUp;
+attribute float aWeight;
+varying vec3 vColor;
+varying float vAlpha;
+varying float vHeld;
+
+${SIMPLEX3}
+${EASING}
+${POST_UNIFORMS}
+${TOUCH_UNIFORMS}
+${POINT_SIZE}
+${RIPPLE_UNIFORMS}
+
+void main(){
+  float open = isPost(aStation) * uPostStrength;
+  if (open < 0.01){
+    // Parked behind the camera rather than drawn: a post that is not open costs
+    // nothing but the vertex.
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    vAlpha = 0.0;
+    vColor = vec3(0.0);
+    vHeld = 0.0;
+    return;
+  }
+
+  vHeld = (uPostSpecies < -0.5 ? 0.0 : step(abs(uPostSpecies - aLocal), 0.5)) * uPostSelect;
+
+  vec3 pos = position;
+  // The filaments sway; they are made of air and birdsong, not of masonry.
+  float sway = snoise(vec3(aLocal * 0.6, uTime * 0.25, aUp * 1.6)) * aUp * 0.07;
+  pos.x += sway;
+  pos.z += sway * 0.7;
+  pos.y += vHeld * 0.12;
+  pos += touchDisplace(pos, 1.2, 0.09);
+
+  float ripple = rippleField(pos, 2.4, 2.6, 0.5);
+
+  // They rise as the post opens, tallest last.
+  float grow = easeOutQuart(clamp(uPostStrength * 1.6 - aWeight * 0.3, 0.0, 1.0));
+  pos.y *= grow;
+
+  vec3 guild = uGuildColors[int(aGuild)];
+  vColor = mix(guild, mix(guild, uBone, 0.5) * 1.5, vHeld) + vec3(0.3, 0.2, 0.08) * ripple;
+
+  // Bright at the foot, thinning upward; everything but the held one steps back.
+  float taper = mix(1.0, 0.4, aUp);
+  vAlpha = open * taper * (0.3 + aWeight * 0.55) * mix(1.0, 0.3, uPostSelect * (1.0 - vHeld));
+
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  gl_PointSize = pointSizeFor(0.04 + aWeight * 0.07 + vHeld * 0.05, mv.z);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+const FILAMENT_FRAGMENT = /* glsl */ `
+varying vec3 vColor;
+varying float vAlpha;
+varying float vHeld;
+
+void main(){
+  vec2 uv = gl_PointCoord - 0.5;
+  float d = length(uv) * 2.0;
+  float core = 1.0 - smoothstep(0.0, 0.58, d);
+  float halo = exp(-d * 2.7) * 0.5;
+  float ring = (1.0 - smoothstep(0.03, 0.09, abs(d - 0.8))) * vHeld * 0.6;
+
+  float a = (core + halo + ring) * vAlpha;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vColor * a * 0.8 + vec3(ring) * 0.15, a);
+}
+`;
 
 const STATION_FIELD = /* glsl */ `
 #define STATION_COUNT 5
@@ -767,6 +1402,7 @@ ${CURL}
 ${HASH}
 ${EASING}
 ${STATION_FIELD}
+${POST_UNIFORMS}
 ${TOUCH_UNIFORMS}
 ${POINT_SIZE}
 ${RIPPLE_UNIFORMS}
@@ -798,7 +1434,8 @@ void main(){
 
   vec3 guild = uGuildColors[int(aGuild)];
   vColor = guild + vec3(0.3, 0.2, 0.07) * ripple + vec3(0.3) * touchGlow(pos, 3.0);
-  vAlpha = sin(life * 3.14159) * (0.10 + aWeight * 0.20) * uReveal * focusFade(aStation);
+  vAlpha = sin(life * 3.14159) * (0.10 + aWeight * 0.20) * uReveal * focusFade(aStation)
+         * mix(1.0, 0.45, uPostStrength);
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   gl_PointSize = pointSizeFor((0.0018 + aWeight * 0.0034 + ripple * 0.006) * uAltitude, mv.z);

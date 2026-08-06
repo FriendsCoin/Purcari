@@ -27,13 +27,63 @@ so on screen.
 | | Chapter | What it shows | Touch |
 |---|---|---|---|
 | — | **Le chœur** | Attract state. All 2,665 detections held in a ring whose azimuth is time of day, with a wave of light sweeping it in clock order. Because the dawn chorus is almost a third of the record, the wave arrives as a visible swell every half minute and goes quiet overnight. | Drag to turn, tap to push the cloud |
-| I | **Terroir** | The estate from above, on aerial imagery, with the five recorders marked where they actually stand and a plume of light over each one carrying its detections. It behaves like a map: drag to pan, pinch to zoom, and a scale bar in the masthead tracks the zoom. | Drag to pan, pinch to zoom, tap a marker |
-| II | **Circadien** | Every detection on a 24-hour dial: angle from the minute it was recorded, distance from the centre from its rank within that hour. The spikes *are* the hourly histogram, and the tallest by a wide margin is the dawn chorus at 04:00–07:00. | Drag left/right to scrub the hour |
+| I | **Terroir** | The estate from above, on aerial imagery, with the five recorders marked where they actually stand and a plume of light over each one carrying its detections. It behaves like a map: drag to pan, pinch to zoom, and a scale bar in the masthead tracks the zoom. Touching a recorder **falls into it** — see *Inside a station* below. | Drag to pan, pinch to zoom, tap a recorder to enter it |
+| II | **Circadien** | A crown of twenty-four blades standing on the day itself. Each blade is an hour, its height the detections in it, and inside it every one of those detections is a mote placed by its own minute and coloured by guild. The ground is the real day for 46.52° N — gold from sunrise at 05:49 to sunset at 20:24, violet either side. The two tallest blades in the ring stand entirely on the violet. | Drag sideways to walk round it, up/down to fall from clock to skyline, pinch to close in, tap an hour to hold it |
 | III | **Espèces** | 121 species positioned by *when* they sing — the angle of each node is the circular mean of its 24-hour profile, so the dawn chorus gathers on one side and the owls and nightjars drift to the other. Distance from the centre is inverse abundance. Links join species with similar daily rhythms. | Drag to rotate, tap a node to select it |
 | IV | **Flux** | The seventeen days of the survey as a river of light, thinning from 347 detections on 4 August to one on the last three days. | Drag left/right to scrub the day |
 | V | **Chevauchement** | Eighteen camera-trap species and the correlation between their daily rhythms, as a ring of chords. Warm means two species are out at the same hours, cool means they avoid each other. The highlight walks the ring on its own. | Tap a species to hold it |
 | VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
 | VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
+
+### Inside a station
+
+Touching a recorder in Chapter I does not frame it — it falls to it. The map's own
+altitude keeps going down to about a hundred metres, the tilt comes up with it,
+and the recorder's own record unfolds on the ground it actually stands on:
+
+- **twenty-four spokes** engraved around the microphone, one per hour, their
+  length that station's own count for that hour — not the survey's. ct47 at the
+  ponds spikes through the night; the plateau recorders do not;
+- **a filament for every species it heard**, standing at the hour it sings (the
+  same clock as everywhere else, so the dawn chorus gathers on one side and the
+  owls on the other) and as tall as the log of its count here;
+- the station's plume of detections, stepped back so the instrument reads.
+
+The instrument is about a hundred and ten metres across, which is the clearing a
+recorder listens over rather than a diagram floating in space. Touching a
+filament opens that species **as this station heard it** — and the sparkline is
+its hours *here*, which is the whole reason to stand at a post: the night heron
+is a 23:00 bird at the ponds, and the same atlas entry says nothing of the kind.
+The species carries over to the other chapters like any other selection.
+Anything that is not a filament is the way back up to the map.
+
+The scale bar is computed along the distance to what the camera is looking at
+rather than straight down. Overhead the two are the same; leaning in at a post
+they are not, and the bar would otherwise report a third of the distance it
+draws.
+
+### What Chapter II is made of
+
+The crown's ground is the sun: NOAA's solar equations for the middle of the
+survey, 05:49 to 20:24. The seventeen days move sunrise by twenty minutes, less
+than the width of the drawn seam, so one arc for the window is honest — and the
+figures in the readout do not use it anyway. Each detection is measured against
+the sunrise of **its own day**:
+
+| | detections | share |
+|---|---|---|
+| before sunrise | 628 | 23.6 % |
+| after sunset | 104 | 3.9 % |
+
+Nearly a quarter of the record is sung in the dark, and only four percent of it
+after dusk. The two loudest hours of the whole survey, 04:00 (222) and 05:00
+(239), both end before the sun clears the horizon. The dawn chorus is not an
+early-morning thing; it is a night thing that stops when the light arrives.
+
+The guilds sort themselves without being asked, which is why the blades are
+tinted by the dominant guild of their own hour: waterbirds hold midnight to
+02:00, owls and nightjars hold 03:00 and everything from 19:00, songbirds hold
+the rest.
 
 ### What Chapter I is made of
 
@@ -205,10 +255,15 @@ Designed for a wall panel with no cursor, no keyboard and no scroll:
   tap on the same thing and let it go. Nothing could be selected by finger at
   all, and a mouse, which does not leave the canvas when a click ends, showed
   none of it.
-- Where something plays on its own — the circadian hand, the river of days — a
-  tap **holds it**: the hand goes to the hour you pointed at and stays. Tapping
-  the middle of the dial, or the day already held, hands it back. A held hour
-  also names more of what was singing in it.
+- Where something plays on its own — the circadian sweep, the river of days — a
+  tap **holds it**: the hour you pointed at stays, and its detections fan open
+  out of the blade into a comb you can count. Tapping the middle of the ring, or
+  the day already held, hands it back. A held hour also names more of what was
+  singing in it.
+- A chapter with a three-dimensional object in it separates the axes rather than
+  overloading one drag: sideways turns, up and down changes the angle you read it
+  from, two fingers change how close you stand. Chapter II falls from a clock
+  face to a skyline that way, and it is the same object either way round.
 - A flick keeps spinning after release, then the framing eases back toward a
   composed one — so a visitor who spins the camera and walks away leaves the
   piece looking intentional for the next person.
