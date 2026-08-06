@@ -9,7 +9,7 @@ import {
   PALETTE,
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
-import { Spectrogram } from '../ui/Spectrogram';
+import { Spectrogram, SPECTROGRAM_AXES } from '../ui/Spectrogram';
 import { useChapterTransition } from '../core/useChapterTransition';
 import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
@@ -18,6 +18,7 @@ import { Choir } from '../gl/Choir';
 import { Refuge, type RefugeMode } from '../gl/Refuge';
 import { Unseen } from '../gl/Unseen';
 import { buildRings } from '../gl/unseenRings';
+import { GLYPH_CREDIT } from '../gl/silhouettes';
 import '../ui/installation.css';
 
 /**
@@ -1027,8 +1028,17 @@ export default function IndoorApp() {
               Its voice
             </p>
             <Spectrogram active={chapter.id === 'choir'} height={78} />
+            {/*
+              The axes, stated. Without them the strip is a texture — nobody can
+              tell whether the bright band low down is a drone or a whistle. The
+              provenance line stays whole above it: it is the more important of
+              the two sentences and must not be shortened to make room.
+            */}
             <p className="inst-mono" style={{ marginTop: '0.4rem' }}>
               SYNTHESISED FROM THIS SPECIES&rsquo; OWN MEASURES — NOT A RECORDING
+            </p>
+            <p className="inst-mono" style={{ marginTop: '0.2rem', opacity: 0.5 }}>
+              {SPECTROGRAM_AXES.toUpperCase()}
             </p>
 
             <div className="inst-rule" />
@@ -1112,13 +1122,55 @@ export default function IndoorApp() {
                 );
               })}
             </div>
+            {/*
+              JAN and DEC anchor the axis; the peak month is named over its own
+              bar, not spaced evenly between them. Laid out with space-between it
+              read as a three-point scale, so a species peaking in February was
+              labelled FEB at the middle of the year — the axis contradicting the
+              bar directly above it.
+            */}
             <div
               className="inst-mono"
-              style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem' }}
+              style={{ position: 'relative', marginTop: '0.4rem', height: '1.1em' }}
             >
-              <span>JAN</span>
-              <span>{MONTHS[selectedSpecies.peakMonth - 1].toUpperCase()}</span>
-              <span>DEC</span>
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  color: selectedSpecies.peakMonth === 1 ? PALETTE.candle : undefined,
+                }}
+              >
+                JAN
+              </span>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  color: selectedSpecies.peakMonth === 12 ? PALETTE.candle : undefined,
+                }}
+              >
+                DEC
+              </span>
+              {/*
+                A January or December peak is already named by its anchor — drawn
+                again it would land on top of it. Lighting the anchor instead
+                keeps one label per month at either end of the axis.
+              */}
+              {selectedSpecies.peakMonth > 1 && selectedSpecies.peakMonth < 12 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    // Centre of the peak bar: twelve equal columns, so the n-th
+                    // sits at (n - 0.5)/12 of the width.
+                    left: `${((selectedSpecies.peakMonth - 0.5) / 12) * 100}%`,
+                    transform: 'translateX(-50%)',
+                    color: PALETTE.candle,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {MONTHS[selectedSpecies.peakMonth - 1].toUpperCase()}
+                </span>
+              )}
             </div>
 
             {/* Where it was actually recorded. */}
@@ -1229,6 +1281,19 @@ export default function IndoorApp() {
             <button className="inst-rise inst-delay-3" onClick={() => void begin()}>
               Enter
             </button>
+            {/*
+              The colophon. A piece that spends five chapters insisting on the
+              difference between what was counted and what was estimated cannot
+              then put two generated animals on screen without saying so, and the
+              place to say it is before the visitor starts rather than in a
+              footnote they will never reach.
+            */}
+            <p
+              className="inst-mono inst-rise inst-delay-4"
+              style={{ margin: '2.6rem auto 0', maxWidth: '34rem', opacity: 0.45 }}
+            >
+              {GLYPH_CREDIT}
+            </p>
           </div>
         </div>
       )}

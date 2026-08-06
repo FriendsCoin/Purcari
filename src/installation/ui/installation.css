@@ -187,8 +187,23 @@
 
 .inst-corner--tl { top: 0; left: 0; }
 .inst-corner--tr { top: 0; right: 0; text-align: right; }
-.inst-corner--bl { bottom: 0; left: 0; }
 .inst-corner--br { bottom: 0; right: 0; text-align: right; }
+
+/*
+ * Held clear of the chapter nav, which is centred along the same edge. Left
+ * unbounded, the longest caption in the piece — the Refuge's "same community in
+ * every stage · one year, no before-and-after" — ran straight under THE ESTATE
+ * and became unreadable. That line is the one that says the chapter is not
+ * claiming cause, so of everything on screen it is the least acceptable thing
+ * to lose. The nav's left edge sits a little under 27% of the width, so the
+ * cap keeps a margin on that.
+ */
+.inst-corner--bl {
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  max-width: min(30rem, 25vw);
+}
 
 .inst-rule {
   height: 1px;
@@ -286,12 +301,23 @@
 .inst-panel--right {
   position: absolute;
   top: 0;
-  bottom: 0;
+  /*
+   * Stops above the chapter nav. The panel is centred in the space between
+   * `top` and `bottom`, so leaving `bottom: 0` let a tall species — one with a
+   * long station list — grow until its lower edge sat on top of THE REFUGE and
+   * ate the last nav item.
+   */
+  bottom: 5.5rem;
   right: clamp(1.4rem, 3vw, 3.4rem);
   margin: auto 0;
   height: fit-content;
   width: clamp(280px, 26vw, 440px);
-  max-height: 80vh;
+  /*
+   * border-box, or the padding is added on top of max-height and the panel
+   * stands ~66px taller than the number written here.
+   */
+  box-sizing: border-box;
+  max-height: 100%;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -708,10 +734,17 @@
     letter-spacing: 0.14em;
   }
 
-  /* Detail panels become bottom sheets, clear of the nav. */
+  /*
+   * Detail panels become bottom sheets, clear of the nav.
+   *
+   * The offset has to cover the whole nav, not just one touch target: the bar
+   * adds its own top padding and sits a little above the safe area, which put
+   * the last rows of the sheet under it — measured at 8px of overlap on a
+   * 390x844 phone. 2.4rem is that gap plus a margin.
+   */
   .inst-panel--right {
     top: auto;
-    bottom: calc(var(--touch) + 0.6rem + env(safe-area-inset-bottom));
+    bottom: calc(var(--touch) + 2.4rem + env(safe-area-inset-bottom));
     left: 0.6rem;
     right: 0.6rem;
     margin: 0;
