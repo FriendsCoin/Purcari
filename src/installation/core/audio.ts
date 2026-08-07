@@ -173,6 +173,7 @@ export interface PlayOptions {
 
 export class SoundField {
   private ctx: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
   private master: GainNode | null = null;
   private voiceBus: GainNode | null = null;
   private reverb: ConvolverNode | null = null;
@@ -192,6 +193,15 @@ export class SoundField {
    */
   private lastVoiceAt = -Infinity;
   private maxPolyphony = 14;
+
+  /**
+   * The output tap, or null before the visitor has started the audio. Callers
+   * read it every frame and must tolerate null: the browser will not give this
+   * piece an AudioContext until someone touches the screen.
+   */
+  get spectrum(): AnalyserNode | null {
+    return this.analyser;
+  }
 
   get ready(): boolean {
     return this.ctx !== null && this.ctx.state === 'running';
@@ -227,6 +237,7 @@ export class SoundField {
     limiter.release.value = 0.18;
 
     master.connect(limiter);
+
     limiter.connect(ctx.destination);
 
     const voiceBus = ctx.createGain();
@@ -240,7 +251,53 @@ export class SoundField {
     reverb.connect(wet);
     wet.connect(master);
 
+    /**
+     * A tap for the spectrogram, carrying the voices and nothing else.
+     *
+     * This began as a tap on the master bus after the limiter, on the principle
+     * that the honest thing to draw is exactly what leaves the speakers. It was
+     * measured, and the principle turned out to produce a dishonest picture: the
+     * ambient bed and the wind go straight to master and sit far louder than any
+     * call, so every species drew the same bar low in the strip and a Blackcap at
+     * 2–4 kHz was invisible under a drone. A panel headed "its voice" showing the
+     * room's drone is a worse lie than a narrower tap.
+     *
+     * So the analyser is fed from `voiceBus` and the reverb return, summed here.
+     * That is still signal genuinely being played — the same nodes that reach the
+     * speakers, including each voice's own reverb — with the bed left out. It is
+     * not a second synthesis run, and it is never a recording. The one thing that
+     * changes is that the strip answers "what is this animal doing" rather than
+     * "what is the room doing", which is the question the panel asks.
+     *
+     * `voiceTap` deliberately does not reach the destination: it is an analysis
+     * branch, and adds nothing to the sound.
+     *
+     * 2048 is a ~46 ms window at 44.1 kHz: fine enough in frequency to separate
+     * the formants that give each voice its character, short enough that a
+     * 90 ms call still occupies several columns rather than smearing into one.
+     */
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.35;
+    // The window is set around the level a single voice actually reaches on this
+    // branch — measured at roughly -58 dB per bin at the peak of a call, because
+    // each voice is mixed against a 14-voice polyphony cap and there is no master
+    // gain in front of the tap. With the -12 dB ceiling a full-bus tap wants, a
+    // call drew at a third of the ramp and every species came out the same dim
+    // grey. There is no amplitude axis on the strip — its two scales are
+    // frequency and time, and both are stated — so this decides brightness only.
+    // The floor can sit low here: with the bed excluded, silence on this branch
+    // is actual silence and draws nothing at all.
+    analyser.minDecibels = -90;
+    analyser.maxDecibels = -45;
+    const voiceTap = ctx.createGain();
+    voiceTap.gain.value = 1;
+    voiceBus.connect(voiceTap);
+    wet.connect(voiceTap);
+    voiceTap.connect(analyser);
+
     this.ctx = ctx;
+    this.analyser = analyser;
     this.master = master;
     this.voiceBus = voiceBus;
     this.reverb = reverb;

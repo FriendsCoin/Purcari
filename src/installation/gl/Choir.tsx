@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import type { InstallationData, Species } from '../core/types';
 import { logScale } from '../core/data';
 import { GUILD_COLORS, PALETTE, toRGB } from '../core/palette';
-import { SIMPLEX_3D } from './chunks';
+import { SIMPLEX_3D, SPRITE } from './chunks';
+import { GLYPH_POINTS, glyphCloud, glyphFor } from './silhouettes';
 
 /**
  * "The Choir" — every species recorded at Purcari, at once.
@@ -130,7 +131,7 @@ void main(){
   color += vec3(1.0, 0.93, 0.78) * core * (0.4 + vSelected * 0.9);
 
   float a = (core * 0.95 + halo * 0.55);
-  a *= mix(1.0, 0.16, vDimmed);
+  a *= mix(1.0, 0.3, vDimmed);
   a *= (0.55 + vAwake * 0.45);
 
   // The passing shockwave lifts a mark toward the candle white and back.
@@ -276,6 +277,106 @@ void main(){
 }
 `;
 
+/**
+ * The ghost the swarm gathers when an animal is chosen.
+ *
+ * Marks fly out of the cloud and settle onto the contour of a pictogram — a bird
+ * or a quadruped, chosen by the species' own guild — hold there, and scatter
+ * again when the selection clears. It is the one figurative moment in a piece
+ * made entirely of abstract marks, and it earns its place by being what a
+ * visitor actually asks of a species list: *what is it?*
+ *
+ * Deliberately a pictogram and not a portrait. See `silhouettes.ts`.
+ */
+
+/**
+ * World size of the form's longest axis on a landscape frame.
+ *
+ * Larger than the contour version this replaced: a cloud sampled over a surface
+ * spreads the same number of marks through a volume, so it reads fainter and
+ * smaller than an outline drawn with the same count.
+ */
+const GLYPH_SCALE = 8.2;
+
+const GLYPH_VERT = /* glsl */ `
+${SIMPLEX_3D}
+attribute vec3 aBird;
+attribute vec3 aMammal;
+attribute vec3 aScatter;
+attribute float aSeed;
+
+uniform float uTime;
+uniform float uForm;    // 0 = dispersed in the cloud, 1 = settled on the form
+uniform float uGlyph;   // 0 = bird, 1 = quadruped
+uniform float uTurn;    // radians about Y — the ghost is a solid and it turns
+uniform float uScale;
+uniform float uSize;
+
+varying float vAlpha;
+varying float vDepth;
+
+void main(){
+  vec3 shape = mix(aBird, aMammal, uGlyph) * uScale;
+
+  // The form is a solid, so it turns. Only a few degrees either way: a full
+  // rotation would carry the silhouette through its own edge-on view, where a
+  // bird from the front is a shapeless V and a deer from the front is a post.
+  float c = cos(uTurn);
+  float sn = sin(uTurn);
+  shape = vec3(shape.x * c + shape.z * sn, shape.y, shape.z * c - shape.x * sn);
+  vDepth = shape.z;
+
+  // The surface breathes and drifts a little even when fully formed. A form
+  // pinned to exact coordinates reads as clip art; one still made of living
+  // marks reads as the swarm holding a shape, which is what it is.
+  float t = uTime * 0.25 + aSeed * 30.0;
+  vec3 breath = vec3(
+    snoise(vec3(shape.yz * 0.6, t)),
+    snoise(vec3(shape.zx * 0.6, t + 11.0)),
+    snoise(vec3(shape.xy * 0.6, t + 23.0))
+  );
+  vec3 target = shape + breath * 0.16;
+
+  // Each mark arrives on its own beat, so the form assembles rather than snaps.
+  float lag = 1.0 - aSeed * 0.45;
+  float form = clamp(uForm * 1.45 * lag, 0.0, 1.0);
+  form = form * form * (3.0 - 2.0 * form);
+
+  vec3 p = mix(aScatter, target, form);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_PointSize = uSize * (0.45 + form * 0.55) * (300.0 / -mv.z);
+  gl_Position = projectionMatrix * mv;
+
+  vAlpha = form;
+}
+`;
+
+const GLYPH_FRAG = /* glsl */ `
+${SPRITE}
+uniform vec3 uColor;
+uniform float uScale;
+
+varying float vAlpha;
+varying float vDepth;
+
+void main(){
+  float mask = spriteAlpha(gl_PointCoord, 0.5);
+
+  // The far side of the form is dimmer than the near side. Without it a point
+  // cloud of a solid reads as a flat scatter — every mark equally bright, front
+  // and back on top of each other — and the whole reason for using a 3D form is
+  // lost. Normalised by the scale so it holds if the ghost is resized.
+  float depth = clamp(vDepth / max(uScale * 0.5, 0.001) * 0.5 + 0.5, 0.0, 1.0);
+  float facing = mix(0.42, 1.0, depth);
+
+  // Kept low: this sits behind two hundred marks and a caption, and a bright
+  // glyph would out-shout the animal it is labelling.
+  float a = mask * vAlpha * facing * 0.95;
+  if (a <= 0.003) discard;
+  gl_FragColor = vec4((uColor + vec3(0.35, 0.31, 0.24) * vAlpha * facing) * a, a);
+}
+`;
+
 export interface ChoirProps {
   data: InstallationData;
   reveal?: number;
@@ -306,6 +407,7 @@ export function Choir({
   const pointsRef = useRef<THREE.Points>(null);
   /** Marks, filaments and rings all hang off this so they can never drift apart. */
   const swarmRef = useRef<THREE.Group>(null);
+  const glyphRef = useRef<THREE.Points>(null);
   const revealRef = useRef(0);
   const spinRef = useRef(0);
   const clusterRef = useRef(0);
@@ -592,6 +694,52 @@ export function Choir({
    * uploads only the uniforms a given program actually declares, so the extras
    * cost nothing.
    */
+  /**
+   * The pictogram layer. Both outlines are baked into one buffer so the shader
+   * can hold either — or morph between them if the visitor jumps from a bird to
+   * a mammal — without rebuilding anything.
+   */
+  const glyphGeometry = useMemo(() => {
+    const bird = glyphCloud('bird');
+    const mammal = glyphCloud('mammal');
+    const scatter = new Float32Array(GLYPH_POINTS * 3);
+    const seeds = new Float32Array(GLYPH_POINTS);
+    for (let i = 0; i < GLYPH_POINTS; i++) {
+      // Where a mark waits when nothing is chosen: a loose cloud the size of the
+      // swarm, so the form gathers out of the same space the animals live in.
+      const theta = (i * 2.399963) % (Math.PI * 2);
+      const radius = 3 + ((i * 0.7548776662466927) % 1) * 6;
+      scatter[i * 3] = Math.cos(theta) * radius;
+      scatter[i * 3 + 1] = (((i * 0.5698402909980532) % 1) - 0.5) * 6;
+      scatter[i * 3 + 2] = Math.sin(theta) * radius * 0.4;
+      seeds[i] = (i * 0.6180339887498949) % 1;
+    }
+
+    const g = new THREE.BufferGeometry();
+    // `position` is unused by the glyph shader but three.js needs one to bound
+    // the draw; the scattered cloud is the honest extent.
+    g.setAttribute('position', new THREE.BufferAttribute(scatter.slice(), 3));
+    g.setAttribute('aBird', new THREE.BufferAttribute(bird, 3));
+    g.setAttribute('aMammal', new THREE.BufferAttribute(mammal, 3));
+    g.setAttribute('aScatter', new THREE.BufferAttribute(scatter, 3));
+    g.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 14);
+    return g;
+  }, []);
+
+  const glyphUniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uForm: { value: 0 },
+      uGlyph: { value: 0 },
+      uTurn: { value: 0 },
+      uScale: { value: GLYPH_SCALE },
+      uSize: { value: 0.58 },
+      uColor: { value: new THREE.Color(PALETTE.foil) },
+    }),
+    [],
+  );
+
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -740,6 +888,51 @@ export function Choir({
       if (isNewAnimal) pulseRef.current = selected ? 0 : 2;
     }
 
+    /* ---- the pictogram ---- */
+    glyphUniforms.uTime.value = t;
+
+    /*
+     * How much of the frame the ghost can have.
+     *
+     * On the kiosk it has the whole middle. In portrait the species panel
+     * becomes a bottom sheet and the chapter's title and standfirst run the full
+     * width above it, and what is left between them was measured at 51 px on a
+     * 390x844 phone — a band the ghost cannot be drawn in and cannot be drawn
+     * through. Formed at the centre of the world it sits behind the sheet and
+     * shows only as a cloud leaking from under the top edge, which reads as a
+     * bug rather than as an animal.
+     *
+     * So it fades out as the frame narrows, and is gone by 1.7:1. That is not a
+     * quiet failure: the phone still names the species, draws its voice, its day
+     * and its year. What it loses is the gesture, which is the kiosk's, and a
+     * gesture shrunk to a smudge would be worse than its absence.
+     */
+    const aspect = size.height / Math.max(1, size.width);
+    const room = 1 - THREE.MathUtils.smoothstep(aspect, 1.3, 1.7);
+    if (glyphRef.current) {
+      const portrait = THREE.MathUtils.clamp(aspect - 1, 0, 0.7);
+      glyphRef.current.position.y = portrait * 3.4;
+      glyphUniforms.uScale.value = GLYPH_SCALE * (1 - portrait * 0.34);
+    }
+    // A slow sway rather than a spin — ±14°, which is enough for the legs of the
+    // deer to separate in depth and for the bird's far wing to fall behind the
+    // near one, and not enough to reach either form's unreadable edge-on view.
+    glyphUniforms.uTurn.value = Math.sin(t * 0.16) * 0.24;
+    // Only ever holds a form while something is chosen, and it takes its time
+    // both ways: gathering is the point, and a form that snapped would read as
+    // an overlay rather than as the swarm doing something.
+    glyphUniforms.uForm.value +=
+      ((selected ? room : 0) - glyphUniforms.uForm.value) * Math.min(1, delta * 1.5);
+    if (selected) {
+      // Held until the next selection rather than eased back: with nothing
+      // chosen there is no form on screen to be wrong about, and morphing the
+      // ghost to a bird as it disperses looks like an error.
+      glyphUniforms.uGlyph.value +=
+        ((glyphFor(selected.guild) === 'mammal' ? 1 : 0) - glyphUniforms.uGlyph.value) *
+        Math.min(1, delta * 2.2);
+      glyphUniforms.uColor.value.set(GUILD_COLORS[selected.guild] ?? PALETTE.foil);
+    }
+
     // A little over half a second from the mark to the far edge of the swarm.
     if (pulseRef.current <= 1) pulseRef.current = Math.min(1.2, pulseRef.current + delta * 1.6);
     uniforms.uPulse.value = pulseRef.current;
@@ -761,6 +954,21 @@ export function Choir({
 
   return (
     <group>
+      {/*
+        Behind everything, and outside the swarm's rotation: the ghost is a label
+        held up beside the constellation, not a member of it.
+      */}
+      <points ref={glyphRef} geometry={glyphGeometry} position={[0, 0, -3.5]} renderOrder={-1}>
+        <shaderMaterial
+          vertexShader={GLYPH_VERT}
+          fragmentShader={GLYPH_FRAG}
+          uniforms={glyphUniforms}
+          transparent
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </points>
+
       <group ref={swarmRef}>
         {/* Drawn before the marks so the marks always sit on top of their own web. */}
         <lineSegments geometry={filamentGeometry} renderOrder={0}>

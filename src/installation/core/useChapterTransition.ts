@@ -33,7 +33,7 @@ export interface ChapterTransition<T> {
  * @param value    the chapter identity — changing it starts a dissolve
  * @param duration seconds the two scenes overlap
  */
-export function useChapterTransition<T>(value: T, duration = 1.15): ChapterTransition<T> {
+export function useChapterTransition<T>(value: T, duration = 1.5): ChapterTransition<T> {
   const [state, setState] = useState<{ current: T; previous: T | null; t: number }>({
     current: value,
     previous: null,

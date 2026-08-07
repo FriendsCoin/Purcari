@@ -219,6 +219,46 @@ export function Stage({
 }
 
 /**
+ * Holds one chapter while it arrives or leaves.
+ *
+ * A cross-fade between two scenes that both sit still at full size reads as one
+ * image printed over another — the eye sees two flat layers, not a move. Giving
+ * the outgoing chapter somewhere to *go* — back and down, away from the camera —
+ * while the incoming one comes forward turns the same dissolve into depth.
+ *
+ * The two are deliberately asymmetric: what is leaving recedes about twice as
+ * far as what is arriving comes forward, so the pair reads as one scene passing
+ * behind another rather than as a symmetrical zoom in and out.
+ *
+ * At rest the transform is exactly identity, so nothing that picks against a
+ * world matrix is disturbed once a chapter has settled.
+ */
+export function ChapterFrame({
+  reveal,
+  leaving = false,
+  children,
+}: {
+  reveal: number;
+  leaving?: boolean;
+  children: ReactNode;
+}) {
+  const ref = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    const group = ref.current;
+    if (!group) return;
+    const r = THREE.MathUtils.clamp(reveal, 0, 1);
+    const eased = r * r * (3 - 2 * r);
+    const depth = leaving ? 0.11 : 0.05;
+    group.scale.setScalar(1 - depth * (1 - eased));
+    group.position.y = -(1 - eased) * (leaving ? 0.55 : 0.26);
+    group.visible = eased > 0.002;
+  });
+
+  return <group ref={ref}>{children}</group>;
+}
+
+/**
  * A camera that eases toward successive targets instead of cutting. Chapter
  * changes and station selections both drive it, which is what gives the indoor
  * piece its unhurried, cinematic feel.
@@ -240,16 +280,34 @@ export function CameraRig({
    * still gets the room it needs.
    */
   subjectAspect = 1,
+  /**
+   * How far the camera may be pushed back to fit a wide subject on a narrow
+   * viewport. The default stops a portrait phone from flying the camera to the
+   * far clip plane over a subject that was never going to fit anyway; a chapter
+   * whose subject genuinely is that wide — a ten-column colonnade — raises it.
+   */
+  maxPull = 2.2,
+  /**
+   * 0..1 through a chapter dissolve. The camera eases back along its own axis and
+   * settles again — the small pull that makes two scenes read as one continuous
+   * move rather than as a cut with a cross-fade painted over it. Cinema does the
+   * same thing, and for the same reason: a camera that never moves through a
+   * transition tells the eye there were two cameras.
+   */
+  dissolve = 0,
 }: {
   position: [number, number, number];
   lookAt?: [number, number, number];
   speed?: number;
   subjectAspect?: number;
+  maxPull?: number;
+  dissolve?: number;
 }) {
   const { size } = useThree();
   const target = useRef(new THREE.Vector3(...lookAt));
   const desired = useRef(new THREE.Vector3(...position));
   const base = useRef(new THREE.Vector3(...position));
+  const scratch = useRef(new THREE.Vector3());
 
   useEffect(() => {
     base.current.set(...position);
@@ -264,13 +322,20 @@ export function CameraRig({
     desired.current
       .copy(base.current)
       .sub(target.current)
-      .multiplyScalar(Math.min(pull, 2.2))
+      .multiplyScalar(Math.min(pull, maxPull))
       .add(target.current);
-  }, [size.width, size.height, subjectAspect, position, lookAt]);
+  }, [size.width, size.height, subjectAspect, maxPull, position, lookAt]);
 
   useFrame((state, delta) => {
     const k = Math.min(1, delta * speed);
-    state.camera.position.lerp(desired.current, k);
+    // The dolly is applied to the *goal*, not to the camera, so it composes with
+    // the ease instead of fighting it: the camera is always chasing one point.
+    scratch.current
+      .copy(desired.current)
+      .sub(target.current)
+      .multiplyScalar(1 + dissolve * 0.16)
+      .add(target.current);
+    state.camera.position.lerp(scratch.current, k);
     state.camera.lookAt(target.current);
   });
 

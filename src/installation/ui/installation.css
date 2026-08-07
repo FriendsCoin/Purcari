@@ -68,6 +68,27 @@
   pointer-events: auto;
 }
 
+/*
+ * A whole chapter's overlay, held on stage while it fades. Absolute and inert
+ * itself so it does not disturb the corners it contains, which keep their own
+ * positioning and their own touches.
+ *
+ * Not called `.inst-fade`: that name was already taken by the entrance
+ * animation below, and giving every element carrying it `position: absolute;
+ * inset: 0` stretched the totals corner and the outdoor title band across the
+ * whole frame.
+ */
+.inst-chapter-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.inst-chapter-layer > * {
+  pointer-events: auto;
+}
+
 /* Anything that should not eat touches. */
 .inst-pass {
   pointer-events: none !important;
@@ -166,8 +187,23 @@
 
 .inst-corner--tl { top: 0; left: 0; }
 .inst-corner--tr { top: 0; right: 0; text-align: right; }
-.inst-corner--bl { bottom: 0; left: 0; }
 .inst-corner--br { bottom: 0; right: 0; text-align: right; }
+
+/*
+ * Held clear of the chapter nav, which is centred along the same edge. Left
+ * unbounded, the longest caption in the piece — the Refuge's "same community in
+ * every stage · one year, no before-and-after" — ran straight under THE ESTATE
+ * and became unreadable. That line is the one that says the chapter is not
+ * claiming cause, so of everything on screen it is the least acceptable thing
+ * to lose. The nav's left edge sits a little under 27% of the width, so the
+ * cap keeps a margin on that.
+ */
+.inst-corner--bl {
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  max-width: min(30rem, 25vw);
+}
 
 .inst-rule {
   height: 1px;
@@ -265,12 +301,23 @@
 .inst-panel--right {
   position: absolute;
   top: 0;
-  bottom: 0;
+  /*
+   * Stops above the chapter nav. The panel is centred in the space between
+   * `top` and `bottom`, so leaving `bottom: 0` let a tall species — one with a
+   * long station list — grow until its lower edge sat on top of THE REFUGE and
+   * ate the last nav item.
+   */
+  bottom: 5.5rem;
   right: clamp(1.4rem, 3vw, 3.4rem);
   margin: auto 0;
   height: fit-content;
   width: clamp(280px, 26vw, 440px);
-  max-height: 80vh;
+  /*
+   * border-box, or the padding is added on top of max-height and the panel
+   * stands ~66px taller than the number written here.
+   */
+  box-sizing: border-box;
+  max-height: 100%;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -303,6 +350,79 @@
   font-family: var(--mono);
   font-size: 0.92rem;
   color: var(--candle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------- the ring list */
+
+/*
+ * The Unseen's legend. Thirteen rows have to be a scannable column of bars, not
+ * a table — the eye compares the bar ends, and the percentage is there to be
+ * read only once one row has been chosen.
+ */
+.inst-ringlist {
+  padding-top: clamp(1rem, 1.6vw, 1.6rem);
+  padding-bottom: clamp(1rem, 1.6vw, 1.6rem);
+  /*
+   * Anchored below the totals rather than centred in the frame. Thirteen rows
+   * is a tall panel, and vertically centred it climbs straight into the
+   * top-right block that every chapter carries.
+   */
+  top: clamp(12rem, 42vh, 25rem);
+  bottom: auto;
+  margin: 0;
+}
+
+.inst-ring-row {
+  appearance: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 4.5rem 2.4rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.34rem 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ash);
+  font-family: var(--body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  transition: color 320ms ease;
+}
+
+.inst-ring-row[data-active='true'] { color: var(--candle); }
+.inst-ring-row[data-estate='true'] { color: var(--parchment); font-weight: 600; }
+.inst-ring-row[data-estate='true'][data-active='true'] { color: var(--candle); }
+
+.inst-ring-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The bar is the same reading as the ring: filled to completeness, open after. */
+.inst-ring-bar {
+  height: 2px;
+  background: rgba(232, 200, 106, 0.14);
+  position: relative;
+  overflow: hidden;
+}
+
+.inst-ring-bar span {
+  display: block;
+  height: 100%;
+  background: var(--foil);
+  transform-origin: left;
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.inst-ring-value {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
@@ -558,12 +678,36 @@
     display: none;
   }
 
-  /* Chapter controls stack above the totals row. */
+  /*
+   * Chapter controls stack above the totals row.
+   *
+   * In portrait there is no gutter to put them in — they sit directly over the
+   * scene, which on a chapter as wide as the colonnade means over the subject
+   * itself. A scrim rising from the bottom keeps them legible without hiding
+   * what is behind them, mirroring the title band at the top of the frame.
+   */
   .inst-corner--bl {
     bottom: calc(var(--touch) + 3.1rem + env(safe-area-inset-bottom));
     left: 0;
     right: 0;
-    padding: 0 1.1rem;
+    padding: 1.2rem 1.1rem 0;
+    background: linear-gradient(
+      0deg,
+      rgba(5, 4, 10, 0.92) 0%,
+      rgba(5, 4, 10, 0.8) 55%,
+      transparent 100%
+    );
+  }
+
+  /*
+   * The ring list is kiosk furniture. Thirteen rows and the chapter's own
+   * reading cannot both hold the bottom of a phone, and the list is the part a
+   * wall needs — from across a room the inner rings are indistinguishable. At
+   * arm's length they are not: the figure is directly touchable, and the reading
+   * under it is what the visitor came for.
+   */
+  .inst-ringlist {
+    display: none;
   }
 
   /* Wall credits and the touch prompt are gallery furniture; a phone has neither. */
@@ -590,10 +734,17 @@
     letter-spacing: 0.14em;
   }
 
-  /* Detail panels become bottom sheets, clear of the nav. */
+  /*
+   * Detail panels become bottom sheets, clear of the nav.
+   *
+   * The offset has to cover the whole nav, not just one touch target: the bar
+   * adds its own top padding and sits a little above the safe area, which put
+   * the last rows of the sheet under it — measured at 8px of overlap on a
+   * 390x844 phone. 2.4rem is that gap plus a margin.
+   */
   .inst-panel--right {
     top: auto;
-    bottom: calc(var(--touch) + 0.6rem + env(safe-area-inset-bottom));
+    bottom: calc(var(--touch) + 2.4rem + env(safe-area-inset-bottom));
     left: 0.6rem;
     right: 0.6rem;
     margin: 0;

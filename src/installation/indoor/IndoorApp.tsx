@@ -9,12 +9,16 @@ import {
   PALETTE,
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
+import { Spectrogram, SPECTROGRAM_AXES } from '../ui/Spectrogram';
 import { useChapterTransition } from '../core/useChapterTransition';
-import { Stage, CameraRig } from '../gl/Stage';
+import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
-import { Refuge } from '../gl/Refuge';
+import { Refuge, type RefugeMode } from '../gl/Refuge';
+import { Unseen } from '../gl/Unseen';
+import { buildRings } from '../gl/unseenRings';
+import { GLYPH_CREDIT } from '../gl/silhouettes';
 import '../ui/installation.css';
 
 /**
@@ -29,7 +33,7 @@ import '../ui/installation.css';
  * animals living on top of it, and calls the result the estate's other harvest.
  */
 
-type ChapterId = 'estate' | 'year' | 'choir' | 'refuge';
+type ChapterId = 'estate' | 'year' | 'choir' | 'unseen' | 'refuge';
 
 /** Where one Refuge column's foot sits on screen, reported by the scene itself. */
 interface RefugeMark {
@@ -39,6 +43,19 @@ interface RefugeMark {
   self: boolean;
   value: number;
 }
+
+/**
+ * The four questions the Refuge row can answer. All four are about this estate
+ * and nothing outside it: what it does, what its own ground carries as the
+ * cameras see it and as the recorders hear it, and what its published ecosystem
+ * score stands on.
+ */
+const REFUGE_READINGS: { label: string; mode: RefugeMode; metric: number }[] = [
+  { label: 'Practices', mode: 'practices', metric: 0 },
+  { label: 'Mammals', mode: 'habitat', metric: 0 },
+  { label: 'Birds', mode: 'habitat', metric: 1 },
+  { label: 'Ecosystem', mode: 'ecosystem', metric: 0 },
+];
 
 /**
  * Approximate advance of one character of the caption face — 0.6rem monospace
@@ -58,6 +75,8 @@ interface Chapter {
   lookAt: [number, number, number];
   /** Width ÷ height of the subject, so narrow viewports pull back only when needed. */
   subjectAspect: number;
+  /** Optional override of how far the camera may pull back to fit it. */
+  maxPull?: number;
 }
 
 const CHAPTERS: Chapter[] = [
@@ -94,14 +113,31 @@ const CHAPTERS: Chapter[] = [
     subjectAspect: 1.7,
   },
   {
+    id: 'unseen',
+    label: 'The Unseen',
+    title: 'What a year\nstill missed',
+    lede: 'Chao1 estimates a place’s true richness from how many species were caught only once or twice. One ring per station, filled as far as the count got and then broken. The estate closes furthest — because what one station missed, another caught.',
+    dwell: 36,
+    // Standing off far enough that the outermost ring has air around it: the
+    // spiral of open ends is the figure, and it needs somewhere to be seen.
+    camera: [0, 0, 16.8],
+    lookAt: [0, 0, 0],
+    subjectAspect: 1.0,
+  },
+  {
     id: 'refuge',
     label: 'Refuge',
-    title: 'Richer than\nthe fields around it',
-    lede: 'Every1Counts monitors the same way across Europe. Set beside ordinary farmland and industrial land, this estate holds far more life — and not one hectare of it is protected.',
+    title: 'What the estate\ndoes to it',
+    lede: 'One column per stage of the estate\u2019s own programme, standing at how far it has been rolled out, with the same living community rising inside all of them.',
     dwell: 38,
-    camera: [0, 2.6, 15],
+    // The widest row in the piece — ten habitat columns — so the camera stands
+    // off far enough that every capital is in frame at once.
+    camera: [0, 2.6, 16.5],
     lookAt: [0, 1.9, 0],
-    subjectAspect: 1.9,
+    subjectAspect: 2.3,
+    // A ten-column colonnade is genuinely three times wider than it is tall, and
+    // on a phone in portrait the default limit left it running off both edges.
+    maxPull: 3.1,
   },
 ];
 
@@ -140,8 +176,16 @@ export default function IndoorApp() {
   const [clusterGuilds, setClusterGuilds] = useState(false);
   const [flagshipOnly, setFlagshipOnly] = useState(false);
   const [refugeMetric, setRefugeMetric] = useState(0);
+  /**
+   * Which question the Refuge row answers: what the estate does, what its own
+   * ground carries under each survey method, or what its published ecosystem
+   * score stands on.
+   */
+  const [refugeMode, setRefugeMode] = useState<RefugeMode>('practices');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
+  /** Which ring of The Unseen is chosen — a station id, 'ESTATE', or null. */
+  const [unseenSelected, setUnseenSelected] = useState<string | null>(null);
   /**
    * The hour the estate is shown at. Starts at the château's real local time,
    * so a visitor first meets the estate as it is right now, and can then scrub
@@ -157,16 +201,20 @@ export default function IndoorApp() {
   /**
    * The Refuge captions, with collisions removed.
    *
-   * Seven land-use names is about 300 px of type; on a phone in portrait the row
-   * is only 430 px wide and they overlap into an unreadable smear. Shrinking the
-   * face further would make it unreadable on the kiosk too, so instead the ones
-   * that collide are dropped — in priority order, so the label that survives is
-   * always the one that matters: the estate's own first, then whatever the
-   * visitor has selected, then left to right.
+   * Ten habitat names is well over 300 px of type; on a phone in portrait the
+   * row is only 430 px wide and they overlap into an unreadable smear. Shrinking
+   * the face further would make it unreadable on the kiosk too, so instead the
+   * ones that collide are dropped — in priority order, so the label that
+   * survives is always the one that matters: ground the estate keeps first, then
+   * whatever the visitor has selected, then left to right.
    */
   const refugeLabels = useMemo(() => {
+    // Worked and built ground outranks kept ground here, and deliberately: only
+    // two of the ten columns are in production, and dropping *those* two labels
+    // to fit the rest leaves a row that looks entirely like habitat. The rare
+    // case is the informative one.
     const rank = (mark: RefugeMark) =>
-      mark.self ? 0 : refugeSelected === mark.landUse ? 1 : 2;
+      refugeSelected === mark.landUse ? 0 : mark.self ? 2 : 1;
     const ordered = [...refugeMarks].sort((a, b) => rank(a) - rank(b) || a.x - b.x);
     const taken: { left: number; right: number }[] = [];
     const kept: RefugeMark[] = [];
@@ -182,6 +230,9 @@ export default function IndoorApp() {
     }
     return kept;
   }, [refugeMarks, refugeSelected]);
+
+  /** The Unseen's rings, in the same order the scene draws them. */
+  const rings = useMemo(() => (data ? buildRings(data) : []), [data]);
 
   const idleTimer = useRef<number | null>(null);
   const chapter = CHAPTERS[chapterIndex];
@@ -357,6 +408,7 @@ export default function IndoorApp() {
             data={data}
             reveal={reveal}
             metric={refugeMetric}
+            mode={refugeMode}
             selected={refugeSelected}
             onSelect={
               interactive
@@ -367,6 +419,23 @@ export default function IndoorApp() {
                 : undefined
             }
             onLayout={interactive ? setRefugeMarks : undefined}
+          />
+        );
+      case 'unseen':
+        return (
+          <Unseen
+            key="unseen"
+            data={data}
+            reveal={reveal}
+            selected={unseenSelected}
+            onSelect={
+              interactive
+                ? (id) => {
+                    touch();
+                    setUnseenSelected((current) => (current === id ? null : id));
+                  }
+                : undefined
+            }
           />
         );
       case 'choir':
@@ -387,48 +456,24 @@ export default function IndoorApp() {
     }
   };
 
-  if (error) {
+  /**
+   * One chapter's overlay: its title band and its own controls.
+   *
+   * Rendered twice through a dissolve, exactly as the 3D scenes are. Before
+   * this, the canvas cross-faded while the type hard-cut — the largest thing on
+   * the screen changing on a single frame, which is precisely the seam the
+   * dissolve exists to remove. The outgoing copy takes no touches, so a fading
+   * control cannot steal a tap meant for the arriving one.
+   */
+  const chapterOverlay = (id: ChapterId, opacity: number, interactive: boolean) => {
+    const chapter = CHAPTERS.find((entry) => entry.id === id) ?? CHAPTERS[0];
     return (
-      <div className="inst-root" style={{ display: 'grid', placeItems: 'center' }}>
-        <p className="inst-body">Could not load the survey data: {error}</p>
-      </div>
-    );
-  }
-
-  const lensMeta = LENSES.find((l) => l.id === lens) ?? LENSES[0];
-
-  return (
-    <div className="inst-root inst-cursor-visible" onPointerDown={touch}>
-      {data && (
-        <Stage
-          className="inst-canvas"
-          cameraPosition={chapter.camera}
-          bloomStrength={0.95}
-          bloomRadius={0.75}
-          bloomThreshold={0.12}
-          swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
-        >
-          <CameraRig
-            position={chapter.camera}
-            lookAt={chapter.lookAt}
-            subjectAspect={chapter.subjectAspect}
-            speed={0.5}
-          />
-
-          {/*
-            Both chapters are on stage during a dissolve. The outgoing one keeps
-            rendering at a falling `reveal` but stops accepting touches, so a
-            fading scene cannot steal a tap meant for the arriving one.
-          */}
-          {renderScene(transition.current, transition.reveal, true)}
-          {transition.previous !== null &&
-            renderScene(transition.previous, transition.fade, false)}
-        </Stage>
-      )}
-
-      {/* ------------------------------------------------------------ text */}
-      <div className="inst-layer">
-        <div className="inst-corner inst-corner--tl inst-pass" key={chapter.id}>
+      <div
+        className="inst-chapter-layer"
+        key={id}
+        style={{ opacity, pointerEvents: interactive ? undefined : 'none' }}
+      >
+        <div className="inst-corner inst-corner--tl inst-pass" >
           <p className="inst-subtitle inst-rise">{chapter.label}</p>
           <h1
             className="inst-title inst-rise inst-delay-1"
@@ -440,7 +485,7 @@ export default function IndoorApp() {
         </div>
 
         {/* ------------------------------------------------ chapter controls */}
-        {chapter.id === 'estate' && (
+        {id === 'estate' && (
           <div
             className="inst-corner inst-corner--bl"
             style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}
@@ -501,7 +546,7 @@ export default function IndoorApp() {
           </div>
         )}
 
-        {chapter.id === 'choir' && data && (
+        {id === 'choir' && data && (
           <div className="inst-corner inst-corner--bl">
             {/*
               The clock. Native range input on purpose: it is the one control a
@@ -597,7 +642,7 @@ export default function IndoorApp() {
           </div>
         )}
 
-        {chapter.id === 'refuge' &&
+        {id === 'refuge' &&
           refugeLabels.map((mark) => (
             <span
               key={mark.landUse}
@@ -614,23 +659,26 @@ export default function IndoorApp() {
             </span>
           ))}
 
-        {chapter.id === 'refuge' && data && (
+        {id === 'refuge' && data && (
           <div className="inst-corner inst-corner--bl">
             <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
               Compare by
             </p>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              {[
-                { v: 0, label: 'Mammals', caption: 'Shannon diversity, camera traps' },
-                { v: 1, label: 'Birds', caption: 'Species heard per site' },
-              ].map((entry) => (
+              {REFUGE_READINGS.map((entry) => (
                 <button
                   key={entry.label}
                   className="inst-nav-item"
-                  data-active={refugeMetric === entry.v}
+                  data-active={
+                    entry.mode === 'habitat'
+                      ? refugeMode === 'habitat' && refugeMetric === entry.metric
+                      : refugeMode === entry.mode
+                  }
                   onClick={() => {
                     touch();
-                    setRefugeMetric(entry.v);
+                    setRefugeMode(entry.mode);
+                    if (entry.mode === 'habitat') setRefugeMetric(entry.metric);
+                    setRefugeSelected(null);
                   }}
                   style={{ minHeight: 56, padding: '0.9rem 1.1rem' }}
                 >
@@ -639,27 +687,166 @@ export default function IndoorApp() {
               ))}
             </div>
             <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
-              {(refugeMetric === 0
-                ? 'SHANNON DIVERSITY, CAMERA TRAPS'
-                : 'BIRD SPECIES HEARD PER SITE'
+              {(refugeMode === 'practices'
+                ? 'LEFT: SHARE ACHIEVED · RIGHT: HECTARES — TWO SCALES, NOT ONE'
+                : refugeMode === 'ecosystem'
+                  ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
+                  : refugeMetric === 0
+                    ? 'EFFECTIVE SPECIES PER HABITAT · CAMERA TRAPS'
+                    : 'EFFECTIVE SPECIES PER HABITAT · RECORDERS'
               ).toUpperCase()}
             </p>
 
-            {/* The tension the whole survey leaves unresolved. */}
             <div className="inst-rule" style={{ maxWidth: 380 }} />
+
+            {refugeMode === 'practices' ? (
+              /*
+                The stages, in their own units, and the reason the row carries
+                two scales at once. Saying so is the point: the estate's total
+                area is not published anywhere in the survey, so there is no
+                honest conversion between a hectare figure and a share.
+              */
+              <>
+                <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+                  {notInProduction.toFixed(1)}%
+                </p>
+                <p className="inst-mono">OF THE ESTATE IS NOT IN PRODUCTION</p>
+                <p
+                  className="inst-body"
+                  style={{ maxWidth: '40ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
+                >
+                  {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha drip-irrigated
+                  at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
+                  {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water;{' '}
+                  {formatNumber(data.narrative.estate.organicConversionHectares)} ha converting to
+                  organic; treatments down{' '}
+                  {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%. The two
+                  hectare stages stand open-topped: their share of the estate is not published.
+                </p>
+                <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
+                  SAME COMMUNITY IN EVERY STAGE · ONE YEAR, NO BEFORE-AND-AFTER
+                </p>
+              </>
+            ) : refugeMode === 'ecosystem' ? (
+              /*
+                What the pillars hold up. The overall score is not an average of
+                the three — it is published as its own figure — so it is given as
+                the datum the row is read against, exactly as the scene draws it.
+              */
+              <>
+                <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+                  {data.narrative.ecosystemScore.overall.toFixed(1)}
+                  <span style={{ fontSize: '1rem', opacity: 0.6 }}> / 100</span>
+                </p>
+                <p className="inst-mono">
+                  ECOSYSTEM SCORE · {data.narrative.protection.protConn.toFixed(1)}% PROTECTED
+                </p>
+                <p
+                  className="inst-body"
+                  style={{ maxWidth: '38ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
+                >
+                  A strong ecosystem, and strong because it is joined up:
+                  connectivity {data.narrative.ecosystemScore.connectivity.toFixed(1)} against
+                  intrinsic quality {data.narrative.ecosystemScore.intrinsic.toFixed(1)}.
+                </p>
+              </>
+            ) : (
+              /*
+                What the estate does, and what the survey concludes about doing
+                it. The figure is the estate's own land cover — the share it is
+                not farming — and the practices under it are its own investment,
+                not a comparison with anybody.
+              */
+              <>
+                <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
+                  {notInProduction.toFixed(1)}%
+                </p>
+                <p className="inst-mono">OF THE ESTATE IS NOT IN PRODUCTION</p>
+                <p
+                  className="inst-body"
+                  style={{ maxWidth: '38ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
+                >
+                  {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha drip-irrigated
+                  at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
+                  {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water;{' '}
+                  {formatNumber(data.narrative.estate.organicConversionHectares)} ha converting to
+                  organic; treatments down{' '}
+                  {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%.
+                </p>
+                <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
+                  HABITAT MOSAICS AND STRUCTURAL COMPLEXITY — EVERY1COUNTS
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {id === 'unseen' && data && (
+          <div className="inst-corner inst-corner--bl">
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              {chosenRing ? 'Selected' : 'Least counted first'}
+            </p>
             <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
-              {data.narrative.protection.protConn.toFixed(1)}%
+              {chosenRing
+                ? `${Math.round(chosenRing.completeness * 100)}%`
+                : `${Math.round(
+                    (data.meta.totalSpecies / data.meta.chao1) * 100
+                  )}%`}
             </p>
-            <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem' }}>
-              {data.narrative.protection.text}
+            <p className="inst-mono">
+              {chosenRing
+                ? `${chosenRing.observed} SEEN · ${Math.round(
+                    chosenRing.estimated
+                  )} ESTIMATED · ${Math.round(
+                    chosenRing.estimated - chosenRing.observed
+                  )} MISSED`
+                : `${data.meta.totalSpecies} SEEN · ${Math.round(
+                    data.meta.chao1
+                  )} ESTIMATED ACROSS THE ESTATE`}
             </p>
-            <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
-              {data.narrative.protection.policy.toUpperCase()}
+            <p className="inst-body" style={{ maxWidth: '34ch', fontSize: '0.86rem', marginTop: '0.7rem' }}>
+              {chosenRing
+                ? chosenRing.estate
+                  ? 'Every station pooled. The estate closes furthest of all — what one station missed, another caught.'
+                  : `${chosenRing.label}. The open arc is a count, not a list: Chao1 says how many are still out there, never which.`
+                : 'Touch any ring.'}
             </p>
           </div>
         )}
 
-        {chapter.id === 'year' && data && (
+        {/*
+          The ring list. Every row is the same reading as the ring it names, and
+          touching either selects both — the figure is legible on a wall from
+          across the room, and the list is what makes it legible from arm's
+          length, where the inner rings are only a couple of centimetres apart.
+        */}
+        {id === 'unseen' && data && (
+          <aside className="inst-panel inst-panel--right inst-rise inst-ringlist">
+            <p className="inst-label" style={{ marginBottom: '0.7rem' }}>
+              Counted
+            </p>
+            {rings.map((ring) => (
+              <button
+                key={ring.id}
+                className="inst-ring-row"
+                data-active={unseenSelected === ring.id}
+                data-estate={ring.estate}
+                onClick={() => {
+                  touch();
+                  setUnseenSelected((current) => (current === ring.id ? null : ring.id));
+                }}
+              >
+                <span className="inst-ring-name">{ring.label}</span>
+                <span className="inst-ring-bar">
+                  <span style={{ transform: `scaleX(${ring.completeness})` }} />
+                </span>
+                <span className="inst-ring-value">{Math.round(ring.completeness * 100)}%</span>
+              </button>
+            ))}
+          </aside>
+        )}
+
+        {id === 'year' && data && (
           <div className="inst-corner inst-corner--bl">
             <p className="inst-label" style={{ marginBottom: '0.6rem' }}>
               Dawn chorus
@@ -678,6 +865,78 @@ export default function IndoorApp() {
             )}
           </div>
         )}
+      </div>
+    );
+  };
+
+  if (error) {
+    return (
+      <div className="inst-root" style={{ display: 'grid', placeItems: 'center' }}>
+        <p className="inst-body">Could not load the survey data: {error}</p>
+      </div>
+    );
+  }
+
+  const lensMeta = LENSES.find((l) => l.id === lens) ?? LENSES[0];
+  const chosenRing = rings.find((ring) => ring.id === unseenSelected) ?? null;
+
+  /**
+   * The share of the estate that is not farmed and not built, straight from the
+   * published land-cover split rather than from one minus the agricultural
+   * share — the four classes are measured separately and need not sum to 1.
+   */
+  const notInProduction = data
+    ? data.narrative.landCover
+        .filter((entry) => entry.label !== 'Agricultural' && entry.label !== 'Built')
+        .reduce((sum, entry) => sum + entry.share, 0) * 100
+    : 0;
+
+  return (
+    <div className="inst-root inst-cursor-visible" onPointerDown={touch}>
+      {data && (
+        <Stage
+          className="inst-canvas"
+          cameraPosition={chapter.camera}
+          bloomStrength={0.95}
+          bloomRadius={0.75}
+          bloomThreshold={0.12}
+          swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
+        >
+          <CameraRig
+            position={chapter.camera}
+            lookAt={chapter.lookAt}
+            subjectAspect={chapter.subjectAspect}
+            maxPull={chapter.maxPull}
+            /*
+              Fast enough that the camera lands with the dissolve rather than
+              still gliding a second after the new chapter is fully lit — which
+              was what made the old transition read as a cut followed by a drift.
+            */
+            speed={1.15}
+            dissolve={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
+          />
+
+          {/*
+            Both chapters are on stage during a dissolve. The outgoing one keeps
+            rendering at a falling `reveal` but stops accepting touches, so a
+            fading scene cannot steal a tap meant for the arriving one.
+          */}
+          <ChapterFrame reveal={transition.reveal}>
+            {renderScene(transition.current, transition.reveal, true)}
+          </ChapterFrame>
+          {transition.previous !== null && (
+            <ChapterFrame reveal={transition.fade} leaving>
+              {renderScene(transition.previous, transition.fade, false)}
+            </ChapterFrame>
+          )}
+        </Stage>
+      )}
+
+      {/* ------------------------------------------------------------ text */}
+      <div className="inst-layer">
+        {transition.previous !== null &&
+          chapterOverlay(transition.previous, transition.fade, false)}
+        {chapterOverlay(transition.current, transition.reveal, true)}
 
         {/* ----------------------------------------------------- detail panel */}
         {site && (
@@ -758,6 +1017,29 @@ export default function IndoorApp() {
                 <p className="inst-body" style={{ fontSize: '0.86rem' }}>{selectedSpecies.note}</p>
               </>
             )}
+
+            {/*
+              The voice, seen. This is the master bus after the limiter, so it is
+              exactly the sound in the room — and it is a synthesis, not a
+              recording, which the caption under it says every time.
+            */}
+            <div className="inst-rule" />
+            <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
+              Its voice
+            </p>
+            <Spectrogram active={chapter.id === 'choir'} height={78} />
+            {/*
+              The axes, stated. Without them the strip is a texture — nobody can
+              tell whether the bright band low down is a drone or a whistle. The
+              provenance line stays whole above it: it is the more important of
+              the two sentences and must not be shortened to make room.
+            */}
+            <p className="inst-mono" style={{ marginTop: '0.4rem' }}>
+              SYNTHESISED FROM THIS SPECIES&rsquo; OWN MEASURES — NOT A RECORDING
+            </p>
+            <p className="inst-mono" style={{ marginTop: '0.2rem', opacity: 0.5 }}>
+              {SPECTROGRAM_AXES.toUpperCase()}
+            </p>
 
             <div className="inst-rule" />
             <dl style={{ margin: 0 }}>
@@ -840,13 +1122,55 @@ export default function IndoorApp() {
                 );
               })}
             </div>
+            {/*
+              JAN and DEC anchor the axis; the peak month is named over its own
+              bar, not spaced evenly between them. Laid out with space-between it
+              read as a three-point scale, so a species peaking in February was
+              labelled FEB at the middle of the year — the axis contradicting the
+              bar directly above it.
+            */}
             <div
               className="inst-mono"
-              style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem' }}
+              style={{ position: 'relative', marginTop: '0.4rem', height: '1.1em' }}
             >
-              <span>JAN</span>
-              <span>{MONTHS[selectedSpecies.peakMonth - 1].toUpperCase()}</span>
-              <span>DEC</span>
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  color: selectedSpecies.peakMonth === 1 ? PALETTE.candle : undefined,
+                }}
+              >
+                JAN
+              </span>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  color: selectedSpecies.peakMonth === 12 ? PALETTE.candle : undefined,
+                }}
+              >
+                DEC
+              </span>
+              {/*
+                A January or December peak is already named by its anchor — drawn
+                again it would land on top of it. Lighting the anchor instead
+                keeps one label per month at either end of the axis.
+              */}
+              {selectedSpecies.peakMonth > 1 && selectedSpecies.peakMonth < 12 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    // Centre of the peak bar: twelve equal columns, so the n-th
+                    // sits at (n - 0.5)/12 of the width.
+                    left: `${((selectedSpecies.peakMonth - 0.5) / 12) * 100}%`,
+                    transform: 'translateX(-50%)',
+                    color: PALETTE.candle,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {MONTHS[selectedSpecies.peakMonth - 1].toUpperCase()}
+                </span>
+              )}
             </div>
 
             {/* Where it was actually recorded. */}
@@ -957,6 +1281,19 @@ export default function IndoorApp() {
             <button className="inst-rise inst-delay-3" onClick={() => void begin()}>
               Enter
             </button>
+            {/*
+              The colophon. A piece that spends five chapters insisting on the
+              difference between what was counted and what was estimated cannot
+              then put two generated animals on screen without saying so, and the
+              place to say it is before the visitor starts rather than in a
+              footnote they will never reach.
+            */}
+            <p
+              className="inst-mono inst-rise inst-delay-4"
+              style={{ margin: '2.6rem auto 0', maxWidth: '34rem', opacity: 0.45 }}
+            >
+              {GLYPH_CREDIT}
+            </p>
           </div>
         </div>
       )}
