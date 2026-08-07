@@ -1,0 +1,738 @@
+{
+ "source": {
+  "endpoint": "https://query.wikidata.org/sparql",
+  "retrieved": "2026-08-07",
+  "what": "taxon name (P225) and IUCN Red List category (P141) for every vernacular name in the two surveys, plus a class check that the matched taxon sits under Aves (Q5113) or Mammalia (Q7377).",
+  "note": "The class check is not decoration: matching by French vernacular name alone put 'Renard' on Alopias vulpinus, the thresher shark, which is called renard de mer in French. That match is dropped here."
+ },
+ "byVernacular": {
+  "Merle noir": {
+   "sci": "Turdus merula",
+   "taxon": "http://www.wikidata.org/entity/Q25234",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Buse variable": {
+   "sci": "Buteo buteo",
+   "taxon": "http://www.wikidata.org/entity/Q25385",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Chardonneret élégant": {
+   "sci": "Carduelis carduelis",
+   "taxon": "http://www.wikidata.org/entity/Q25418",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Faisan de Colchide": {
+   "sci": "Phasianus colchicus",
+   "taxon": "http://www.wikidata.org/entity/Q25432",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Cygne chanteur": {
+   "sci": "Cygnus cygnus",
+   "taxon": "http://www.wikidata.org/entity/Q25612",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Chouette hulotte": {
+   "sci": "Strix aluco",
+   "taxon": "http://www.wikidata.org/entity/Q25756",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bergeronnette printanière": {
+   "sci": "Motacilla flava",
+   "taxon": "http://www.wikidata.org/entity/Q25984",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pigeon ramier": {
+   "sci": "Columba palumbus",
+   "taxon": "http://www.wikidata.org/entity/Q26026",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Linotte mélodieuse": {
+   "sci": "Linaria cannabina",
+   "taxon": "http://www.wikidata.org/entity/Q27075852",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Hirondelle de fenêtre": {
+   "sci": "Delichon urbicum",
+   "taxon": "http://www.wikidata.org/entity/Q26055",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Blongios nain": {
+   "sci": "Botaurus minutus",
+   "taxon": "http://www.wikidata.org/entity/Q26129",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pic épeiche": {
+   "sci": "Dendrocopos major",
+   "taxon": "http://www.wikidata.org/entity/Q26209",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Gobemouche gris": {
+   "sci": "Muscicapa striata",
+   "taxon": "http://www.wikidata.org/entity/Q26607",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Rougequeue à front blanc": {
+   "sci": "Phoenicurus phoenicurus",
+   "taxon": "http://www.wikidata.org/entity/Q26620",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Engoulevent d'Europe": {
+   "sci": "Caprimulgus europaeus",
+   "taxon": "http://www.wikidata.org/entity/Q26717",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Gobemouche noir": {
+   "sci": "Ficedula hypoleuca",
+   "taxon": "http://www.wikidata.org/entity/Q27442",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Tourterelle turque": {
+   "sci": "Streptopelia decaocto",
+   "taxon": "http://www.wikidata.org/entity/Q54696",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bihoreau gris": {
+   "sci": "Nycticorax nycticorax",
+   "taxon": "http://www.wikidata.org/entity/Q126216",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Chevêche d'Athéna": {
+   "sci": "Athene noctua",
+   "taxon": "http://www.wikidata.org/entity/Q129958",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Tourterelle des bois": {
+   "sci": "Streptopelia turtur",
+   "taxon": "http://www.wikidata.org/entity/Q168514",
+   "iucn": "vulnerable",
+   "class": "bird"
+  },
+  "Guêpier d'Europe": {
+   "sci": "Merops apiaster",
+   "taxon": "http://www.wikidata.org/entity/Q170718",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Petit-duc scops": {
+   "sci": "Otus scops",
+   "taxon": "http://www.wikidata.org/entity/Q171563",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Rossignol progné": {
+   "sci": "Luscinia luscinia",
+   "taxon": "http://www.wikidata.org/entity/Q206130",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pic syriaque": {
+   "sci": "Dendrocopos syriacus",
+   "taxon": "http://www.wikidata.org/entity/Q752481",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grue cendrée": {
+   "sci": "Grus grus",
+   "taxon": "http://www.wikidata.org/entity/Q4764",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Courlis corlieu": {
+   "sci": "Numenius phaeopus",
+   "taxon": "http://www.wikidata.org/entity/Q18858",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Huppe fasciée": {
+   "sci": "Upupa epops",
+   "taxon": "http://www.wikidata.org/entity/Q25247",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Effraie des clochers": {
+   "sci": "Tyto alba",
+   "taxon": "http://www.wikidata.org/entity/Q25317",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Corbeau freux": {
+   "sci": "Corvus frugilegus",
+   "taxon": "http://www.wikidata.org/entity/Q25386",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Rossignol philomèle": {
+   "sci": "Luscinia megarhynchos",
+   "taxon": "http://www.wikidata.org/entity/Q25393",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Mésange bleue": {
+   "sci": "Cyanistes caeruleus",
+   "taxon": "http://www.wikidata.org/entity/Q25404",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Mésange charbonnière": {
+   "sci": "Parus major",
+   "taxon": "http://www.wikidata.org/entity/Q25485",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Butor étoilé": {
+   "sci": "Botaurus stellaris",
+   "taxon": "http://www.wikidata.org/entity/Q25709",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grive litorne": {
+   "sci": "Turdus pilaris",
+   "taxon": "http://www.wikidata.org/entity/Q25777",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Moineau friquet": {
+   "sci": "Passer montanus",
+   "taxon": "http://www.wikidata.org/entity/Q25968",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grive musicienne": {
+   "sci": "Turdus philomelos",
+   "taxon": "http://www.wikidata.org/entity/Q26349",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pie-grièche écorcheur": {
+   "sci": "Lanius collurio",
+   "taxon": "http://www.wikidata.org/entity/Q26671",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pouillot fitis": {
+   "sci": "Phylloscopus trochilus",
+   "taxon": "http://www.wikidata.org/entity/Q27239",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Chevalier cul-blanc": {
+   "sci": "Tringa ochropus",
+   "taxon": "http://www.wikidata.org/entity/Q28450",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Gros-bec casse-noyaux": {
+   "sci": "Coccothraustes coccothraustes",
+   "taxon": "http://www.wikidata.org/entity/Q174088",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grive mauvis": {
+   "sci": "Turdus iliacus",
+   "taxon": "http://www.wikidata.org/entity/Q184825",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Marouette ponctuée": {
+   "sci": "Porzana porzana",
+   "taxon": "http://www.wikidata.org/entity/Q194024",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Marouette poussin": {
+   "sci": "Zapornia parva",
+   "taxon": "http://www.wikidata.org/entity/Q270680",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pic mar": {
+   "sci": "Dendrocoptes medius",
+   "taxon": "http://www.wikidata.org/entity/Q275591",
+   "iucn": null,
+   "class": "bird"
+  },
+  "Sizerin flammé": {
+   "sci": "Acanthis flammea",
+   "taxon": "http://www.wikidata.org/entity/Q20754771",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Choucas des tours": {
+   "sci": "Coloeus monedula",
+   "taxon": "http://www.wikidata.org/entity/Q25345384",
+   "iucn": null,
+   "class": "bird"
+  },
+  "Fauvette babillarde": {
+   "sci": "Curruca curruca",
+   "taxon": "http://www.wikidata.org/entity/Q110257504",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Moineau domestique": {
+   "sci": "Passer domesticus",
+   "taxon": "http://www.wikidata.org/entity/Q14683",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Courlis cendré": {
+   "sci": "Numenius arquata",
+   "taxon": "http://www.wikidata.org/entity/Q18854",
+   "iucn": "near threatened",
+   "class": "bird"
+  },
+  "Cigogne blanche": {
+   "sci": "Ciconia ciconia",
+   "taxon": "http://www.wikidata.org/entity/Q25352",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Foulque macroule": {
+   "sci": "Fulica atra",
+   "taxon": "http://www.wikidata.org/entity/Q25376",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Hibou moyen-duc": {
+   "sci": "Asio otus",
+   "taxon": "http://www.wikidata.org/entity/Q25384",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bergeronnette grise": {
+   "sci": "Motacilla alba",
+   "taxon": "http://www.wikidata.org/entity/Q25399",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Hirondelle de rivage": {
+   "sci": "Riparia riparia",
+   "taxon": "http://www.wikidata.org/entity/Q25909",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Jaseur boréal": {
+   "sci": "Bombycilla garrulus",
+   "taxon": "http://www.wikidata.org/entity/Q26135",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bécasseau variable": {
+   "sci": "Calidris alpina",
+   "taxon": "http://www.wikidata.org/entity/Q26650",
+   "iucn": "near threatened",
+   "class": "bird"
+  },
+  "Roselin cramoisi": {
+   "sci": "Carpodacus erythrinus",
+   "taxon": "http://www.wikidata.org/entity/Q46143",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pipit des arbres": {
+   "sci": "Anthus trivialis",
+   "taxon": "http://www.wikidata.org/entity/Q143313",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bruant zizi": {
+   "sci": "Emberiza cirlus",
+   "taxon": "http://www.wikidata.org/entity/Q148583",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Nyctale de Tengmalm": {
+   "sci": "Aegolius funereus",
+   "taxon": "http://www.wikidata.org/entity/Q174466",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pic épeichette": {
+   "sci": "Dryobates minor",
+   "taxon": "http://www.wikidata.org/entity/Q184518",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Fauvette à tête noire": {
+   "sci": "Sylvia atricapilla",
+   "taxon": "http://www.wikidata.org/entity/Q188446",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Chevêchette d'Europe": {
+   "sci": "Glaucidium passerinum",
+   "taxon": "http://www.wikidata.org/entity/Q191155",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bergeronnette citrine": {
+   "sci": "Motacilla citreola",
+   "taxon": "http://www.wikidata.org/entity/Q206540",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Alouette hausse-col": {
+   "sci": "Eremophila alpestris",
+   "taxon": "http://www.wikidata.org/entity/Q207249",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Rémiz penduline": {
+   "sci": "Remiz pendulinus",
+   "taxon": "http://www.wikidata.org/entity/Q273067",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Locustelle luscinioïde": {
+   "sci": "Locustella luscinioides",
+   "taxon": "http://www.wikidata.org/entity/Q321272",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Gobemouche à collier": {
+   "sci": "Ficedula albicollis",
+   "taxon": "http://www.wikidata.org/entity/Q690826",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pouillot siffleur": {
+   "sci": "Phylloscopus sibilatrix",
+   "taxon": "http://www.wikidata.org/entity/Q27075477",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Gallinule poule-d'eau": {
+   "sci": "Gallinula chloropus",
+   "taxon": "http://www.wikidata.org/entity/Q18847",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pluvier doré": {
+   "sci": "Pluvialis apricaria",
+   "taxon": "http://www.wikidata.org/entity/Q21148",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grèbe castagneux": {
+   "sci": "Tachybaptus ruficollis",
+   "taxon": "http://www.wikidata.org/entity/Q25421",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Sarcelle d'hiver": {
+   "sci": "Anas crecca",
+   "taxon": "http://www.wikidata.org/entity/Q25700",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Perdrix grise": {
+   "sci": "Perdix perdix",
+   "taxon": "http://www.wikidata.org/entity/Q26106",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bécasse des bois": {
+   "sci": "Scolopax rusticola",
+   "taxon": "http://www.wikidata.org/entity/Q26114",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pigeon colombin": {
+   "sci": "Columba oenas",
+   "taxon": "http://www.wikidata.org/entity/Q26140",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bec-croisé des sapins": {
+   "sci": "Loxia curvirostra",
+   "taxon": "http://www.wikidata.org/entity/Q26552",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Eider à duvet": {
+   "sci": "Somateria mollissima",
+   "taxon": "http://www.wikidata.org/entity/Q26696",
+   "iucn": "near threatened",
+   "class": "bird"
+  },
+  "Accenteur mouchet": {
+   "sci": "Prunella modularis",
+   "taxon": "http://www.wikidata.org/entity/Q26698",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pipit farlouse": {
+   "sci": "Anthus pratensis",
+   "taxon": "http://www.wikidata.org/entity/Q26956",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Alouette lulu": {
+   "sci": "Lullula arborea",
+   "taxon": "http://www.wikidata.org/entity/Q26969",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Macreuse noire": {
+   "sci": "Melanitta nigra",
+   "taxon": "http://www.wikidata.org/entity/Q27434",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pic noir": {
+   "sci": "Dryocopus martius",
+   "taxon": "http://www.wikidata.org/entity/Q143284",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Héron pourpré": {
+   "sci": "Ardea purpurea",
+   "taxon": "http://www.wikidata.org/entity/Q160488",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Tadorne casarca": {
+   "sci": "Tadorna ferruginea",
+   "taxon": "http://www.wikidata.org/entity/Q170723",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Aigle botté": {
+   "sci": "Hieraaetus pennatus",
+   "taxon": "http://www.wikidata.org/entity/Q182971",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Râle d'eau": {
+   "sci": "Rallus aquaticus",
+   "taxon": "http://www.wikidata.org/entity/Q185099",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pinson du Nord": {
+   "sci": "Fringilla montifringilla",
+   "taxon": "http://www.wikidata.org/entity/Q188877",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bruant ortolan": {
+   "sci": "Emberiza hortulana",
+   "taxon": "http://www.wikidata.org/entity/Q206630",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Locustelle tachetée": {
+   "sci": "Locustella naevia",
+   "taxon": "http://www.wikidata.org/entity/Q208710",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Hirondelle de rochers": {
+   "sci": "Ptyonoprogne rupestris",
+   "taxon": "http://www.wikidata.org/entity/Q213216",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Linotte à bec jaune": {
+   "sci": "Linaria flavirostris",
+   "taxon": "http://www.wikidata.org/entity/Q10965357",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Sterne naine": {
+   "sci": "Sternula albifrons",
+   "taxon": "http://www.wikidata.org/entity/Q12267692",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Fauvette épervière": {
+   "sci": "Curruca nisoria",
+   "taxon": "http://www.wikidata.org/entity/Q104867606",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Martre des pins": {
+   "sci": "Martes martes",
+   "taxon": "http://www.wikidata.org/entity/Q26046",
+   "iucn": "least concern",
+   "class": "mammal"
+  },
+  "Blaireau européen": {
+   "sci": "Meles meles",
+   "taxon": "http://www.wikidata.org/entity/Q27066",
+   "iucn": "least concern",
+   "class": "mammal"
+  },
+  "Chacal doré": {
+   "sci": "Canis aureus",
+   "taxon": "http://www.wikidata.org/entity/Q128098",
+   "iucn": "least concern",
+   "class": "mammal"
+  },
+  "Tarier pâtre": {
+   "sci": "Saxicola rubicola",
+   "taxon": "http://www.wikidata.org/entity/Q838665",
+   "iucn": null,
+   "class": "bird"
+  },
+  "Héron cendré": {
+   "sci": "Ardea cinerea",
+   "taxon": "http://www.wikidata.org/entity/Q25273",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pie bavarde": {
+   "sci": "Pica pica",
+   "taxon": "http://www.wikidata.org/entity/Q25307",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Rougegorge familier": {
+   "sci": "Erithacus rubecula",
+   "taxon": "http://www.wikidata.org/entity/Q25334",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Geai des chênes": {
+   "sci": "Garrulus glandarius",
+   "taxon": "http://www.wikidata.org/entity/Q25354",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grand Corbeau": {
+   "sci": "Corvus corax",
+   "taxon": "http://www.wikidata.org/entity/Q25357",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pinson des arbres": {
+   "sci": "Fringilla coelebs",
+   "taxon": "http://www.wikidata.org/entity/Q25383",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Loriot d'Europe": {
+   "sci": "Oriolus oriolus",
+   "taxon": "http://www.wikidata.org/entity/Q25388",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Oie cendrée": {
+   "sci": "Anser anser",
+   "taxon": "http://www.wikidata.org/entity/Q25882",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Grand-duc d'Europe": {
+   "sci": "Bubo bubo",
+   "taxon": "http://www.wikidata.org/entity/Q130933",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Orite à longue queue": {
+   "sci": "Aegithalos caudatus",
+   "taxon": "http://www.wikidata.org/entity/Q170831",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Pouillot véloce": {
+   "sci": "Phylloscopus collybita",
+   "taxon": "http://www.wikidata.org/entity/Q185784",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Bouvreuil pivoine": {
+   "sci": "Pyrrhula pyrrhula",
+   "taxon": "http://www.wikidata.org/entity/Q25382",
+   "iucn": "least concern",
+   "class": "bird"
+  },
+  "Garrot à oeil d'or": {
+   "sci": "Bucephala clangula",
+   "taxon": "http://www.wikidata.org/entity/Q29865",
+   "iucn": "least concern",
+   "class": "bird"
+  }
+ },
+ "byScientific": {
+  "Vulpes vulpes": {
+   "taxon": "http://www.wikidata.org/entity/Q8332",
+   "iucn": "least concern"
+  },
+  "Canis lupus": {
+   "taxon": "http://www.wikidata.org/entity/Q18498",
+   "iucn": "least concern"
+  },
+  "Erithacus rubecula": {
+   "taxon": "http://www.wikidata.org/entity/Q25334",
+   "iucn": "least concern"
+  },
+  "Phasianus colchicus": {
+   "taxon": "http://www.wikidata.org/entity/Q25432",
+   "iucn": "least concern"
+  },
+  "Parus major": {
+   "taxon": "http://www.wikidata.org/entity/Q25485",
+   "iucn": "least concern"
+  },
+  "Martes martes": {
+   "taxon": "http://www.wikidata.org/entity/Q26046",
+   "iucn": "least concern"
+  },
+  "Lanius collurio": {
+   "taxon": "http://www.wikidata.org/entity/Q26671",
+   "iucn": "least concern"
+  },
+  "Lepus europaeus": {
+   "taxon": "http://www.wikidata.org/entity/Q26838",
+   "iucn": "least concern"
+  },
+  "Meles meles": {
+   "taxon": "http://www.wikidata.org/entity/Q27066",
+   "iucn": "least concern"
+  },
+  "Felis silvestris": {
+   "taxon": "http://www.wikidata.org/entity/Q43576",
+   "iucn": "least concern"
+  },
+  "Sus scrofa": {
+   "taxon": "http://www.wikidata.org/entity/Q58697",
+   "iucn": "least concern"
+  },
+  "Capreolus capreolus": {
+   "taxon": "http://www.wikidata.org/entity/Q122069",
+   "iucn": "least concern"
+  },
+  "Canis aureus": {
+   "taxon": "http://www.wikidata.org/entity/Q128098",
+   "iucn": "least concern"
+  },
+  "Equus caballus": {
+   "taxon": "http://www.wikidata.org/entity/Q10758650",
+   "iucn": null
+  },
+  "Felis catus": {
+   "taxon": "http://www.wikidata.org/entity/Q20980826",
+   "iucn": null
+  }
+ }
+}

@@ -18,7 +18,7 @@ npm run build        # emits dist/index.html and dist/installation.html
 
 ## What is on screen
 
-Eight chapters, each a full-screen realtime composition. Chapters I–IV, VII and
+Nine chapters, each a full-screen realtime composition. Chapters I–IV, VII and
 the attract state are drawn from the 2,665 detections recorded between 31 July
 and 16 August 2025 by five acoustic recorders across 121 species; Chapters V and
 VI come from the camera traps — a different survey, a different method — and say
@@ -34,6 +34,7 @@ so on screen.
 | V | **Chevauchement** | Eighteen camera-trap species and the correlation between their daily rhythms, as a ring of chords. Warm means two species are out at the same hours, cool means they avoid each other. The highlight walks the ring on its own. | Tap a species to hold it |
 | VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
 | VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
+| VIII | **Statut** | The twelve species out of both surveys that carry a conservation status, on four rings — one per category, worst at the top. Each is a column of its own detections, and how *loosely* that column is drawn is the BirdNET score behind it: a tight column was identified with confidence, a haze was not. | Drag sideways to turn the tower, up/down to climb it, tap a species |
 
 ### Inside a station
 
@@ -61,6 +62,50 @@ The scale bar is computed along the distance to what the camera is looking at
 rather than straight down. Overhead the two are the same; leaning in at a post
 they are not, and the bar would otherwise report a third of the distance it
 draws.
+
+### What Chapter VIII is made of, and what it deliberately does not claim
+
+Two lists, joined to the survey by `npm run status`. Neither is written from
+memory; both ship as snapshots in `scripts/sources/`, each carrying its own URL
+and retrieval date, so the build needs no network and the provenance travels
+with the data.
+
+| | source | what it gives |
+|---|---|---|
+| global | Wikidata SPARQL (`P225` taxon name, `P141` IUCN category), retrieved 7 Aug 2026 | scientific name and IUCN Red List category for every vernacular name in both surveys |
+| national | *Cartea Roșie a Republicii Moldova*, transcribed from the tables on Romanian Wikipedia, retrieved 7 Aug 2026 | category (CR/EN/VU) for 39 birds and 14 mammals |
+
+The result is twelve species: three critically endangered, four endangered, two
+vulnerable, three near threatened. Eight are on the national list — including the
+whooper swan, the eagle owl and the barn owl among the recordings, and the pine
+marten and the wildcat on the camera traps. Four are on the global one, of which
+the only one that is genuinely common here is the **European turtle dove**,
+globally vulnerable, 54 detections.
+
+**The national layer under-reports and the chapter says so on screen.** The
+transcription carries 39 birds against the third edition's 62, and 14 mammals
+against 30. A species shown without a national category may simply be missing
+from the transcription — never the other way round. Replace
+`scripts/sources/redbook-md.json` with the official annex and rebuild; nothing
+else changes.
+
+Two guards are worth keeping:
+
+- **Matching by vernacular name needs a class check.** Matching French names
+  against Wikidata put *Renard* — the atlas' red fox — on *Alopias vulpinus*, the
+  thresher shark, which is called *renard de mer* in French. Every match is
+  therefore required to sit under Aves or Mammalia, and that one is dropped.
+- **A category is a claim about a species; a detection is a claim about three
+  seconds of audio.** They are not the same claim, so the chapter draws the
+  second one too. Every acoustic species carries the BirdNET scores behind it,
+  and the column is drawn loose in proportion to how low they are: the turtle
+  dove is 54 records at a median of 0.93, the barn owl is 14 at 0.57, and the
+  single booted eagle — nationally critically endangered — is one clip at 0.97
+  and nothing else in seventeen days. Camera records carry no score at all,
+  because a person identified them from a photograph, and are drawn firm.
+
+Nothing in the export sits below 0.50: that is where the threshold was set, and
+the median of all 2,649 scored detections is 0.71.
 
 ### What Chapter II is made of
 
@@ -326,6 +371,8 @@ scripts/fetch-basemap.mjs              stitches map tiles -> basemap*.jpg
 scripts/fetch-terrain.mjs              fetches SRTM       -> terrain.json
 scripts/extract-overlap-matrix.mjs     reads the deck     -> overlap.json
 scripts/build-passages-atlas.mjs       bakes the CT export -> passages.json
+scripts/build-status-atlas.mjs         joins the two lists -> status.json
+scripts/sources/                       source snapshots, each with its URL and date
 public/installation/                   the two basemap layers
 src/installation/
   main.tsx                        bootstrap (deliberately no StrictMode)
@@ -345,12 +392,14 @@ src/installation/
     SpeciesScene.ts FluxScene.ts  OverlapScene.ts
     PassagesScene.ts              the eighty-night actogram
     TailScene.ts                  the abundance ranking
+    StatusScene.ts                the four categories, with their evidence
   data/
     atlas.ts / atlas.json         the baked detections
     basemap.ts / basemap.json     the aerial layers: bounds, projection, extent
     terrain.ts / terrain.json     elevations, now only quoted as figures
     overlap.ts / overlap.json     the camera-trap correlation matrix
     passages.ts / passages.json   the camera-trap records, one row per passage
+    status.ts / status.json       conservation status, with the evidence behind it
     solar.ts                      sunrise and sunset, for the night band in VI
   ui/                             Readout, ChapterNav, Sparkline, Diagnostics
   styles/installation.css         overlay chrome (no Tailwind in this bundle)
@@ -368,6 +417,7 @@ npm run basemap    # aerial       380 map tiles         -> basemap*.jpg (3.1 MB)
 npm run terrain    # elevation    SRTM via opentopodata -> terrain.json (17 KB)
 npm run overlap -- <heatmap.png>   # chapter V matrix   -> overlap.json  (7 KB)
 npm run passages   # camera traps 20251110_100018.csv    -> passages.json (14 KB)
+npm run status     # conservation  scripts/sources/*.json  -> status.json   (6 KB)
 ```
 
 `npm run basemap` needs a raster library that the project deliberately does not

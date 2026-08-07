@@ -13,6 +13,7 @@
     "basemap": "node scripts/fetch-basemap.mjs",
     "overlap": "node scripts/extract-overlap-matrix.mjs",
     "passages": "node scripts/build-passages-atlas.mjs",
+    "status": "node scripts/build-status-atlas.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\"",

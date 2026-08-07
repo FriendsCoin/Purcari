@@ -1,0 +1,335 @@
+{
+ "source": {
+  "title": "Cartea Roșie a Republicii Moldova",
+  "transcribedFrom": "https://ro.wikipedia.org/wiki/Cartea_Ro%C8%99ie_a_Republicii_Moldova",
+  "retrieved": "2026-08-07",
+  "note": "Partial. The tables on that page carry 39 birds and 14 mammals; the third edition of the book (Știința, 2015) lists 62 birds and 30 mammals. Everything here is therefore an under-count of the national list, never an over-count. Replace with the official annex when it is available.",
+  "categories": {
+   "CR": "critic periclitată",
+   "EN": "periclitată",
+   "VU": "vulnerabilă"
+  }
+ },
+ "birds": [
+  {
+   "ro": "Cormoran mic",
+   "scientific": "Phalacrocorax pygmeus",
+   "category": "CR",
+   "where": "cursul inferior al Nistrului și al Prutului"
+  },
+  {
+   "ro": "Stârc galben",
+   "scientific": "Ardeola ralloides",
+   "category": "CR",
+   "where": "cursul inferior al Nistrului și al Prutului"
+  },
+  {
+   "ro": "Egreta mare",
+   "scientific": "Egretta alba",
+   "category": "CR",
+   "where": "cursul inferior al Prutului"
+  },
+  {
+   "ro": "Pelican comun",
+   "scientific": "Pelecanus onocrotalus",
+   "category": "CR",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Pelican creț",
+   "scientific": "Pelecanus crispus",
+   "category": "CR",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Țigănaș",
+   "scientific": "Plegadis falcinellus",
+   "category": "CR",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Lopătar",
+   "scientific": "Platalea leucorodia",
+   "category": "CR",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Cocostârc negru",
+   "scientific": "Ciconia nigra",
+   "category": "CR",
+   "where": "pădurile din luncile Prutului (r. Glodeni, Leova),  Nistrului (r. Căușeni), Codri (r. Hânceșit)"
+  },
+  {
+   "ro": "Lebăda cucuiată",
+   "scientific": "Cygnus olor",
+   "category": "VU",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Lebăda cântătoare",
+   "scientific": "Cygnus cygnus",
+   "category": "CR",
+   "where": "cursul inferior al Nistrului, în timpul migrației"
+  },
+  {
+   "ro": "Rață cu ochi albi",
+   "scientific": "Aythya nyroca",
+   "category": "CR",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Viespar",
+   "scientific": "Pernis apivorus",
+   "category": "EN",
+   "where": "rar, pe tot teritoriul țării"
+  },
+  {
+   "ro": "Gaie roșie",
+   "scientific": "Milvus milvus",
+   "category": "CR",
+   "where": "pădurile din centrul țării (r. Sângerei, Telenști)"
+  },
+  {
+   "ro": "Codalb",
+   "scientific": "Haliaeetus albicilla",
+   "category": "CR",
+   "where": "cursul inferior al Prutului și al Nistrului"
+  },
+  {
+   "ro": "Hoitar",
+   "scientific": "Neophron percnopterus",
+   "category": "CR",
+   "where": "nordul și centrul țării"
+  },
+  {
+   "ro": "Șerpar",
+   "scientific": "Circaetus gallicus",
+   "category": "CR",
+   "where": "pădurile din centrul țării"
+  },
+  {
+   "ro": "Erete vânat",
+   "scientific": "Circus cyaneus",
+   "category": "CR",
+   "where": "centrul și sudul țării"
+  },
+  {
+   "ro": "Erete alb",
+   "scientific": "Circus macrourus",
+   "category": "",
+   "where": "nordul, centrul și sud-estul țării ultima oară semnalată în 1962"
+  },
+  {
+   "ro": "Erete sur",
+   "scientific": "Circus pygargus",
+   "category": "CR",
+   "where": "centrul țării"
+  },
+  {
+   "ro": "Acvila țipătoare mică",
+   "scientific": "Aquila pomarina",
+   "category": "CR",
+   "where": "Codri, luncile Prutului și Nistrului"
+  },
+  {
+   "ro": "Acvila țipătoare mare",
+   "scientific": "Aquila clanga",
+   "category": "CR",
+   "where": "pădurile din centrul țării"
+  },
+  {
+   "ro": "Acvila imperială",
+   "scientific": "Aquila heliaca",
+   "category": "CR",
+   "where": "pădurile Orheiului și Corneștiului (?)"
+  },
+  {
+   "ro": "Acvila de stepă",
+   "scientific": "Aquila rapax",
+   "category": "CR",
+   "where": "centrul și sudul țării ultima oară semnalată în 1963"
+  },
+  {
+   "ro": "Acvila de munte",
+   "scientific": "Aquila chrysaetus",
+   "category": "CR",
+   "where": "sudul țării ultima oară semnalată în 1965"
+  },
+  {
+   "ro": "Acvila pitică",
+   "scientific": "Hieraaetus pennatus",
+   "category": "CR",
+   "where": "Codri, pădurile din lucinile Prutului și Nistrului"
+  },
+  {
+   "ro": "Vultur pescar",
+   "scientific": "Pandion haliaetus",
+   "category": "CR",
+   "where": "cursul inferior al Nistrului,  pădurea Cuhnești pe malul Prutului"
+  },
+  {
+   "ro": "Vânturel mic",
+   "scientific": "Falco naumanni",
+   "category": "CR",
+   "where": "cursul inferior al Prutului"
+  },
+  {
+   "ro": "Șoim dunărean",
+   "scientific": "Falco cherrug",
+   "category": "CR",
+   "where": "rar, pe tot teritoriul țării"
+  },
+  {
+   "ro": "Dropie mică",
+   "scientific": "Tetrax tetrax",
+   "category": "CR",
+   "where": "sudul țării (1982)"
+  },
+  {
+   "ro": "Dropie",
+   "scientific": "Otis tarda",
+   "category": "CR",
+   "where": "stepa Bălțiului, stepa Bugeacului (1962)"
+  },
+  {
+   "ro": "Cristel",
+   "scientific": "Crex crex",
+   "category": "CR",
+   "where": "în luncile Prutului, Nistrului și râurilor interioare"
+  },
+  {
+   "ro": "Porumbel de scorbură",
+   "scientific": "Columba oenas",
+   "category": "EN",
+   "where": "Codri, cursul inferior al Prutului și Nistrului"
+  },
+  {
+   "ro": "Striga",
+   "scientific": "Tyto alba",
+   "category": "EN",
+   "where": "parcurile din Chișinău și Tiraspol"
+  },
+  {
+   "ro": "Buhă mare",
+   "scientific": "Bubo bubo",
+   "category": "CR",
+   "where": "Codri, văile Nistrului și Prutului"
+  },
+  {
+   "ro": "Ciuf de câmp",
+   "scientific": "Asio flammeus",
+   "category": "CR",
+   "where": "luncile Nistrului, Prutului și Răutului"
+  },
+  {
+   "ro": "Ciocănitoarea verde",
+   "scientific": "Picus viridis",
+   "category": "EN",
+   "where": "nordul și centrul țării"
+  },
+  {
+   "ro": "Ciocănitoarea neagră",
+   "scientific": "Dryocopus martius",
+   "category": "EN",
+   "where": "valea Prutului, Codri"
+  },
+  {
+   "ro": "Mierla de piatră",
+   "scientific": "Monticola saxatilis",
+   "category": "EN",
+   "where": "cursul superior și de mijloc al Nistrului"
+  },
+  {
+   "ro": "Cănăraș",
+   "scientific": "Serinus serinus",
+   "category": "EN",
+   "where": "tot teritoriul țării"
+  }
+ ],
+ "mammals": [
+  {
+   "ro": "Chițcan cu abdomen alb",
+   "scientific": "Crocidura leucodon",
+   "category": "CR",
+   "where": "pretutindeni, dar are o densitate mică"
+  },
+  {
+   "ro": "Rinofild mare",
+   "scientific": "Rhinolophus ferrumequinum",
+   "category": "CR",
+   "where": "în apropiere de Nistru, în raioanele Soroca și Grigoriopol"
+  },
+  {
+   "ro": "Noptar cu urechi mari",
+   "scientific": "Myotis bechsteinii",
+   "category": "CR",
+   "where": "în raioanele Orhei și Strășeni"
+  },
+  {
+   "ro": "Noptar natterer",
+   "scientific": "Myotis nattereri",
+   "category": "CR",
+   "where": "în unele peșteri sau mine de extragere  a pietrei din [[raionul Orhei]]"
+  },
+  {
+   "ro": "Liliac cârn",
+   "scientific": "Barbastella barbastellus",
+   "category": "CR",
+   "where": "malurile stâncoase al Nistrului  din raionul Orhei"
+  },
+  {
+   "ro": "Nictal gigantic",
+   "scientific": "Nyctalus lasiopterus",
+   "category": "CR",
+   "where": "Codrii Centrali"
+  },
+  {
+   "ro": "Vespertil bicolor",
+   "scientific": "Vespertilio murinus",
+   "category": "CR",
+   "where": "Codrii Centrali"
+  },
+  {
+   "ro": "Popândău comun",
+   "scientific": "Spermophilus citellus",
+   "category": "VU",
+   "where": "terasele superioare și versantele Nistrului și Răutului"
+  },
+  {
+   "ro": "Jder de pădure",
+   "scientific": "Martes martes",
+   "category": "VU",
+   "where": "Codri, pădurile din lunca Prutului,  în Rezervația „Pădurea Domnească”"
+  },
+  {
+   "ro": "Hermelină",
+   "scientific": "Mustela erminea",
+   "category": "VU",
+   "where": "în luncile inundabile din cursurile inferioare  ale Nistrului și Prutului, în Codri"
+  },
+  {
+   "ro": "Nurcă europeană",
+   "scientific": "Mustela lutreola",
+   "category": "CR",
+   "where": "în cursurile inferioare ale Nistrului și Prutului"
+  },
+  {
+   "ro": "Dihor de stepă",
+   "scientific": "Mustela eversmanni",
+   "category": "EN",
+   "where": "stepa Bălțului și stepa Bugeacului,  zonele neîmpădurite din centrul țării"
+  },
+  {
+   "ro": "Vidră de râu",
+   "scientific": "Lutra lutra",
+   "category": "CR",
+   "where": "în lunca Prutlui și în cursul inferior al Nistrului"
+  },
+  {
+   "ro": "Pisică sălbatică",
+   "scientific": "Felis silvestris",
+   "category": "EN",
+   "where": "Codrii Centrali, pădurile din cursurile mijlociu  și inferior al Prutului și  din cursul inferior la Nistrului"
+  }
+ ]
+}
