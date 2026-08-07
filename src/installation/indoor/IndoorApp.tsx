@@ -186,6 +186,8 @@ export default function IndoorApp() {
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
   /** Named anchors on the estate map — the château, the villages, the scale. */
   const [mapAnchors, setMapAnchors] = useState<MapAnchor[]>([]);
+  /** Where the chosen station stands, for the fly-to. Null at the overview. */
+  const [estateFocus, setEstateFocus] = useState<[number, number, number] | null>(null);
   /** Which ring of The Unseen is chosen — a station id, 'ESTATE', or null. */
   const [unseenSelected, setUnseenSelected] = useState<string | null>(null);
   /**
@@ -384,6 +386,7 @@ export default function IndoorApp() {
             selectedSite={selectedSite}
             onSelectSite={interactive ? handleSelectSite : undefined}
             onMapAnchors={interactive ? setMapAnchors : undefined}
+            onFocus={interactive ? setEstateFocus : undefined}
           />
         );
       case 'year':
@@ -938,9 +941,25 @@ export default function IndoorApp() {
           bloomThreshold={0.12}
           swell={transition.crossing ? Math.sin(transition.t * Math.PI) : 0}
         >
+          {/*
+            Choosing a station swoops the camera from the plan view down to an
+            oblique over that station — the "come and look at this ground"
+            gesture. The look-at sits a little east of the mark so the station
+            lands left of centre, clear of the detail panel on the right; the
+            CameraRig's own easing makes both the descent and the return one
+            continuous move.
+          */}
           <CameraRig
-            position={chapter.camera}
-            lookAt={chapter.lookAt}
+            position={
+              chapter.id === 'estate' && estateFocus
+                ? [estateFocus[0] + 1.3, estateFocus[1] + 5.2, estateFocus[2] + 5.6]
+                : chapter.camera
+            }
+            lookAt={
+              chapter.id === 'estate' && estateFocus
+                ? [estateFocus[0] + 1.3, estateFocus[1], estateFocus[2]]
+                : chapter.lookAt
+            }
             subjectAspect={chapter.subjectAspect}
             maxPull={chapter.maxPull}
             /*

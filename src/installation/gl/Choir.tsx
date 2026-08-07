@@ -311,6 +311,11 @@ uniform float uGlyph;   // 0 = bird, 1 = quadruped
 uniform float uTurn;    // radians about Y — the ghost is a solid and it turns
 uniform float uScale;
 uniform float uSize;
+// The species' own choreography — see glyphChoreography() for what each is.
+uniform float uStagger; // which marks arrive first: a different order per species
+uniform float uSwirl;   // radians of spiral the gather comes in on
+uniform float uArc;     // how high the marks vault on the way
+uniform vec3 uFrom;     // where the gather blows in from
 
 varying float vAlpha;
 varying float vDepth;
@@ -337,12 +342,28 @@ void main(){
   );
   vec3 target = shape + breath * 0.16;
 
-  // Each mark arrives on its own beat, so the form assembles rather than snaps.
-  float lag = 1.0 - aSeed * 0.45;
+  // Each mark arrives on its own beat, and uStagger decides whose beat comes
+  // first: fract() folds the seeds into a different arrival order for every
+  // species, so a warbler assembles head-first where a duck fills in from the
+  // tail — same marks, different bird.
+  float lag = 1.0 - fract(aSeed * uStagger) * 0.45;
   float form = clamp(uForm * 1.45 * lag, 0.0, 1.0);
   form = form * form * (3.0 - 2.0 * form);
 
-  vec3 p = mix(aScatter, target, form);
+  // The way in is the species' own: the scatter is blown out toward uFrom,
+  // spiralled by uSwirl, and the marks vault over uArc as they close — so one
+  // ghost swirls together out of the east while another pours in flat from
+  // below. All of it fades to nothing as form reaches 1: the finished shape is
+  // identical, only the journey differs.
+  float open = 1.0 - form;
+  vec3 start = aScatter + uFrom * open;
+  float ang = uSwirl * open;
+  float ca = cos(ang);
+  float sa = sin(ang);
+  start = vec3(start.x * ca + start.z * sa, start.y, start.z * ca - start.x * sa);
+
+  vec3 p = mix(start, target, form);
+  p.y += uArc * sin(3.14159265 * form) * (0.35 + aSeed * 0.65);
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_PointSize = uSize * (0.45 + form * 0.55) * (300.0 / -mv.z);
   gl_Position = projectionMatrix * mv;
@@ -350,6 +371,54 @@ void main(){
   vAlpha = form;
 }
 `;
+
+/**
+ * One species, one way of arriving and one way of holding the air.
+ *
+ * Everything is derived from a hash of the scientific name, so the Blackcap
+ * gathers the same way every time it is chosen — a visitor who taps it twice
+ * sees its own entrance again, not a reroll — and no two species share one.
+ * The parameters stay inside ranges where the finished silhouette is never
+ * compromised: choreography varies, the animal does not.
+ */
+function glyphChoreography(sci: string) {
+  let h = 2166136261;
+  for (let i = 0; i < sci.length; i++) {
+    h ^= sci.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const rnd = () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+  const theta = rnd() * Math.PI * 2;
+  return {
+    stagger: 3 + rnd() * 9,
+    swirl: (rnd() * 2 - 1) * 2.4,
+    arc: rnd() * 2.4,
+    from: [
+      Math.cos(theta) * (4 + rnd() * 5),
+      (rnd() - 0.35) * 3.5,
+      Math.sin(theta) * (4 + rnd() * 5),
+    ] as [number, number, number],
+    // The little flight it makes once formed: a slow Lissajous wander whose
+    // amplitudes, tempi and phases are its own.
+    ax: 0.5 + rnd() * 0.9,
+    ay: 0.2 + rnd() * 0.45,
+    az: 0.4 + rnd() * 0.7,
+    fx: 0.09 + rnd() * 0.15,
+    fy: 0.13 + rnd() * 0.17,
+    fz: 0.07 + rnd() * 0.13,
+    px: rnd() * Math.PI * 2,
+    py: rnd() * Math.PI * 2,
+    pz: rnd() * Math.PI * 2,
+    turnAmp: 0.16 + rnd() * 0.14,
+    turnFreq: 0.1 + rnd() * 0.12,
+  };
+}
+
+type GlyphChoreography = ReturnType<typeof glyphChoreography>;
 
 const GLYPH_FRAG = /* glsl */ `
 ${SPRITE}
@@ -408,6 +477,10 @@ export function Choir({
   /** Marks, filaments and rings all hang off this so they can never drift apart. */
   const swarmRef = useRef<THREE.Group>(null);
   const glyphRef = useRef<THREE.Points>(null);
+  /** Whose entrance the ghost is currently performing, and whose comes next. */
+  const shownSciRef = useRef<string | null>(null);
+  const pendingSciRef = useRef<string | null>(null);
+  const choreographyRef = useRef<GlyphChoreography | null>(null);
   const revealRef = useRef(0);
   const spinRef = useRef(0);
   const clusterRef = useRef(0);
@@ -736,6 +809,10 @@ export function Choir({
       uScale: { value: GLYPH_SCALE },
       uSize: { value: 0.58 },
       uColor: { value: new THREE.Color(PALETTE.foil) },
+      uStagger: { value: 9 },
+      uSwirl: { value: 0 },
+      uArc: { value: 0 },
+      uFrom: { value: new THREE.Vector3() },
     }),
     [],
   );
@@ -909,29 +986,61 @@ export function Choir({
      */
     const aspect = size.height / Math.max(1, size.width);
     const room = 1 - THREE.MathUtils.smoothstep(aspect, 1.3, 1.7);
+
+    /*
+     * One species at a time performs its entrance. Choosing another while a
+     * ghost is up first disperses the old one — quickly, this is a beat, not a
+     * scene — and only at the bottom of that dissolve do the choreography
+     * uniforms swap, so no species is ever seen wearing another's entrance.
+     * The same gate switches the bird/quadruped form and the guild colour:
+     * they change while nothing is on screen to be wrong about.
+     */
+    const want = selected ? selected.sci : null;
+    if (want !== shownSciRef.current) pendingSciRef.current = want;
+    const dissolving = pendingSciRef.current !== shownSciRef.current;
+    const formTarget = dissolving ? 0 : selected ? room : 0;
+    // Gathering is the point and takes its time; getting out of the way is not.
+    const formRate = dissolving ? 4.5 : 1.5;
+    glyphUniforms.uForm.value +=
+      (formTarget - glyphUniforms.uForm.value) * Math.min(1, delta * formRate);
+    if (dissolving && glyphUniforms.uForm.value < 0.04) {
+      shownSciRef.current = pendingSciRef.current;
+      if (shownSciRef.current && selected) {
+        const dance = glyphChoreography(shownSciRef.current);
+        choreographyRef.current = dance;
+        glyphUniforms.uStagger.value = dance.stagger;
+        glyphUniforms.uSwirl.value = dance.swirl;
+        glyphUniforms.uArc.value = dance.arc;
+        (glyphUniforms.uFrom.value as THREE.Vector3).set(...dance.from);
+        glyphUniforms.uGlyph.value = glyphFor(selected.guild) === 'mammal' ? 1 : 0;
+        glyphUniforms.uColor.value.set(GUILD_COLORS[selected.guild] ?? PALETTE.foil);
+      }
+    }
+
+    /*
+     * Once formed, the ghost holds the air its own way: a slow Lissajous
+     * wander with the species' own amplitudes and tempi, banking a little into
+     * its own sideways motion. Scaled by form so the assembly happens on the
+     * spot and the flight only begins once there is an animal to fly.
+     */
+    const dance = choreographyRef.current;
+    const form = glyphUniforms.uForm.value;
     if (glyphRef.current) {
       const portrait = THREE.MathUtils.clamp(aspect - 1, 0, 0.7);
-      glyphRef.current.position.y = portrait * 3.4;
+      const drift = form * (dance ? 1 : 0);
+      const dx = dance ? Math.sin(t * dance.fx + dance.px) * dance.ax * drift : 0;
+      const dy = dance ? Math.sin(t * dance.fy + dance.py) * dance.ay * drift : 0;
+      const dz = dance ? Math.sin(t * dance.fz + dance.pz) * dance.az * drift : 0;
+      glyphRef.current.position.set(dx, portrait * 3.4 + dy, -3.5 + dz);
       glyphUniforms.uScale.value = GLYPH_SCALE * (1 - portrait * 0.34);
     }
-    // A slow sway rather than a spin — ±14°, which is enough for the legs of the
-    // deer to separate in depth and for the bird's far wing to fall behind the
-    // near one, and not enough to reach either form's unreadable edge-on view.
-    glyphUniforms.uTurn.value = Math.sin(t * 0.16) * 0.24;
-    // Only ever holds a form while something is chosen, and it takes its time
-    // both ways: gathering is the point, and a form that snapped would read as
-    // an overlay rather than as the swarm doing something.
-    glyphUniforms.uForm.value +=
-      ((selected ? room : 0) - glyphUniforms.uForm.value) * Math.min(1, delta * 1.5);
-    if (selected) {
-      // Held until the next selection rather than eased back: with nothing
-      // chosen there is no form on screen to be wrong about, and morphing the
-      // ghost to a bird as it disperses looks like an error.
-      glyphUniforms.uGlyph.value +=
-        ((glyphFor(selected.guild) === 'mammal' ? 1 : 0) - glyphUniforms.uGlyph.value) *
-        Math.min(1, delta * 2.2);
-      glyphUniforms.uColor.value.set(GUILD_COLORS[selected.guild] ?? PALETTE.foil);
-    }
+    // The resting sway keeps the solid readable (±14° puts the far wing behind
+    // the near one); the bank leans the form into its own sideways drift, which
+    // is what separates flying from floating.
+    const bank = dance ? Math.cos(t * dance.fx + dance.px) * dance.fx * dance.ax * -1.4 : 0;
+    const swayAmp = dance ? dance.turnAmp : 0.24;
+    const swayFreq = dance ? dance.turnFreq : 0.16;
+    glyphUniforms.uTurn.value = Math.sin(t * swayFreq) * swayAmp + bank * form;
 
     // A little over half a second from the mark to the far edge of the swarm.
     if (pulseRef.current <= 1) pulseRef.current = Math.min(1.2, pulseRef.current + delta * 1.6);

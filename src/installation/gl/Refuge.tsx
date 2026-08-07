@@ -801,7 +801,22 @@ uniform float uFocus;      // 0 = nothing selected, 1 = something is
 uniform float uCount;
 uniform float uRise;       // column heights per second
 uniform float uSway;
-uniform float uMorph;      // peaks halfway through a change of reading
+uniform float uMorph;
+uniform float uMorphAge;
+
+/*
+ * The change of reading travels. A scalar dip switched the whole row off and
+ * on again, which read as a projector blink; staggering the same dip by column
+ * turns it into a wave running left to right, so the eye is told "these are
+ * re-forming in order" rather than "the image glitched". The stagger is small
+ * enough that every column is still near the bottom of its own dip when the
+ * data swaps at age 0.5 — nothing is caught mid-change.
+ */
+float morphDip(float column){
+  float order = column / max(uCount - 1.0, 1.0);
+  float phase = clamp((uMorphAge - order * 0.18) / 0.82, 0.0, 1.0);
+  return sin(phase * 3.14159265);
+}      // peaks halfway through a change of reading
 uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
@@ -872,7 +887,7 @@ void main(){
   // read as an equivalence between "vineyard" and "connectivity", which is not
   // a claim the survey makes. Dissolving and re-forming says what it is: a
   // different question being asked of the same estate.
-  vAlpha = alive * ends * presence * rv * (1.0 - uMorph * 0.72);
+  vAlpha = alive * ends * presence * rv * (1.0 - morphDip(aColumn) * 0.72);
 }
 `;
 
@@ -913,6 +928,21 @@ uniform float uFocus;
 uniform float uCount;
 uniform float uDatum;     // >0 flattens the thread to this height (the score datum)
 uniform float uMorph;
+uniform float uMorphAge;
+
+/*
+ * The change of reading travels. A scalar dip switched the whole row off and
+ * on again, which read as a projector blink; staggering the same dip by column
+ * turns it into a wave running left to right, so the eye is told "these are
+ * re-forming in order" rather than "the image glitched". The stagger is small
+ * enough that every column is still near the bottom of its own dip when the
+ * data swaps at age 0.5 — nothing is caught mid-change.
+ */
+float morphDip(float column){
+  float order = column / max(uCount - 1.0, 1.0);
+  float phase = clamp((uMorphAge - order * 0.18) / 0.82, 0.0, 1.0);
+  return sin(phase * 3.14159265);
+}
 uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uGroup[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
@@ -954,7 +984,7 @@ void main(){
   // than dragging it to the floor: the segment fades, it does not lie.
   vColor = mix(mix(uColumnColor[ia], uColumnColor[ib], aBlend), vec3(1.0, 0.93, 0.78), level);
   vAlpha = presence * rv * (0.46 + sel * 0.60) * mix(1.0, mix(0.45, 1.35, sel), uFocus)
-         * (1.0 - uMorph * 0.6);
+         * (1.0 - morphDip((aColumnA + aColumnB) * 0.5) * 0.6);
 }
 `;
 
@@ -986,6 +1016,21 @@ uniform float uReveal;
 uniform float uFocus;
 uniform float uCount;
 uniform float uMorph;
+uniform float uMorphAge;
+
+/*
+ * The change of reading travels. A scalar dip switched the whole row off and
+ * on again, which read as a projector blink; staggering the same dip by column
+ * turns it into a wave running left to right, so the eye is told "these are
+ * re-forming in order" rather than "the image glitched". The stagger is small
+ * enough that every column is still near the bottom of its own dip when the
+ * data swaps at age 0.5 — nothing is caught mid-change.
+ */
+float morphDip(float column){
+  float order = column / max(uCount - 1.0, 1.0);
+  float phase = clamp((uMorphAge - order * 0.18) / 0.82, 0.0, 1.0);
+  return sin(phase * 3.14159265);
+}
 uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
@@ -1015,7 +1060,7 @@ void main(){
   vColor = uColumnColor[idx];
   vRadial = aRadial;
   vSelect = sel;
-  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus) * (1.0 - uMorph * 0.6);
+  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus) * (1.0 - morphDip(aColumn) * 0.6);
 }
 `;
 
@@ -1056,6 +1101,21 @@ uniform float uReveal;
 uniform float uFocus;
 uniform float uCount;
 uniform float uMorph;
+uniform float uMorphAge;
+
+/*
+ * The change of reading travels. A scalar dip switched the whole row off and
+ * on again, which read as a projector blink; staggering the same dip by column
+ * turns it into a wave running left to right, so the eye is told "these are
+ * re-forming in order" rather than "the image glitched". The stagger is small
+ * enough that every column is still near the bottom of its own dip when the
+ * data swaps at age 0.5 — nothing is caught mid-change.
+ */
+float morphDip(float column){
+  float order = column / max(uCount - 1.0, 1.0);
+  float phase = clamp((uMorphAge - order * 0.18) / 0.82, 0.0, 1.0);
+  return sin(phase * 3.14159265);
+}
 uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uCapital[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
@@ -1108,7 +1168,7 @@ void main(){
   vCrown = crown;
   vAlpha = presence * rv * (0.55 + uFill[idx] * 0.45)
          * mix(1.0, mix(0.35, 1.5, sel), uFocus)
-         * (1.0 - uMorph * 0.72);
+         * (1.0 - morphDip(aColumn) * 0.72);
 }
 `;
 
@@ -1235,6 +1295,7 @@ type MoteUniforms = {
   uSway: Uniform<number>;
   /** Peaks halfway through a change of reading, so the row can dissolve. */
   uMorph: Uniform<number>;
+  uMorphAge: Uniform<number>;
   /** Above zero, the skyline flattens to this height and becomes a datum. */
   uDatum: Uniform<number>;
   uColumnColor: Uniform<THREE.Color[]>;
@@ -1284,6 +1345,7 @@ function createMoteMaterial(): Shaded<MoteUniforms> {
     uRise: { value: 0.055 },
     uSway: { value: 0.085 },
     uMorph: { value: 0 },
+    uMorphAge: { value: 9 },
     uDatum: { value: 0 },
     uColumnColor: {
       value: Array.from({ length: MAX_COLUMNS }, () => hexColor(PALETTE.ash)),
@@ -1424,6 +1486,8 @@ export function Refuge({
   const shownRef = useRef<RefugeMode>(mode);
   const requestedRef = useRef<RefugeMode>(mode);
   const morphAt = useRef(-999);
+  const measureRef = useRef<THREE.LineSegments>(null);
+  const measureY = useRef(0);
   const focusRef = useRef(0);
   const { camera, size } = useThree();
 
@@ -1478,6 +1542,24 @@ export function Refuge({
       }),
     []
   );
+  /*
+   * The measure: the baseline's own geometry lifted to the selected column's
+   * capital and warmed to gold. Comparison is the one thing a row of columns
+   * is for, and the eye cannot hold a height across four intervening shafts —
+   * a rule at that height can. It rides the same eased uniform the shafts
+   * read, so it is always exactly as tall as the column is drawn, including
+   * mid-change.
+   */
+  const measureMaterial = useMemo(
+    () =>
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        color: new THREE.Color(1.5, 1.24, 0.66),
+        opacity: 0,
+        ...GLOW_DEFAULTS,
+      }),
+    []
+  );
   const backdropMaterial = useMemo(
     () => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
     []
@@ -1502,6 +1584,7 @@ export function Refuge({
       protection.material,
       ring.material,
       baselineMaterial,
+      measureMaterial,
       backdropMaterial,
     ];
     return () => {
@@ -1524,6 +1607,7 @@ export function Refuge({
     protection,
     ring,
     baselineMaterial,
+    measureMaterial,
     backdropMaterial,
   ]);
 
@@ -1612,6 +1696,7 @@ export function Refuge({
     const eased = r * r * (3 - 2 * r);
 
     const u = motes.uniforms;
+    let measureHeight = 0;
     // Fast enough to have arrived by the time the row is bright again, so the
     // change is something that happened in the dark rather than a slide.
     const rate = 5.5;
@@ -1628,6 +1713,7 @@ export function Refuge({
       // Selection is a prop change rather than a continuous control, so this one
       // gets its own ease. It never touches React state.
       u.uSelect.value[i] = ease(u.uSelect.value[i], slot.label === selected ? 1 : 0, 5.5);
+      if (slot.label === selected && slot.presence > 0) measureHeight = u.uHeight.value[i];
     }
 
     u.uTime.value = time;
@@ -1635,6 +1721,7 @@ export function Refuge({
     u.uFocus.value = focusRef.current;
     u.uCount.value = MAX_COLUMNS;
     u.uMorph.value = morph;
+    u.uMorphAge.value = Math.min(morphAge, 9);
     // Only the ecosystem reading has a datum: a published overall score the three
     // pillars are read against. The other two readings are profiles, and the
     // thread joins their heads.
@@ -1680,6 +1767,15 @@ export function Refuge({
     ring.uniforms.uReveal.value =
       eased * (1 - focusRef.current * 0.35) * (shown === 'habitat' ? 1 : 0) * (1 - morph);
     baselineMaterial.opacity = eased * 0.9;
+    // The measure rises to the chosen capital and dies with the selection —
+    // and with the morph wave, so it never asserts a height mid-change.
+    measureY.current = ease(measureY.current, measureHeight, 6);
+    measureMaterial.opacity = ease(
+      measureMaterial.opacity,
+      measureHeight > 0.05 ? eased * 0.8 * (1 - morph) : 0,
+      6
+    );
+    if (measureRef.current) measureRef.current.position.y = measureY.current;
 
     const group = groupRef.current;
     if (group) {
@@ -1715,6 +1811,13 @@ export function Refuge({
           offset into XZ directly, so this must not be rotated flat a second time. */}
       <mesh geometry={poolGeometry} material={poolMaterial} renderOrder={1} />
       <lineSegments geometry={baselineGeometry} material={baselineMaterial} renderOrder={2} />
+      {/* Same rule geometry, lifted: the ticks land over each column's axis. */}
+      <lineSegments
+        ref={measureRef}
+        geometry={baselineGeometry}
+        material={measureMaterial}
+        renderOrder={2}
+      />
 
       {hero && (
         <mesh

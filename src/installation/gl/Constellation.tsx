@@ -491,6 +491,12 @@ interface ConstellationProps {
    */
   onMapAnchors?: (marks: MapAnchor[]) => void;
   /**
+   * Where the selected station stands, in scene units, or null with nothing
+   * chosen. The parent flies the camera with it: the scene knows where its
+   * stations are, the parent owns the camera — same division as the captions.
+   */
+  onFocus?: (point: [number, number, number] | null) => void;
+  /**
    * Hour of day, 0..24. Each station brightens and swells in proportion to how
    * much life its own sensors actually recorded at that hour, and the ground
    * shifts from night through dawn to day. Scrubbing it shows the estate change
@@ -521,9 +527,12 @@ export function Constellation({
   selectedSite = null,
   onSelectSite,
   onMapAnchors,
+  onFocus,
 }: ConstellationProps) {
   const groupRef = useRef<THREE.Group>(null);
   const lastAnchors = useRef(0);
+  /** Eased pointer yaw, so the orbit follows the mouse without jitter. */
+  const orbitRef = useRef(0);
   const { camera, size } = useThree();
   const groundRef = useRef<THREE.Mesh>(null);
   const stationsRef = useRef<THREE.Points>(null);
@@ -1089,12 +1098,21 @@ export function Constellation({
     event.stopPropagation();
     pulse.current.set(event.point.x, event.point.z, 1);
 
+    // Into the group's own frame first. The stations are stored in local
+    // coordinates, and with the mouse orbit the group can stand a dozen degrees
+    // away from world axes — comparing world point against local marks was
+    // already slightly off under the idle sway, and under the orbit it would
+    // miss by more than the touch radius.
+    const local = groupRef.current
+      ? groupRef.current.worldToLocal(event.point.clone())
+      : event.point;
+
     // Nearest station within a generous touch radius — fingers are imprecise.
     let nearest: string | null = null;
     let best = 1.9;
     placed.forEach((entry) => {
-      const dx = entry.position[0] - event.point.x;
-      const dz = entry.position[2] - event.point.z;
+      const dx = entry.position[0] - local.x;
+      const dz = entry.position[2] - local.z;
       const distance = Math.hypot(dx, dz);
       if (distance < best) {
         best = distance;
@@ -1103,6 +1121,30 @@ export function Constellation({
     });
     onSelectSite?.(nearest);
   };
+
+  /* ---- the camera's mark ---- */
+  /**
+   * Where the chosen station stands: its mark in local scene units, halfway up
+   * its own lift so the camera aims between the light and the ground it names.
+   * Local, not world: the idle sway and the mouse orbit rotate the group a few
+   * degrees, and a camera chasing the swayed point would never settle.
+   */
+  useEffect(() => {
+    if (!onFocus) return;
+    if (!selectedSite) {
+      onFocus(null);
+      return;
+    }
+    const entry = placed.find((item) => item.site.id === selectedSite);
+    if (!entry) {
+      onFocus(null);
+      return;
+    }
+    const ground = projection
+      ? terrainHeightAt(projection, entry.site.x, entry.site.y)
+      : 0;
+    onFocus([entry.position[0], ground + STATION_LIFT * 0.5, entry.position[2]]);
+  }, [onFocus, selectedSite, placed, projection]);
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
@@ -1141,9 +1183,15 @@ export function Constellation({
     }
 
     if (groupRef.current) {
-      // A very slow drift keeps the tableau alive without inducing motion sickness
-      // on a screen someone stands in front of for twenty minutes.
-      groupRef.current.rotation.y = Math.sin(t * 0.035) * 0.09;
+      // A very slow drift keeps the tableau alive without inducing motion
+      // sickness on a screen someone stands in front of for twenty minutes —
+      // plus a small hand-driven orbit: the pointer leads the map around by up
+      // to ~9°, eased hard so it feels like weight, not like a cursor. On a
+      // touch kiosk the pointer rests wherever the last tap left it, which
+      // parks the orbit rather than fighting it.
+      orbitRef.current +=
+        (state.pointer.x * -0.16 - orbitRef.current) * Math.min(1, delta * 1.6);
+      groupRef.current.rotation.y = Math.sin(t * 0.035) * 0.09 + orbitRef.current;
     }
 
     /* ---- caption anchors, ~11 Hz ---- */
