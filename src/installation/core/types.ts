@@ -236,6 +236,16 @@ export interface LandscapeParcel {
   k: string;
 }
 
+export interface LandscapePlace {
+  /** Name as OSM writes it. */
+  n: string;
+  /** Metres east/north of the estate origin. */
+  x: number;
+  y: number;
+  /** 'winery' | 'village' | 'town' | 'locality'. */
+  k: string;
+}
+
 export interface LandscapeData {
   origin: { lat: number; lon: number };
   dem: LandscapeDem;
@@ -244,5 +254,7 @@ export interface LandscapeData {
   water: [number, number][][];
   streams: [number, number][][];
   tracks: [number, number][][];
+  /** Optional: an older cached bundle predates the named places. */
+  places?: LandscapePlace[];
   attribution: string[];
 }

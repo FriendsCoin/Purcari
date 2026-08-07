@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { InstallationData, LandscapeData, Site } from '../core/types';
 import { layoutSites, loadLandscape, logScale } from '../core/data';
@@ -17,6 +17,8 @@ import {
   estateProjection,
   terrainHeightAt,
   terrainHeightAtWorld,
+  worldXOf,
+  worldZOf,
   type EstateProjection,
 } from './landscapeGeometry';
 
@@ -56,6 +58,32 @@ const STATION_LIFT = 0.55;
 const AREA_LIFT = 0.020;
 const TRACK_LIFT = 0.030;
 const WATER_LIFT = 0.038;
+/** Cartographic furniture rides above the water lines, under the stations. */
+const FURNITURE_LIFT = 0.048;
+
+/**
+ * A named point on the map, projected to CSS pixels for the DOM to caption.
+ *
+ * Text drawn inside the canvas would need a font file, which this piece cannot
+ * fetch; real names deserve real type anyway. Same contract as Refuge's
+ * `onLayout`: the scene reports where things are, the parent writes the words.
+ */
+export interface MapAnchor {
+  name: string;
+  /** 'winery' | 'village' | 'locality' | 'scale' | 'north'. */
+  kind: string;
+  x: number;
+  y: number;
+  /**
+   * True when the place itself lies beyond the map sheet and its label was
+   * pulled in to the nearest edge — the convention every paper map uses for a
+   * town the road continues toward.
+   */
+  edge: boolean;
+}
+
+/** Scratch for per-frame projection, so the loop allocates nothing. */
+const ANCHOR_SCRATCH = new THREE.Vector3();
 
 function siteColor(site: Site, lens: Lens): [number, number, number] {
   if (lens === 'camera') return toRGB(CLASS_COLORS[site.cameraClass] ?? PALETTE.ash);
@@ -455,6 +483,11 @@ interface ConstellationProps {
   selectedSite?: string | null;
   onSelectSite?: (siteId: string | null) => void;
   /**
+   * Reports the screen positions of the map's named anchors — the château, the
+   * villages, the scale bar — throttled, in CSS pixels. See `MapAnchor`.
+   */
+  onMapAnchors?: (marks: MapAnchor[]) => void;
+  /**
    * Hour of day, 0..24. Each station brightens and swells in proportion to how
    * much life its own sensors actually recorded at that hour, and the ground
    * shifts from night through dawn to day. Scrubbing it shows the estate change
@@ -484,8 +517,11 @@ export function Constellation({
   hour = 12,
   selectedSite = null,
   onSelectSite,
+  onMapAnchors,
 }: ConstellationProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const lastAnchors = useRef(0);
+  const { camera, size } = useThree();
   const groundRef = useRef<THREE.Mesh>(null);
   const stationsRef = useRef<THREE.Points>(null);
   const linksRef = useRef<THREE.LineSegments>(null);
@@ -662,6 +698,179 @@ export function Constellation({
     },
     [layers],
   );
+
+  /* ---- the château, named and ringed ---- */
+  /**
+   * OSM pins a `craft=winery` node inside the winery complex, and the two
+   * largest footprints on the sheet — 3,380 m² and 2,385 m² — stand beside it.
+   * The ring encloses whichever substantial buildings sit within 250 m of that
+   * node, so it draws the complex as one thing without hand-placing anything:
+   * if the mapping improves, the ring follows it.
+   */
+  const chateau = useMemo(() => {
+    if (!landscape?.places || !projection) return null;
+    const winery = landscape.places.find((place) => place.k === 'winery');
+    if (!winery) return null;
+    const complex = landscape.buildings.filter(
+      (b) =>
+        b.a > 1200 &&
+        b.p.some(([x, y]) => Math.hypot(x - winery.x, y - winery.y) < 250),
+    );
+    if (!complex.length) return null;
+
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    for (const b of complex)
+      for (const [x, y] of b.p) {
+        sx += x;
+        sy += y;
+        n++;
+      }
+    const cx = sx / n;
+    const cy = sy / n;
+    let radius = 0;
+    for (const b of complex)
+      for (const [x, y] of b.p) radius = Math.max(radius, Math.hypot(x - cx, y - cy));
+    radius += 35;
+
+    const ring: [number, number][] = [];
+    for (let i = 0; i <= 120; i++) {
+      const a = (i / 120) * Math.PI * 2;
+      ring.push([cx + Math.cos(a) * radius, cy + Math.sin(a) * radius]);
+    }
+    return { cx, cy, radius, ring };
+  }, [landscape, projection]);
+
+  /* ---- cartographic furniture: the ring, a scale bar, a north arrow ---- */
+  /**
+   * What separates "some terrain" from "a map of a real place" is partly the
+   * furniture a map carries: a bar that says how big it is, an arrow that says
+   * which way it faces. Both are drawn in the scene, draped on the terrain and
+   * inside the swaying group, so the bar is always exactly 1 km of this ground
+   * and the arrow always points at the map's own north — a DOM overlay would
+   * detach from both the moment the camera moved.
+   */
+  const furniture = useMemo(() => {
+    if (!landscape || !projection) return null;
+    const p = projection;
+    const gold: [number, number][][] = [];
+    const bronze: [number, number][][] = [];
+
+    if (chateau) gold.push(chateau.ring);
+
+    // Placement is screen-driven, not compass-driven: under this chapter's
+    // camera the sheet's south edge lies along the chapter nav, so furniture
+    // there sat on top of the buttons. The east-southeast of the sheet is open
+    // farmland with no stations, clear of every control, and far enough from
+    // the edge fade that the bar keeps both its ends.
+    const x0 = p.west + (p.east - p.west) * 0.57;
+    const y0 = p.south + (p.north - p.south) * 0.235;
+    bronze.push(
+      [
+        [x0, y0],
+        [x0 + 1000, y0],
+      ],
+      [
+        [x0, y0 - 45],
+        [x0, y0 + 45],
+      ],
+      [
+        [x0 + 500, y0 - 26],
+        [x0 + 500, y0 + 26],
+      ],
+      [
+        [x0 + 1000, y0 - 45],
+        [x0 + 1000, y0 + 45],
+      ],
+    );
+
+    const xa = x0 - 330;
+    const ya = y0 - 40;
+    bronze.push(
+      [
+        [xa, ya],
+        [xa, ya + 300],
+      ],
+      [
+        [xa - 58, ya + 210],
+        [xa, ya + 300],
+        [xa + 58, ya + 210],
+      ],
+    );
+
+    return {
+      gold: buildLineLayer(gold, p, { color: PALETTE.foil, intensity: 0.9, lift: FURNITURE_LIFT }),
+      bronze: buildLineLayer(bronze, p, {
+        color: PALETTE.parchment,
+        intensity: 0.62,
+        lift: FURNITURE_LIFT,
+      }),
+      scaleAt: [x0 + 500, y0 - 130] as [number, number],
+      northAt: [xa, ya + 420] as [number, number],
+    };
+  }, [landscape, projection, chateau]);
+
+  useEffect(
+    () => () => {
+      if (!furniture) return;
+      furniture.gold.dispose();
+      furniture.bronze.dispose();
+    },
+    [furniture],
+  );
+
+  /* ---- the anchors the DOM will caption ---- */
+  const anchorPoints = useMemo((): {
+    name: string;
+    kind: string;
+    edge: boolean;
+    local: THREE.Vector3;
+  }[] => {
+    if (!projection) return [];
+    const p = projection;
+    const points: { name: string; kind: string; edge: boolean; local: THREE.Vector3 }[] = [];
+    const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+    const at = (mx: number, my: number, lift: number) =>
+      new THREE.Vector3(worldXOf(p, mx), terrainHeightAt(p, mx, my) + lift, worldZOf(p, my));
+
+    for (const place of landscape?.places ?? []) {
+      // Purcari's own village node sits 80 m past the north edge of the DEM,
+      // Antonești 300 m past the south — pulled to the margin, as any sheet
+      // labels the town its road leaves toward. Label placement is layout, not
+      // a coordinate claim.
+      const margin = 120;
+      let mx = clamp(place.x, p.west + margin, p.east - margin);
+      let my = clamp(place.y, p.south + margin, p.north - margin);
+      const edge = mx !== place.x || my !== place.y;
+      let lift = 0.14;
+      if (place.k === 'winery' && chateau) {
+        // The name hangs under the ring like a plaque, on quiet vineyard
+        // ground: above the roof it sat in the thick of the station filaments,
+        // which is the busiest air on the whole sheet.
+        mx = chateau.cx;
+        my = chateau.cy - chateau.radius - 170;
+        lift = 0.1;
+      }
+      points.push({ name: place.n, kind: place.k, edge, local: at(mx, my, lift) });
+    }
+    if (furniture) {
+      points.push({
+        name: '1 km',
+        kind: 'scale',
+        edge: false,
+        local: at(furniture.scaleAt[0], furniture.scaleAt[1], 0.05),
+      });
+      points.push({
+        name: 'N',
+        kind: 'north',
+        edge: false,
+        local: at(furniture.northAt[0], furniture.northAt[1], 0.05),
+      });
+    }
+    return points;
+  }, [landscape, projection, furniture, chateau]);
 
   /**
    * The fallback ground: a densely tessellated plane, not a CircleGeometry — a
@@ -854,6 +1063,28 @@ export function Constellation({
       // on a screen someone stands in front of for twenty minutes.
       groupRef.current.rotation.y = Math.sin(t * 0.035) * 0.09;
     }
+
+    /* ---- caption anchors, ~11 Hz ---- */
+    // Through the group's own matrixWorld, so the labels ride the sway instead
+    // of drifting off their marks. Same cadence as Refuge's captions: fast
+    // enough to track the drift, far too slow to matter to the render loop.
+    if (onMapAnchors && anchorPoints.length && groupRef.current && t - lastAnchors.current > 0.09) {
+      lastAnchors.current = t;
+      const matrix = groupRef.current.matrixWorld;
+      const marks: MapAnchor[] = [];
+      for (const point of anchorPoints) {
+        ANCHOR_SCRATCH.copy(point.local).applyMatrix4(matrix).project(camera);
+        if (ANCHOR_SCRATCH.z > 1) continue;
+        marks.push({
+          name: point.name,
+          kind: point.kind,
+          edge: point.edge,
+          x: (ANCHOR_SCRATCH.x * 0.5 + 0.5) * size.width,
+          y: (-ANCHOR_SCRATCH.y * 0.5 + 0.5) * size.height,
+        });
+      }
+      onMapAnchors(marks);
+    }
   });
 
   return (
@@ -873,6 +1104,16 @@ export function Constellation({
           <lineSegments geometry={layers.tracks} material={materials.drape} renderOrder={2} />
           <lineSegments geometry={layers.waterways} material={materials.drape} renderOrder={3} />
           <mesh geometry={layers.buildings} material={materials.built} renderOrder={4} />
+          {furniture && (
+            <>
+              <lineSegments geometry={furniture.gold} material={materials.drape} renderOrder={4} />
+              <lineSegments
+                geometry={furniture.bronze}
+                material={materials.drape}
+                renderOrder={4}
+              />
+            </>
+          )}
         </>
       ) : (
         noiseGeometry && (

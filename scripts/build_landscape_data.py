@@ -58,6 +58,18 @@ OVERPASS_QUERY = """
 out geom;
 """
 
+# Padded a little beyond the map bbox: the village node of Purcari itself sits
+# 100 m north of the DEM edge, and a map of the estate that cannot say the word
+# "Purcari" is failing at its one job.
+PLACES_QUERY = """
+[out:json][timeout:60];
+(
+  node["place"]({s},{w},{n},{e});
+  nwr["craft"="winery"]({s},{w},{n},{e});
+);
+out tags center;
+"""
+
 
 def to_xy(lat: float, lon: float) -> tuple[float, float]:
     """Equirectangular projection to metres east/north of the estate origin."""
@@ -209,13 +221,60 @@ def fetch_osm() -> dict:
     }
 
 
+def fetch_places() -> list[dict]:
+    """Named anchors: the villages, the localities, and the winery itself.
+
+    These are what turn the sheet from "some terrain" into "that terrain": a
+    visitor from the region recognises Purcari and Hamza by name faster than by
+    any contour. The winery node is the one non-place kept — OSM pins it inside
+    the château complex, and the scene uses it to say which of 533 footprints
+    is the house everything else is named after.
+    """
+    pad = 0.006  # ~650 m beyond the sheet, enough to catch the village node
+    box = {
+        "s": BBOX["south"] - pad,
+        "w": BBOX["west"] - pad,
+        "n": BBOX["north"] + pad,
+        "e": BBOX["east"] + pad,
+    }
+    payload = fetch_json(OVERPASS, data=PLACES_QUERY.format(**box).encode())
+
+    places: list[dict] = []
+    for element in payload.get("elements", []):
+        tags = element.get("tags", {})
+        name = tags.get("name")
+        if not name:
+            continue
+        lat = element.get("lat") or element.get("center", {}).get("lat")
+        lon = element.get("lon") or element.get("center", {}).get("lon")
+        if lat is None or lon is None:
+            continue
+        kind = "winery" if tags.get("craft") == "winery" else tags.get("place", "locality")
+        # Hamlets and farms would label every barnyard; keep the map quiet.
+        if kind not in ("winery", "village", "town", "locality"):
+            continue
+        x, y = to_xy(lat, lon)
+        places.append({"n": name, "x": round(x), "y": round(y), "k": kind})
+
+    places.sort(key=lambda p: (p["k"] != "winery", p["n"]))
+    print(f"  places: {[(p['n'], p['k']) for p in places]}")
+    return places
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--dem-cache", help="reuse a previously fetched DEM")
+    parser.add_argument(
+        "--reuse-dem-from",
+        help="lift the DEM out of an existing landscape bundle instead of re-fetching",
+    )
     args = parser.parse_args()
 
-    if args.dem_cache and Path(args.dem_cache).exists():
+    if args.reuse_dem_from and Path(args.reuse_dem_from).exists():
+        print("reusing DEM from existing bundle")
+        dem = json.loads(Path(args.reuse_dem_from).read_text())["dem"]
+    elif args.dem_cache and Path(args.dem_cache).exists():
         print("reusing cached DEM")
         dem = json.loads(Path(args.dem_cache).read_text())
     else:
@@ -226,6 +285,8 @@ def main() -> None:
 
     print("fetching OpenStreetMap geometry...")
     osm = fetch_osm()
+    print("fetching named places...")
+    osm["places"] = fetch_places()
 
     bundle = {
         "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON},

@@ -12,7 +12,7 @@ import { soundField, Chorus } from '../core/audio';
 import { Spectrogram, SPECTROGRAM_AXES } from '../ui/Spectrogram';
 import { useChapterTransition } from '../core/useChapterTransition';
 import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
-import { Constellation, type Lens } from '../gl/Constellation';
+import { Constellation, type Lens, type MapAnchor } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
 import { Choir } from '../gl/Choir';
 import { Refuge, type RefugeMode } from '../gl/Refuge';
@@ -184,6 +184,8 @@ export default function IndoorApp() {
   const [refugeMode, setRefugeMode] = useState<RefugeMode>('practices');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
+  /** Named anchors on the estate map — the château, the villages, the scale. */
+  const [mapAnchors, setMapAnchors] = useState<MapAnchor[]>([]);
   /** Which ring of The Unseen is chosen — a station id, 'ESTATE', or null. */
   const [unseenSelected, setUnseenSelected] = useState<string | null>(null);
   /**
@@ -381,6 +383,7 @@ export default function IndoorApp() {
             hour={hour}
             selectedSite={selectedSite}
             onSelectSite={interactive ? handleSelectSite : undefined}
+            onMapAnchors={interactive ? setMapAnchors : undefined}
           />
         );
       case 'year':
@@ -484,6 +487,30 @@ export default function IndoorApp() {
           <p className="inst-lede inst-rise inst-delay-2">{chapter.lede}</p>
         </div>
 
+        {/* --------------------------------------------------- map captions */}
+        {/*
+          The names that make the sheet recognisably Purcari: the château, the
+          villages the roads leave toward, the scale bar's own figure. Anchored
+          to screen positions the scene reports each frame, so they ride the
+          map's slow sway; rendered only for the live overlay, since a dissolve
+          would otherwise draw two sets of the same names.
+        */}
+        {id === 'estate' && interactive && (
+          <div className="inst-map-labels inst-pass" aria-hidden="true">
+            {mapAnchors.map((anchor) => (
+              <span
+                key={`${anchor.kind}:${anchor.name}`}
+                className={`inst-map-label inst-map-label--${anchor.kind}${
+                  anchor.edge ? ' inst-map-label--edge' : ''
+                }`}
+                style={{ left: anchor.x, top: anchor.y }}
+              >
+                {anchor.kind === 'winery' ? 'Château Purcari · 1827' : anchor.name}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* ------------------------------------------------ chapter controls */}
         {id === 'estate' && (
           <div
@@ -542,6 +569,15 @@ export default function IndoorApp() {
             </div>
             <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
               {lensMeta.caption.toUpperCase()}
+            </p>
+            {/*
+              The ground's own credits. ODbL requires the OSM line whenever the
+              map data is shown, and the relief deserves the same courtesy —
+              besides which, naming public sources is half of what makes the
+              sheet read as a survey of a real place rather than scenography.
+            */}
+            <p className="inst-mono" style={{ marginTop: '0.6rem', opacity: 0.5 }}>
+              RELIEF SRTM 30 M · MAP © OPENSTREETMAP (ODBL)
             </p>
           </div>
         )}

@@ -697,6 +697,10 @@
       rgba(5, 4, 10, 0.8) 55%,
       transparent 100%
     );
+    /* The desktop cap exists to duck the centred nav; on a phone this corner
+       spans the full width above the nav, and the cap would fold every label
+       into a one-word column. */
+    max-width: none;
   }
 
   /*
@@ -714,6 +718,22 @@
   .inst-corner--br,
   .inst-prompt {
     display: none;
+  }
+
+  /*
+   * On a phone the whole sheet is palm-sized: village names and the scale bar
+   * figure would sit on top of each other. The château keeps its name — it is
+   * the one label that makes the map this place — at body scale.
+   */
+  .inst-map-label--village,
+  .inst-map-label--locality,
+  .inst-map-label--scale,
+  .inst-map-label--north {
+    display: none;
+  }
+
+  .inst-map-label--winery {
+    font-size: 0.85rem;
   }
 
   .inst-nav {
@@ -1046,4 +1066,56 @@
 
 .inst-column-label[data-active='true'] {
   color: var(--candle);
+}
+
+/* ------------------------------------------------------------ map captions */
+
+/*
+ * Names on the estate map, anchored to screen positions the scene reports.
+ * Same reasoning as the column captions above: real type needs the DOM. These
+ * are what make the sheet read as a place — a terrain with no names on it is
+ * scenography, one that says Purcari and Château Purcari is a map.
+ */
+.inst-map-labels {
+  position: absolute;
+  inset: 0;
+}
+
+.inst-map-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--parchment);
+  opacity: 0.62;
+  /* The ground behind a name can be a lit contour; the shadow keeps it legible. */
+  text-shadow: 0 1px 6px rgba(5, 4, 10, 0.9);
+  pointer-events: none;
+}
+
+/* The house the estate is named after gets its own treatment: the display
+   face, the label-foil gold, hanging under its ring like a plaque. */
+.inst-map-label--winery {
+  transform: translate(-50%, 0);
+  font-family: var(--display);
+  font-size: clamp(0.95rem, 1.4vw, 1.3rem);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--foil);
+  opacity: 0.95;
+}
+
+/* A village pulled to the sheet's margin is a direction, not a location. */
+.inst-map-label--edge {
+  opacity: 0.4;
+}
+
+.inst-map-label--scale,
+.inst-map-label--north {
+  font-size: 0.56rem;
+  opacity: 0.5;
 }
