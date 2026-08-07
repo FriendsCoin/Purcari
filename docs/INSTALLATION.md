@@ -18,7 +18,7 @@ npm run build        # emits dist/index.html and dist/installation.html
 
 ## What is on screen
 
-Nine chapters, each a full-screen realtime composition. Chapters I–IV, VII and
+Ten chapters, each a full-screen realtime composition. Chapters I–IV, VII and
 the attract state are drawn from the 2,665 detections recorded between 31 July
 and 16 August 2025 by five acoustic recorders across 121 species; Chapters V and
 VI come from the camera traps — a different survey, a different method — and say
@@ -34,6 +34,7 @@ so on screen.
 | V | **Chevauchement** | Eighteen camera-trap species and the correlation between their daily rhythms, as a ring of chords. Warm means two species are out at the same hours, cool means they avoid each other. The highlight walks the ring on its own. | Tap a species to hold it |
 | VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
 | VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
+| IX | **Méthodes** | The two instruments on one axis of eighty days: the camera traps below, watching all of it for 367 passages; the microphones above, listening to the last seventeen days for 2,665 detections. Between the lists of 121 and 15 species there are exactly four in common, and they are the only threads that cross. | Tap an instrument, or a crossing thread |
 | VIII | **Statut** | The twelve species out of both surveys that carry a conservation status, on four rings — one per category, worst at the top. Each is a column of its own detections, and how *loosely* that column is drawn is the BirdNET score behind it: a tight column was identified with confidence, a haze was not. | Drag sideways to turn the tower, up/down to climb it, tap a species |
 
 ### Inside a station
@@ -62,6 +63,20 @@ The scale bar is computed along the distance to what the camera is looking at
 rather than straight down. Overhead the two are the same; leaning in at a post
 they are not, and the bar would otherwise report a third of the distance it
 draws.
+
+### A note on what the piece is
+
+It is a show. It is meant to be beautiful and legible to somebody holding a glass
+of wine, not to be a report — so it **selects**: the striking hour, the twelve
+species that carry a status, the four that both instruments found. That is
+curation, and it is allowed.
+
+What it never does is state something that is not in a source. The distinction
+matters and it is cheap to hold: choosing which true things to show is editing,
+and saying an untrue one is a different act entirely — on a wall, under the
+estate's own name. So the caveats live here and in the code, the credit lines
+name the sources on screen, and nothing on screen is a claim the data cannot
+carry.
 
 ### What Chapter VIII is made of, and what it deliberately does not claim
 
@@ -393,6 +408,7 @@ src/installation/
     PassagesScene.ts              the eighty-night actogram
     TailScene.ts                  the abundance ranking
     StatusScene.ts                the four categories, with their evidence
+    MethodsScene.ts               the two instruments, and the four threads that cross
   data/
     atlas.ts / atlas.json         the baked detections
     basemap.ts / basemap.json     the aerial layers: bounds, projection, extent

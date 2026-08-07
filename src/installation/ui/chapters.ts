@@ -21,4 +21,5 @@ export const CHAPTERS: ChapterEntry[] = [
   { id: 'passages', numeral: 'VI', name: 'Passages' },
   { id: 'tail', numeral: 'VII', name: 'La traîne' },
   { id: 'status', numeral: 'VIII', name: 'Statut' },
+  { id: 'methods', numeral: 'IX', name: 'Méthodes' },
 ];

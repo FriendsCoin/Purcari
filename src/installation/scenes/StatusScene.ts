@@ -426,9 +426,10 @@ export class StatusScene extends ChapterBase {
   private frame(): Readout {
     return {
       legend: TIERS.map(tier => ({ label: TIER_LABELS[tier], color: TIER_COLORS[tier] })),
-      source:
-        `Cartea Roșie a Republicii Moldova (transcription partielle) · UICN via Wikidata · ` +
-        `relevés Every1Counts & BirdNET`,
+      // A credit line, not a footnote. What the piece must never do is state a
+      // status that is not in a source; which of the true ones it shows is
+      // curation, and this is an installation, not a report.
+      source: 'Cartea Roșie a Republicii Moldova · Liste rouge UICN · Every1Counts & BirdNET',
     };
   }
 

@@ -10,7 +10,8 @@ export type ChapterId =
   | 'overlap'
   | 'passages'
   | 'tail'
-  | 'status';
+  | 'status'
+  | 'methods';
 
 /** What the WebGL layer wants the DOM overlay to display right now. */
 export interface Readout {

@@ -5,6 +5,7 @@ import { GUILD_COLORS, GUILD_ORDER, guildLabel } from './engine/palette';
 import { ChorusScene } from './scenes/ChorusScene';
 import { CircadianScene } from './scenes/CircadianScene';
 import { FluxScene } from './scenes/FluxScene';
+import { MethodsScene } from './scenes/MethodsScene';
 import { OverlapScene } from './scenes/OverlapScene';
 import { PassagesScene } from './scenes/PassagesScene';
 import { SpeciesScene } from './scenes/SpeciesScene';
@@ -96,6 +97,7 @@ export function Installation(): JSX.Element {
     instance.register(new PassagesScene());
     instance.register(new TailScene());
     instance.register(new StatusScene());
+    instance.register(new MethodsScene());
     instance.setHome('chorus');
     instance.goTo('chorus', true);
     instance.start();
