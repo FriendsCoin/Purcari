@@ -1,7 +1,22 @@
 name: Deploy installation preview
 
-# Publishes docs/ to GitHub Pages, which is how the outdoor piece gets tested on
-# a real phone: browsers only grant camera and microphone access over HTTPS.
+# Publishes the whole site — the analytical dashboard and the installation — in
+# one deployment, which is how the outdoor piece gets tested on a real phone:
+# browsers only grant camera and microphone access over HTTPS.
+#
+# One deployment, deliberately. GitHub Pages serves whatever the last successful
+# deployment uploaded and nothing else, so two workflows publishing two different
+# trees do not merge — they take turns deleting each other. That is exactly what
+# happened here: a second branch published `dist` alone on 4 August and /live/
+# returned 404 until this ran again, at which point the dashboard at the root
+# went dark instead. Both belong to the same site, so both go in the same
+# artifact and neither can win.
+#
+#   /              the dashboard (dist/index.html)
+#   /indoor.html   the touchscreen piece, served from its own bundle
+#   /outdoor.html  the sensor piece
+#   /live/         the installation as one self-contained file, works offline
+#   /stills/       press stills
 #
 # Pages must be switched on once by hand before this can run — set
 # Settings → Pages → Source to "GitHub Actions". The automated routes are all
@@ -16,9 +31,9 @@ on:
     branches:
       - main
       - claude/interactive-media-art-dashboard-ki7oz7
-    paths:
-      - 'docs/**'
-      - '.github/workflows/pages.yml'
+    # No paths filter: the artifact now contains the built application as well
+    # as docs/, so a change to src/ changes the site just as much as a change to
+    # docs/ does. Filtering on docs/** would quietly publish a stale dashboard.
   workflow_dispatch:
 
 permissions:
@@ -71,16 +86,51 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      # docs/ becomes the site root, so docs/live/index.html serves at /live/.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # The site is served from a subpath, so the built asset URLs have to carry
+      # it. Passed on the command line rather than written into vite.config.ts:
+      # `base` is a property of where this one deployment lands, not of the
+      # project, and hard-coding it would break `npm run dev` and any other host.
+      - name: Build the dashboard and the two kiosk pages
+        run: npm run build -- --base="${{ steps.pages.outputs.base_path }}/"
+
+      # Assemble one tree. dist/ supplies the root; docs/ is laid over the top,
+      # contributing /live/ and /stills/. The two do not overlap.
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r dist/. _site/
+          cp -r docs/live docs/stills _site/
+          # Fail loudly rather than deploying half a site: a missing file here
+          # is how the root or /live/ silently 404s.
+          for f in _site/index.html _site/indoor.html _site/outdoor.html _site/live/index.html; do
+            [ -s "$f" ] || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          echo "assembled:"; find _site -maxdepth 2 -name '*.html' | sort
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Report the URL
+      - name: Report the URLs
         run: |
-          echo "### Installation preview" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.deployment.outputs.page_url }}live/" >> "$GITHUB_STEP_SUMMARY"
+          url="${{ steps.deployment.outputs.page_url }}"
+          {
+            echo "### Published"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Dashboard | ${url} |"
+            echo "| Installation, offline single file | ${url}live/ |"
+            echo "| Touchscreen piece | ${url}indoor.html |"
+            echo "| Sensor piece | ${url}outdoor.html |"
+          } >> "$GITHUB_STEP_SUMMARY"
