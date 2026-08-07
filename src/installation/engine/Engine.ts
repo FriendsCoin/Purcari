@@ -9,6 +9,16 @@ const TRANSITION_DURATION = 1.4;
 /** No touch for this long and the piece returns to the attract chapter. */
 const IDLE_TIMEOUT = 75;
 
+/**
+ * The attract tour. An untouched panel is not a paused one: after the idle
+ * return it holds the prologue for a while, then walks the chapters on its own,
+ * in order, around and around — the piece becomes a film until somebody touches
+ * it, at which point the tour stops mid-step and the chapter they landed on is
+ * theirs.
+ */
+const TOUR_HOLD = 50;
+const TOUR_STEP = 36;
+
 /** A frame longer than this is treated as a stall, not as slow motion. */
 const MAX_DELTA = 1 / 20;
 
@@ -59,6 +69,11 @@ export class Engine {
 
   private homeChapter: ChapterId = 'chorus';
   private disposed = false;
+
+  /** Seconds into the current stop of the attract tour; see TOUR_HOLD. */
+  private tourClock = 0;
+  /** 0 idle-not-reached, 1 parked home, 2 walking the chapters. */
+  private tourStage = 0;
 
   constructor(options: EngineOptions) {
     this.options = options;
@@ -249,9 +264,27 @@ export class Engine {
       quality: this.quality,
     };
 
-    if (this.pointer.idleTime > IDLE_TIMEOUT && chapter.id !== this.homeChapter && !this.isTransitioning) {
-      this.goTo(this.homeChapter);
-      this.options.onIdleReturn?.();
+    if (this.pointer.idleTime <= IDLE_TIMEOUT) {
+      this.tourClock = 0;
+      this.tourStage = 0;
+    } else if (!this.isTransitioning) {
+      this.tourClock += delta;
+      if (this.tourStage === 0) {
+        // First act of the tour: come home to the attract chapter.
+        if (chapter.id !== this.homeChapter) {
+          this.goTo(this.homeChapter);
+          this.options.onIdleReturn?.();
+        }
+        this.tourStage = 1;
+        this.tourClock = 0;
+      } else if (this.tourClock >= (this.tourStage === 1 ? TOUR_HOLD : TOUR_STEP)) {
+        // Then walk: every chapter in order, prologue included, forever.
+        const order = [...this.chapters.keys()];
+        const next = order[(order.indexOf(chapter.id) + 1) % order.length];
+        this.goTo(next);
+        this.tourStage = 2;
+        this.tourClock = 0;
+      }
     }
 
     chapter.update(ctx);
