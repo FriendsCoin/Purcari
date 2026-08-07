@@ -212,7 +212,11 @@ export class ChorusScene extends ChapterBase {
     // half distance, so the murmuration crosses the screen rather than sitting
     // pinned in the middle of it.
     this.desiredTarget.copy(this.centre).multiplyScalar(0.72);
-    this.desired.radius = damp(this.desired.radius, ctx.idle > 0.5 ? 37 : 34, 0.6, ctx.delta);
+    // A phone is taller than it is wide, and the flock is long: the camera
+    // stands further back as the frame narrows, or the murmuration spends half
+    // its circuit out of shot.
+    const narrow = ctx.aspect < 1.25 ? Math.pow(1.25 / ctx.aspect, 0.72) : 1;
+    this.desired.radius = damp(this.desired.radius, (ctx.idle > 0.5 ? 37 : 34) * narrow, 0.6, ctx.delta);
 
     this.updateCameraRig(ctx);
     this.refreshReadout(phase);
