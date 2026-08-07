@@ -204,8 +204,11 @@ void main(){
   float minor = abs(fract(c) - 0.5) / max(fwidth(c), 0.0001);
   float index = c / 5.0;
   float major = abs(fract(index) - 0.5) / max(fwidth(index), 0.0001);
-  float lines = (1.0 - smoothstep(0.0, 1.4, minor)) * 0.30
-              + (1.0 - smoothstep(0.0, 1.4, major)) * 0.34;
+  // Held back from where they started: with the landuse washes turned up to
+  // presentation strength, contours at equal weight made the whole sheet read
+  // as lava. The landform is still there; it just speaks second.
+  float lines = (1.0 - smoothstep(0.0, 1.4, minor)) * 0.17
+              + (1.0 - smoothstep(0.0, 1.4, major)) * 0.24;
 
   // A slow ripple outward from wherever the visitor last touched.
   float d = distance(vWorld.xz, uPulse.xy);
@@ -642,63 +645,6 @@ export function Constellation({
     [materials],
   );
 
-  /* ---- the map, merged into one buffer per layer ---- */
-  const layers = useMemo(() => {
-    if (!landscape || !projection) return null;
-    return {
-      terrain: buildTerrain(projection),
-      areas: buildAreaLayer(
-        landscape,
-        projection,
-        {
-          // The estate's own wine tone for the blocks it is planted with…
-          vineyard: { color: PALETTE.wine, intensity: 0.24, kind: AREA_HATCHED },
-          // …and a cool green for the woods, which is where the survey found the
-          // richest stations.
-          forest: { color: PALETTE.vine, intensity: 0.22, kind: AREA_PLAIN },
-          orchard: { color: PALETTE.chlorophyll, intensity: 0.16, kind: AREA_PLAIN },
-          meadow: { color: PALETTE.moss, intensity: 0.20, kind: AREA_PLAIN },
-          farmland: { color: PALETTE.brandBronze, intensity: 0.11, kind: AREA_PLAIN },
-          water: { color: PALETTE.water, intensity: 0.34, kind: AREA_WATER },
-        },
-        { color: PALETTE.brandBronze, intensity: 0.09, kind: AREA_PLAIN },
-        AREA_LIFT,
-      ),
-      // Kept just under the contour lines, so the tracks read as a network
-      // without competing with the landform they cross.
-      tracks: buildLineLayer(landscape.tracks, projection, {
-        color: PALETTE.brandBronze,
-        intensity: 0.30,
-        lift: TRACK_LIFT,
-      }),
-      // Streams and the ponds' own edges read as one water network.
-      waterways: buildLineLayer([...landscape.streams, ...landscape.water], projection, {
-        color: PALETTE.water,
-        intensity: 0.55,
-        lift: WATER_LIFT,
-      }),
-      buildings: buildBuildingLayer(landscape, projection, {
-        base: PALETTE.brandBronze,
-        accent: PALETTE.foil,
-        // The château is 3,380 m² and the cellar block beside it 2,385 m²; the
-        // next building on the estate is 734. So the two that matter cross this
-        // ramp and nothing else comes close.
-        minArea: 500,
-        maxArea: 2400,
-        minHeight: 0.05,
-        maxHeight: 0.16,
-      }),
-    };
-  }, [landscape, projection]);
-
-  useEffect(
-    () => () => {
-      if (!layers) return;
-      Object.values(layers).forEach((geometry) => geometry.dispose());
-    },
-    [layers],
-  );
-
   /* ---- the château, named and ringed ---- */
   /**
    * OSM pins a `craft=winery` node inside the winery complex, and the two
@@ -739,8 +685,75 @@ export function Constellation({
       const a = (i / 120) * Math.PI * 2;
       ring.push([cx + Math.cos(a) * radius, cy + Math.sin(a) * radius]);
     }
-    return { cx, cy, radius, ring };
+    return { cx, cy, radius, ring, complex };
   }, [landscape, projection]);
+
+  /* ---- the map, merged into one buffer per layer ---- */
+  /**
+   * This is a stage set, not a cadastre. The chapter has to answer three
+   * questions from across a room — where the woods are, where the vine is,
+   * where the house is — so the classes that carry those answers are turned up
+   * and everything else is context. The one outright omission: of 539 mapped
+   * buildings, only the château complex is drawn. Every shed in Purcari village
+   * at the same emphasis was noise pretending to be information.
+   */
+  const layers = useMemo(() => {
+    if (!landscape || !projection) return null;
+    // Fallback when the bundle predates the winery node: the two footprints
+    // over 1,500 m² are the château and its cellar block.
+    const complex = chateau?.complex ?? landscape.buildings.filter((b) => b.a > 1500);
+    return {
+      terrain: buildTerrain(projection),
+      areas: buildAreaLayer(
+        landscape,
+        projection,
+        {
+          // The estate's own wine tone for the blocks it is planted with…
+          vineyard: { color: PALETTE.wine, intensity: 0.34, kind: AREA_HATCHED },
+          // …and a living green for the woods, which is where the survey found
+          // the richest stations. Bright enough to read as woodland at a
+          // glance, not just as "not vineyard".
+          forest: { color: PALETTE.vine, intensity: 0.5, kind: AREA_PLAIN },
+          orchard: { color: PALETTE.chlorophyll, intensity: 0.2, kind: AREA_PLAIN },
+          meadow: { color: PALETTE.moss, intensity: 0.26, kind: AREA_PLAIN },
+          farmland: { color: PALETTE.brandBronze, intensity: 0.1, kind: AREA_PLAIN },
+          water: { color: PALETTE.water, intensity: 0.42, kind: AREA_WATER },
+        },
+        { color: PALETTE.brandBronze, intensity: 0.08, kind: AREA_PLAIN },
+        AREA_LIFT,
+      ),
+      // Faint on purpose: the track network is texture here, not wayfinding.
+      tracks: buildLineLayer(landscape.tracks, projection, {
+        color: PALETTE.brandBronze,
+        intensity: 0.2,
+        lift: TRACK_LIFT,
+      }),
+      // Streams and the ponds' own edges read as one water network.
+      waterways: buildLineLayer([...landscape.streams, ...landscape.water], projection, {
+        color: PALETTE.water,
+        intensity: 0.55,
+        lift: WATER_LIFT,
+      }),
+      buildings: buildBuildingLayer({ ...landscape, buildings: complex }, projection, {
+        base: PALETTE.brandBronze,
+        accent: PALETTE.foil,
+        // Both footprints of the complex sit high on this ramp, so the whole
+        // house burns in foil.
+        minArea: 500,
+        maxArea: 2400,
+        minHeight: 0.05,
+        maxHeight: 0.16,
+      }),
+    };
+  }, [landscape, projection, chateau]);
+
+  useEffect(
+    () => () => {
+      if (!layers) return;
+      Object.values(layers).forEach((geometry) => geometry.dispose());
+    },
+    [layers],
+  );
 
   /* ---- cartographic furniture: the ring, a scale bar, a north arrow ---- */
   /**
@@ -849,7 +862,9 @@ export function Constellation({
         // The name hangs under the ring like a plaque, on quiet vineyard
         // ground: above the roof it sat in the thick of the station filaments,
         // which is the busiest air on the whole sheet.
-        mx = chateau.cx;
+        // A shade west of centre: dead-centre the year "1827" sat inside a
+        // station's bloom.
+        mx = chateau.cx - 150;
         my = chateau.cy - chateau.radius - 170;
         lift = 0.1;
       }
@@ -868,6 +883,73 @@ export function Constellation({
         edge: false,
         local: at(furniture.northAt[0], furniture.northAt[1], 0.05),
       });
+    }
+
+    /*
+     * The two land covers the chapter is about, each named on one of its own
+     * blocks. A legend asks the visitor to look away and translate; a word
+     * lying on the woods does not.
+     *
+     * Which block gets the word is picked by rule, not by size alone: the
+     * largest forest grove hugs the château and its centroid landed inside the
+     * plaque, and the largest vineyard rows sit past the sheet's southern edge
+     * under this chapter's camera. The word is placed on the biggest block
+     * that is clear of the other captions — a label chooses legible ground the
+     * way any cartographer places one, and claims nothing more than "this
+     * green is woodland, this red is vine", which is true of every block.
+     */
+    if (landscape) {
+      const centroidOfBest = (
+        kind: string,
+        fits: (cx: number, cy: number) => boolean,
+      ): [number, number] | null => {
+        let best: [number, number] | null = null;
+        let bestArea = 0;
+        for (const parcel of landscape.parcels) {
+          if (parcel.k !== kind) continue;
+          const pts = parcel.p;
+          let area = 0;
+          let sx = 0;
+          let sy = 0;
+          for (let i = 0; i < pts.length; i++) {
+            const [x1, y1] = pts[i];
+            const [x2, y2] = pts[(i + 1) % pts.length];
+            area += x1 * y2 - x2 * y1;
+            sx += x1;
+            sy += y1;
+          }
+          area = Math.abs(area) / 2;
+          const cx = sx / pts.length;
+          const cy = sy / pts.length;
+          if (area > bestArea && fits(cx, cy)) {
+            bestArea = area;
+            best = [cx, cy];
+          }
+        }
+        return best;
+      };
+
+      // South of the ravine cluster: the groves beside the château already
+      // live inside the plaque's air.
+      const wood = centroidOfBest(
+        'forest',
+        (cx, cy) => cy < 150 && (chateau ? Math.hypot(cx - chateau.cx, cy - chateau.cy) > 500 : true),
+      );
+      if (wood)
+        points.push({ name: 'Woodland', kind: 'forest', edge: false, local: at(wood[0], wood[1], 0.12) });
+      // The western planted mass, mid-sheet: south of the ravine, clear of the
+      // Hamza caption to the east and of the nav along the sheet's south edge.
+      const vine = centroidOfBest(
+        'vineyard',
+        (cx, cy) => cx < 400 && cy > -1400 && cy < -700,
+      );
+      if (vine)
+        points.push({
+          name: 'Vineyards',
+          kind: 'vineyard',
+          edge: false,
+          local: at(vine[0], vine[1], 0.12),
+        });
     }
     return points;
   }, [landscape, projection, furniture, chateau]);

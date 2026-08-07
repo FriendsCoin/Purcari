@@ -1119,3 +1119,15 @@
   font-size: 0.56rem;
   opacity: 0.5;
 }
+
+/* Land-cover names carry their own cover's hue, so the word and the wash
+   confirm each other without a legend lookup. */
+.inst-map-label--forest {
+  color: #a9d194;
+  opacity: 0.7;
+}
+
+.inst-map-label--vineyard {
+  color: #d98a9e;
+  opacity: 0.7;
+}
