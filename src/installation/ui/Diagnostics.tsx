@@ -16,6 +16,7 @@ interface DiagnosticsProps {
  */
 export function Diagnostics({ engine, onClose }: DiagnosticsProps): JSX.Element {
   const [stats, setStats] = useState({ fps: 0, drawCalls: 0, programs: 0, textures: 0, size: '' });
+  const [muted, setMuted] = useState(engine?.ambience.isMuted ?? false);
 
   useEffect(() => {
     if (!engine) return undefined;
@@ -72,6 +73,20 @@ export function Diagnostics({ engine, onClose }: DiagnosticsProps): JSX.Element 
         aria-label="Fermer le diagnostic"
         style={{ position: 'absolute', inset: 0, opacity: 0, background: 'none', border: 0 }}
       />
+      {/* After the close overlay in the DOM, so it stacks above it and stays
+          tappable — the one control the commissioning panel carries. */}
+      <button
+        type="button"
+        className="diagnostics__sound"
+        onPointerDown={() => {
+          const ambience = engine?.ambience;
+          if (!ambience) return;
+          ambience.setMuted(!ambience.isMuted);
+          setMuted(ambience.isMuted);
+        }}
+      >
+        Son · {muted ? 'coupé' : engine?.ambience.isRunning ? 'actif' : 'au premier toucher'}
+      </button>
     </div>
   );
 }

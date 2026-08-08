@@ -361,6 +361,31 @@ sideways — the overlay changes shape rather than shrinking:
 Everything else is unchanged: same chapters, same data, same gestures. Drag,
 pinch and tap already were the whole vocabulary.
 
+### The look: phosphor trails
+
+Three chapters render through a persistence buffer — the prologue strongly, the
+circadian crown and the river of days gently. The scene is folded in as
+`max(scene, previous × decay)` rather than added, so a moving light leaves a
+cooling wake (tinted a step toward the cellar's violet as it dies) and a static
+one can never charge the buffer past its own brightness, which is the classic
+failure of additive feedback. The buffer is cleared on every chapter change so
+no chapter wears its predecessor's wake, and the decay is framerate-corrected.
+Chapters opt in through `look.trail`.
+
+### The soundscape
+
+Three synthesised layers, no samples, nothing fetched: a low drone whose
+brightness follows the hour; a breath of filtered noise for the room tone of a
+summer night; and sparse chimes on a warm pentatonic whose density and register
+follow the survey's own hourly histogram — dense through the dawn chorus, a
+note a minute overnight. The sound's 34-second day is the same cycle the wave
+flies through the murmuration, so what is heard swells with what is seen.
+
+Browsers only grant audio from a user gesture, so the piece is silent until the
+first touch — which is also correct for a panel that boots unattended. The
+commissioning panel (four taps, top-left) carries the one control: *Son* toggles
+the soundscape, and remembers its state for the session.
+
 ### Service panel
 
 Four taps in the **top-left corner** within a few seconds opens a commissioning

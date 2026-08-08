@@ -562,6 +562,22 @@ body {
   margin: 0 0 0.6rem;
 }
 
+.diagnostics__sound {
+  position: relative;
+  appearance: none;
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--bone) 22%, transparent);
+  color: var(--bone);
+  font: inherit;
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.9rem;
+  margin-top: 0.6rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .diagnostics__hint {
   margin: 0.4rem 0 0;
   color: var(--mist);

@@ -151,6 +151,15 @@ export function Installation(): JSX.Element {
 
   useFullscreenOnFirstTouch();
 
+  // Browsers only grant audio from a user gesture, so the soundscape arms on
+  // touch. The listener stays: start() is idempotent and doubles as resume for
+  // a context the browser suspended while the tab was hidden.
+  useEffect(() => {
+    const arm = (): void => engineRef.current?.ambience.start();
+    window.addEventListener('pointerdown', arm);
+    return () => window.removeEventListener('pointerdown', arm);
+  }, []);
+
   const stageClass = [
     'stage',
     compact ? 'stage--compact' : '',
