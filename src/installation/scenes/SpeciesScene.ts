@@ -1,13 +1,14 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DynamicDrawUsage,
   LineSegments,
   Points,
   ShaderMaterial,
   Vector3,
 } from 'three';
 import { ADDITIVE } from '../engine/blending';
-import { EASING, HASH, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, TOUCH_UNIFORMS } from '../engine/glsl';
+import { POINT_SIZE, RIPPLE_UNIFORMS, TOUCH_UNIFORMS } from '../engine/glsl';
 import { color, guildColorArray, guildCss, guildIndex, PALETTE } from '../engine/palette';
 import { speciesSelection } from '../engine/selection';
 import type { FrameContext, Readout } from '../engine/Scene';
@@ -19,52 +20,113 @@ const R_SPAN = 13.5;
 
 /** Neighbours each species is linked to, by similarity of daily rhythm. */
 const LINKS_PER_NODE = 3;
-const LINK_SEGMENTS = 14;
+
+/** Straight-line segments a spring is drawn with; the sag needs a few. */
+const LINK_SEGMENTS = 6;
 
 const TAP_RADIUS = 0.075;
 
+/** Physics tuning. Substepped Verlet with position-based spring relaxation. */
+const DAMPING = 0.972;
+const SPRING_ITERATIONS = 2;
+const SPRING_STIFFNESS = 0.16;
+/** Pull toward the clock anchor, per second. The web may breathe, not wander. */
+const ANCHOR_RATE = 2.1;
+/** A held finger pushes the web open inside this radius. */
+const FINGER_RADIUS = 6.5;
+const FINGER_FORCE = 260;
+/** A tap thumps everything inside this radius. */
+const PLUCK_RADIUS = 7;
+const PLUCK_IMPULSE = 9;
+
 interface Node {
   species: AtlasSpecies;
+  /** Where the clock says it belongs; the springs argue with this. */
+  anchor: Vector3;
   position: Vector3;
-  /** Circular mean of the species' hourly profile, 0..24. */
+  previous: Vector3;
+  /** Heavier species move less — the hub holds while the rim swings. */
+  mass: number;
   meanHour: number;
-  /** 0 = active around the clock, 1 = active in a single narrow window. */
   concentration: number;
+}
+
+interface Spring {
+  a: number;
+  b: number;
+  rest: number;
 }
 
 /**
  * Chapter III — Espèces.
  *
- * 121 species, positioned by *when* they were heard rather than by any arbitrary
- * layout. The angle of each node is the circular mean of its 24-hour activity
- * profile — so the dawn chorus gathers on one side and the owls, nightjars and
- * scops owls drift to the other. Distance from the centre is inverse abundance:
- * the five species that account for a third of all detections sit in the hub,
- * the single-record rarities hang at the rim.
+ * 121 species as a living spring web, integrated with Verlet every frame.
  *
- * Links join species with similar daily rhythms, which is why the web reads as
- * bands rather than as noise.
+ * Each node is anchored to the position the clock gives it — angle from the
+ * circular mean of its hours, radius from inverse abundance — and sprung to the
+ * three species whose daily rhythm most resembles its own, with the rest length
+ * set by how *unlike* the rhythms are. The two systems disagree, and the
+ * disagreement is the picture: the springs keep trying to gather the web into
+ * rhythm clusters, the clock keeps holding it open, and the shape on screen is
+ * the settled argument, still trembling.
+ *
+ * It is matter, not a diagram. Drag through it and the wake travels down the
+ * links, node to node, at the speed the springs carry it. Tap and the web
+ * thumps and rings. Hold a finger and it parts around the hand. On a phone the
+ * device's own tilt sensor pours gravity through it, so turning the phone lets
+ * the whole web hang from its anchors like wet rigging.
  */
 export class SpeciesScene extends ChapterBase {
   readonly id = 'species' as const;
-  readonly look = { exposure: 0.98, bloom: 0.6, grain: 0.022, aberration: 0.95, vignette: 1.1 };
+  readonly look = { exposure: 0.98, bloom: 0.6, grain: 0.022, aberration: 0.95, vignette: 1.1, trail: 0.6 };
 
   private readonly nodes: Node[] = [];
+  private readonly springs: Spring[] = [];
+  private readonly neighbours: number[][] = [];
+
   private readonly nodeCloud: Points;
   private readonly links: LineSegments;
+  private readonly nodePositions: Float32Array;
+  private readonly linkPositions: Float32Array;
   private readonly uniforms: ReturnType<typeof createUniforms>;
 
-  /** Indices of the species linked to the selected one. */
-  private readonly neighbours: number[][] = [];
+  /** Tilt-driven gravity, world units/s². Zero until a sensor speaks. */
+  private readonly gravity = new Vector3();
+  /**
+   * The pose the hand settles into is "level" — nobody holds a phone flat, so
+   * gravity follows *changes* of tilt against a baseline that drifts after the
+   * reading over a few seconds. Tip the phone and the web swings; hold the new
+   * pose and it quietly rights itself.
+   */
+  private baseGamma: number | null = null;
+  private baseBeta = 0;
+  private readonly onOrientation = (event: DeviceOrientationEvent): void => {
+    if (event.beta === null || event.gamma === null) return;
+    const beta = clamp(event.beta, -80, 80);
+    if (this.baseGamma === null) {
+      this.baseGamma = event.gamma;
+      this.baseBeta = beta;
+      return;
+    }
+    this.baseGamma += (event.gamma - this.baseGamma) * 0.008;
+    this.baseBeta += (beta - this.baseBeta) * 0.008;
+    const rollDelta = clamp(event.gamma - this.baseGamma, -45, 45);
+    const pitchDelta = clamp(beta - this.baseBeta, -45, 45);
+    this.gravity.set(
+      Math.sin((rollDelta / 180) * Math.PI) * 24,
+      -Math.sin((pitchDelta / 180) * Math.PI) * 24,
+      0
+    );
+  };
 
   private selected: number | null = null;
   private selectStrength = 0;
-  /** 0 on entering, 1 once the opening move has landed. */
   private flight = 0;
   private cachedReadout: Readout;
   private readoutKey = '';
   private readonly markerProbe = new Vector3();
   private marker: { x: number; y: number } | undefined;
+  private readonly scratch = new Vector3();
 
   constructor() {
     super(44);
@@ -75,19 +137,31 @@ export class SpeciesScene extends ChapterBase {
     this.desiredTarget.set(0, 0, 0);
     this.target.set(0, 0, 0);
     this.idleSpin = 0.035;
-    this.minPolar = Math.PI * 0.2;
-    this.maxPolar = Math.PI * 0.8;
+    // In this chapter the finger is in the rigging, not on the tripod: a drag
+    // stirs the web, and the camera only sways enough to give it depth.
+    this.dragSensitivity = 0.45;
+    this.minPolar = Math.PI * 0.34;
+    this.maxPolar = Math.PI * 0.66;
     this.interactionPlane.normal.set(0, 0, 1);
     this.interactionPlane.constant = 0;
 
     this.layout();
-    this.neighbours = this.buildNeighbours();
+    this.neighbours.push(...this.buildNeighbours());
+    this.buildSprings();
 
     this.uniforms = createUniforms(this.touch);
-
+    this.nodePositions = new Float32Array(this.nodes.length * 3);
+    this.linkPositions = new Float32Array(this.springs.length * LINK_SEGMENTS * 2 * 3);
     this.links = this.buildLinks();
     this.nodeCloud = this.buildNodes();
     this.scene.add(this.links, this.nodeCloud);
+
+    // The tilt sensor, where the platform grants one without ceremony. Where it
+    // does not (iOS wants a permission dialog), the handler never fires and the
+    // web simply floats — the desktop behaviour.
+    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+      window.addEventListener('deviceorientation', this.onOrientation);
+    }
 
     this.cachedReadout = this.overviewReadout();
   }
@@ -99,38 +173,46 @@ export class SpeciesScene extends ChapterBase {
     atlas.species.forEach((species, index) => {
       const { meanHour, concentration } = circularStats(species.hourly);
 
-      // Same clock mapping as the circadian dial, so a visitor moving between
-      // chapters keeps their bearings: midnight up, hours clockwise.
+      // Same clock mapping as the circadian chapters: midnight up, clockwise.
       const angle = Math.PI / 2 - (meanHour / 24) * Math.PI * 2;
-
-      // Inverse abundance on a log scale: the hub is the handful of species that
-      // dominate the recording, the rim is everything heard once or twice.
       const abundance = Math.log(species.count + 1) / Math.log(maxCount + 1);
       const radius = R_MIN + (1 - abundance) * R_SPAN;
 
-      // Deterministic jitter so equal-count species do not stack into one dot.
       const jitterAngle = (hash(index * 12.9898) - 0.5) * 0.34;
       const jitterRadius = (hash(index * 78.233) - 0.5) * 1.5;
       const r = radius + jitterRadius;
       const a = angle + jitterAngle;
 
-      // Specialists rise, generalists settle — the web gains a third dimension
-      // that says something rather than being decorative depth.
-      const y = (concentration * 2 - 1) * 5.5 + (hash(index * 3.7) - 0.5) * 1.2;
+      // Specialists float up, generalists settle — depth that says something.
+      const z = (concentration * 2 - 1) * 3.4 + (hash(index * 3.7) - 0.5) * 1.0;
+
+      const anchor = new Vector3(Math.cos(a) * r, Math.sin(a) * r, z);
+      // Born scattered far outside the frame: the opening seconds are the web
+      // pulling itself together, which is the whole argument performed once.
+      const start = anchor
+        .clone()
+        .multiplyScalar(2.6)
+        .add(
+          new Vector3(
+            (hash(index * 9.1) - 0.5) * 30,
+            (hash(index * 4.3) - 0.5) * 30,
+            (hash(index * 6.7) - 0.5) * 8
+          )
+        );
 
       this.nodes.push({
         species,
-        position: new Vector3(Math.cos(a) * r, Math.sin(a) * r, y),
+        anchor,
+        position: start,
+        previous: start.clone(),
+        mass: 0.6 + abundance * 2.6,
         meanHour,
         concentration,
       });
     });
   }
 
-  /**
-   * Nearest neighbours by cosine similarity of the normalised hourly profile.
-   * 121 species means the full 121x121 comparison is trivial, so no index needed.
-   */
+  /** Nearest neighbours by cosine similarity of the normalised hourly profile. */
   private buildNeighbours(): number[][] {
     const profiles = atlas.species.map(s => {
       const norm = Math.hypot(...s.hourly) || 1;
@@ -150,9 +232,29 @@ export class SpeciesScene extends ChapterBase {
     });
   }
 
+  /**
+   * One spring per unique link. The rest length carries the data twice over:
+   * anchored distance sets the scale, and rhythm-dissimilarity stretches it, so
+   * species that sing the same hours pull visibly closer than the clock alone
+   * would put them.
+   */
+  private buildSprings(): void {
+    const seen = new Set<string>();
+    this.neighbours.forEach((targets, i) => {
+      for (const j of targets) {
+        const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const anchored = this.nodes[i].anchor.distanceTo(this.nodes[j].anchor);
+        this.springs.push({ a: i, b: j, rest: anchored * 0.82 });
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------- build --
+
   private buildNodes(): Points {
     const count = this.nodes.length;
-    const position = new Float32Array(count * 3);
     const guild = new Float32Array(count);
     const size = new Float32Array(count);
     const index = new Float32Array(count);
@@ -160,9 +262,6 @@ export class SpeciesScene extends ChapterBase {
 
     const maxCount = atlas.species[0].count;
     this.nodes.forEach((node, i) => {
-      position[i * 3] = node.position.x;
-      position[i * 3 + 1] = node.position.y;
-      position[i * 3 + 2] = node.position.z;
       guild[i] = guildIndex(node.species.guild);
       size[i] = clamp(Math.log(node.species.count + 1) / Math.log(maxCount + 1), 0.16, 1);
       index[i] = i;
@@ -170,7 +269,9 @@ export class SpeciesScene extends ChapterBase {
     });
 
     const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(position, 3));
+    const positionAttribute = new BufferAttribute(this.nodePositions, 3);
+    positionAttribute.setUsage(DynamicDrawUsage);
+    geometry.setAttribute('position', positionAttribute);
     geometry.setAttribute('aGuild', new BufferAttribute(guild, 1));
     geometry.setAttribute('aSize', new BufferAttribute(size, 1));
     geometry.setAttribute('aIndex', new BufferAttribute(index, 1));
@@ -188,58 +289,40 @@ export class SpeciesScene extends ChapterBase {
       })
     );
     cloud.frustumCulled = false;
+    cloud.renderOrder = 2;
     return cloud;
   }
 
-  /** Links as subdivided quadratic curves, bowed toward the centre of the web. */
   private buildLinks(): LineSegments {
-    const pairs = new Set<string>();
-    const edges: [number, number][] = [];
-    this.neighbours.forEach((targets, i) => {
-      for (const j of targets) {
-        const key = i < j ? `${i}-${j}` : `${j}-${i}`;
-        if (pairs.has(key)) continue;
-        pairs.add(key);
-        edges.push([i, j]);
-      }
-    });
-
-    const vertexCount = edges.length * LINK_SEGMENTS * 2;
-    const position = new Float32Array(vertexCount * 3);
+    const vertexCount = this.springs.length * LINK_SEGMENTS * 2;
     const along = new Float32Array(vertexCount);
     const endA = new Float32Array(vertexCount);
     const endB = new Float32Array(vertexCount);
+    const strain = new Float32Array(vertexCount);
 
-    const control = new Vector3();
-    const sample = new Vector3();
     let v = 0;
-
-    for (const [i, j] of edges) {
-      const a = this.nodes[i].position;
-      const b = this.nodes[j].position;
-      // Pull the control point toward the hub so links arc through the middle
-      // instead of chording straight across the ring.
-      control.addVectors(a, b).multiplyScalar(0.5).multiplyScalar(0.62);
-
+    for (const spring of this.springs) {
       for (let s = 0; s < LINK_SEGMENTS; s += 1) {
         for (const t of [s / LINK_SEGMENTS, (s + 1) / LINK_SEGMENTS]) {
-          quadratic(a, control, b, t, sample);
-          position[v * 3] = sample.x;
-          position[v * 3 + 1] = sample.y;
-          position[v * 3 + 2] = sample.z;
           along[v] = t;
-          endA[v] = i;
-          endB[v] = j;
+          endA[v] = spring.a;
+          endB[v] = spring.b;
+          strain[v] = 0;
           v += 1;
         }
       }
     }
 
     const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(position, 3));
+    const positionAttribute = new BufferAttribute(this.linkPositions, 3);
+    positionAttribute.setUsage(DynamicDrawUsage);
+    geometry.setAttribute('position', positionAttribute);
     geometry.setAttribute('aAlong', new BufferAttribute(along, 1));
     geometry.setAttribute('aEndA', new BufferAttribute(endA, 1));
     geometry.setAttribute('aEndB', new BufferAttribute(endB, 1));
+    const strainAttribute = new BufferAttribute(strain, 1);
+    strainAttribute.setUsage(DynamicDrawUsage);
+    geometry.setAttribute('aStrain', strainAttribute);
 
     const lines = new LineSegments(
       geometry,
@@ -256,7 +339,125 @@ export class SpeciesScene extends ChapterBase {
     return lines;
   }
 
-  // ----------------------------------------------------------------- update --
+  // ----------------------------------------------------------------- physics --
+
+  /**
+   * Substepped Verlet with position-based springs.
+   *
+   * A hundred and twenty-one nodes and two hundred springs is nothing for a
+   * CPU; what matters is that impulses travel the web *through* the springs,
+   * link by link, which no shader displacement can imitate — a shader moves
+   * points, a solver moves consequences.
+   */
+  private simulate(ctx: FrameContext): void {
+    const dt = Math.min(ctx.delta, 1 / 30);
+    const steps = 2;
+    const h = dt / steps;
+
+    // Anchor pull weakens while a finger is down, so the web can actually be
+    // dragged out of shape and snaps home on release.
+    const touching = ctx.pointer.activeCount > 0;
+    const anchorAlpha = 1 - Math.exp(-ANCHOR_RATE * (touching ? 0.4 : 1) * h);
+
+    for (let step = 0; step < steps; step += 1) {
+      for (const node of this.nodes) {
+        // Integrate: inertia, damping, gravity scaled down by mass.
+        const inertiaX = (node.position.x - node.previous.x) * DAMPING;
+        const inertiaY = (node.position.y - node.previous.y) * DAMPING;
+        const inertiaZ = (node.position.z - node.previous.z) * DAMPING;
+
+        node.previous.copy(node.position);
+        node.position.x += inertiaX + (this.gravity.x / node.mass) * h * h * 60;
+        node.position.y += inertiaY + (this.gravity.y / node.mass) * h * h * 60;
+        node.position.z += inertiaZ;
+
+        // A held finger is a hand in the rigging.
+        for (const touch of ctx.pointer.touches.values()) {
+          if (!touch.down) continue;
+          this.scratch.copy(node.position).sub(touch.world);
+          const distance = this.scratch.length();
+          if (distance > FINGER_RADIUS || distance < 1e-4) continue;
+          const push = (1 - distance / FINGER_RADIUS) ** 2 * (FINGER_FORCE / node.mass) * h * h;
+          node.position.addScaledVector(this.scratch.normalize(), push);
+        }
+
+        // The clock's claim on the node.
+        node.position.lerp(node.anchor, anchorAlpha);
+      }
+
+      // Springs argue last, so their word carries into the next frame.
+      for (let iteration = 0; iteration < SPRING_ITERATIONS; iteration += 1) {
+        for (const spring of this.springs) {
+          const a = this.nodes[spring.a];
+          const b = this.nodes[spring.b];
+          this.scratch.copy(b.position).sub(a.position);
+          const distance = this.scratch.length();
+          if (distance < 1e-5) continue;
+          const correction = ((distance - spring.rest) / distance) * SPRING_STIFFNESS;
+          const total = a.mass + b.mass;
+          a.position.addScaledVector(this.scratch, correction * (b.mass / total));
+          b.position.addScaledVector(this.scratch, -correction * (a.mass / total));
+        }
+      }
+    }
+  }
+
+  /** A tap is a thump: an impulse into everything near it, carried by the web. */
+  private pluck(world: Vector3): void {
+    for (const node of this.nodes) {
+      this.scratch.copy(node.position).sub(world);
+      const distance = this.scratch.length();
+      if (distance > PLUCK_RADIUS || distance < 1e-4) continue;
+      const kick = (1 - distance / PLUCK_RADIUS) ** 2 * (PLUCK_IMPULSE / node.mass);
+      // Verlet takes velocity as displacement of the past.
+      node.previous.addScaledVector(this.scratch.normalize(), -kick * 0.016);
+    }
+  }
+
+  /** Writes the solver's positions into the draw buffers. */
+  private upload(): void {
+    this.nodes.forEach((node, i) => {
+      this.nodePositions[i * 3] = node.position.x;
+      this.nodePositions[i * 3 + 1] = node.position.y;
+      this.nodePositions[i * 3 + 2] = node.position.z;
+    });
+    (this.nodeCloud.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
+
+    const strainAttribute = this.links.geometry.getAttribute('aStrain') as BufferAttribute;
+    const strains = strainAttribute.array as Float32Array;
+
+    let v = 0;
+    for (const spring of this.springs) {
+      const a = this.nodes[spring.a].position;
+      const b = this.nodes[spring.b].position;
+      const distance = a.distanceTo(b);
+      // How hard the spring is working right now, for the shader to show.
+      const strain = clamp(Math.abs(distance - spring.rest) / spring.rest, 0, 1);
+
+      // The spring sags: a quadratic bow whose belly follows gravity when there
+      // is any, and eases toward the hub when there is none — slack rigging
+      // either way, never a ruled line.
+      const sag = spring.rest * 0.1 * (1 - strain * 0.85);
+      const bellyX = (a.x + b.x) / 2 + (this.gravity.x !== 0 ? this.gravity.x * 0.01 : -(a.x + b.x) * 0.04) * sag;
+      const bellyY = (a.y + b.y) / 2 + (this.gravity.lengthSq() > 1 ? this.gravity.y * 0.01 * sag : -sag) - (a.y + b.y) * 0.02;
+      const bellyZ = (a.z + b.z) / 2;
+
+      for (let s = 0; s < LINK_SEGMENTS; s += 1) {
+        for (const t of [s / LINK_SEGMENTS, (s + 1) / LINK_SEGMENTS]) {
+          const inv = 1 - t;
+          this.linkPositions[v * 3] = inv * inv * a.x + 2 * inv * t * bellyX + t * t * b.x;
+          this.linkPositions[v * 3 + 1] = inv * inv * a.y + 2 * inv * t * bellyY + t * t * b.y;
+          this.linkPositions[v * 3 + 2] = inv * inv * a.z + 2 * inv * t * bellyZ + t * t * b.z;
+          strains[v] = strain;
+          v += 1;
+        }
+      }
+    }
+    (this.links.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
+    strainAttribute.needsUpdate = true;
+  }
+
+  // ------------------------------------------------------------------ update --
 
   enter(): void {
     super.enter();
@@ -265,7 +466,21 @@ export class SpeciesScene extends ChapterBase {
     this.flight = 0;
     this.desired.radius = this.restSpherical.radius * 1.3;
 
-    // Whatever was held elsewhere, if this survey heard it.
+    // Scatter again, so every entry replays the web assembling itself.
+    this.nodes.forEach((node, index) => {
+      node.position
+        .copy(node.anchor)
+        .multiplyScalar(2.6)
+        .add(
+          new Vector3(
+            (hash(index * 9.1) - 0.5) * 30,
+            (hash(index * 4.3) - 0.5) * 30,
+            (hash(index * 6.7) - 0.5) * 8
+          )
+        );
+      node.previous.copy(node.position);
+    });
+
     const carried = speciesSelection.name;
     const index = carried ? atlas.species.findIndex(s => s.name === carried) : -1;
     this.selected = index >= 0 ? index : null;
@@ -276,11 +491,20 @@ export class SpeciesScene extends ChapterBase {
     this.uniforms.uTime.value = ctx.time;
     this.uniforms.uReveal.value = damp(this.uniforms.uReveal.value, 1, 0.9, ctx.delta);
 
+    // A portrait panel sees a narrow slice of the web; pull the camera back
+    // until the whole rigging fits the frame.
+    const aspectPull = ctx.aspect < 1.25 ? Math.pow(1.25 / ctx.aspect, 0.7) : 1;
+    this.restSpherical.radius = 46 * aspectPull;
+
     for (const tap of ctx.pointer.consumeTaps()) {
       const hit = this.pickNode(tap.ndc.x, tap.ndc.y);
       this.selected = hit === this.selected ? null : hit;
       speciesSelection.set(this.selected === null ? null : atlas.species[this.selected].name);
+      this.pluck(tap.world);
     }
+
+    this.simulate(ctx);
+    this.upload();
 
     this.selectStrength = damp(this.selectStrength, this.selected === null ? 0 : 1, 2.6, ctx.delta);
     this.uniforms.uSelected.value = this.selected ?? -1;
@@ -288,17 +512,14 @@ export class SpeciesScene extends ChapterBase {
 
     if (this.selected !== null) {
       const node = this.nodes[this.selected];
-      // Drift the frame toward the selection without snapping onto it — the web
-      // has to stay legible around whatever is chosen.
       this.desiredTarget.copy(node.position).multiplyScalar(0.45);
-      this.desired.radius = damp(this.desired.radius, 37, 1.4, ctx.delta);
+      this.desired.radius = damp(this.desired.radius, 37 * aspectPull, 1.4, ctx.delta);
       this.recentres = false;
     } else {
       this.desiredTarget.set(0, 0, 0);
       this.recentres = true;
     }
 
-    // Opening move: the web unrolls from a steep angle into its resting one.
     this.flight = Math.min(1, this.flight + ctx.delta / 4.5);
     const landed = 1 - Math.pow(1 - this.flight, 3);
     this.desired.phi = damp(this.desired.phi, this.restSpherical.phi + (1 - landed) * 0.55, 2.0, ctx.delta);
@@ -315,7 +536,6 @@ export class SpeciesScene extends ChapterBase {
       this.markerProbe.copy(this.nodes[i].position).project(this.camera);
       if (this.markerProbe.z > 1) continue;
       const distance = Math.hypot(this.markerProbe.x - ndcX, this.markerProbe.y - ndcY);
-      // Larger nodes claim a slightly larger tap area, matching what is drawn.
       const bias = 1 - Math.log(this.nodes[i].species.count + 1) / Math.log(atlas.species[0].count + 1) * 0.35;
       if (distance * bias < bestDistance) {
         bestDistance = distance * bias;
@@ -345,10 +565,6 @@ export class SpeciesScene extends ChapterBase {
       this.readoutKey = key;
       this.cachedReadout = this.selected === null ? this.overviewReadout() : this.speciesReadout(this.selected);
     }
-    // The marker moves every frame while the camera drifts. It is mutated in
-    // place rather than spread into a new object, because the overlay uses
-    // reference equality to decide whether to re-render — and the marker is
-    // written straight to the DOM, so it never needs one.
     this.cachedReadout.marker = this.marker;
   }
 
@@ -358,12 +574,13 @@ export class SpeciesScene extends ChapterBase {
       eyebrow: 'Chapitre III',
       title: 'Espèces',
       body:
-        'Chaque nœud est une espèce, placée selon l’heure moyenne de ses détections. ' +
-        'Les liens relient les espèces qui partagent le même rythme quotidien. Touchez un nœud.',
+        'Une toile de ressorts : chaque nœud est une espèce à l’heure moyenne de son chant, ' +
+        'reliée à celles qui partagent son rythme. Traversez-la du doigt — l’onde court de lien en lien. ' +
+        'Touchez un nœud pour le tenir.',
       stats: [
         { label: 'Espèces', value: String(atlas.meta.speciesCount) },
         { label: 'Nocturnes', value: String(nocturnal) },
-        { label: 'Vues une seule fois', value: String(atlas.species.filter(s => s.count === 1).length) },
+        { label: 'Ressorts', value: String(this.springs.length) },
       ],
       accent: PALETTE.bone,
     };
@@ -394,6 +611,13 @@ export class SpeciesScene extends ChapterBase {
   readout(): Readout {
     return this.cachedReadout;
   }
+
+  dispose(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('deviceorientation', this.onOrientation);
+    }
+    super.dispose();
+  }
 }
 
 function createUniforms(touch: TouchUniforms) {
@@ -410,11 +634,7 @@ function createUniforms(touch: TouchUniforms) {
   };
 }
 
-/**
- * Circular mean and concentration of an hourly histogram. Treating the clock as
- * a circle is the only correct way to average times: a species heard at 23:00
- * and 01:00 peaks at midnight, not at noon.
- */
+/** Circular mean and concentration of an hourly histogram. */
 function circularStats(hourly: number[]): { meanHour: number; concentration: number } {
   let sx = 0;
   let sy = 0;
@@ -431,15 +651,6 @@ function circularStats(hourly: number[]): { meanHour: number; concentration: num
   const meanAngle = Math.atan2(sy, sx);
   const meanHour = (((meanAngle / (Math.PI * 2)) * 24) + 24) % 24;
   return { meanHour, concentration: Math.hypot(sx, sy) / total };
-}
-
-function quadratic(a: Vector3, control: Vector3, b: Vector3, t: number, out: Vector3): Vector3 {
-  const inv = 1 - t;
-  return out.set(
-    inv * inv * a.x + 2 * inv * t * control.x + t * t * b.x,
-    inv * inv * a.y + 2 * inv * t * control.y + t * t * b.y,
-    inv * inv * a.z + 2 * inv * t * control.z + t * t * b.z
-  );
 }
 
 function hash(n: number): number {
@@ -470,42 +681,26 @@ varying vec3 vColor;
 varying float vAlpha;
 varying float vSelected;
 
-${SIMPLEX3}
-${HASH}
-${EASING}
 ${SELECTION}
 ${TOUCH_UNIFORMS}
 ${POINT_SIZE}
 ${RIPPLE_UNIFORMS}
 
 void main(){
+  // The solver owns the motion; the shader only lights what it is handed.
   vec3 pos = position;
-
-  // Every node drifts on its own slow orbit; without it the web looks printed.
-  float t = uTime * 0.16 + aSeed * 6.2831;
-  pos += vec3(sin(t), cos(t * 1.13), sin(t * 0.87)) * (0.28 + aSize * 0.5);
-  pos += vec3(snoise(vec3(pos.xy * 0.09, uTime * 0.07))) * 0.35;
-
-  pos += touchDisplace(pos, 5.5, 1.6);
-  float ripple = rippleField(pos, 9.0, 2.6, 1.8);
-  pos += normalize(pos + 1e-4) * ripple * 0.9;
 
   float selected = isSelected(aIndex);
   vSelected = selected * uSelectStrength;
-  pos += normalize(pos + 1e-4) * vSelected * 0.8;
 
-  // Reveal sweeps outward from the hub.
-  float radius = length(position.xy);
-  float grow = easeOutQuart(clamp(uReveal * 1.5 - radius / 26.0, 0.0, 1.0));
-  pos *= mix(0.25, 1.0, grow);
+  float ripple = rippleField(pos, 9.0, 2.6, 1.8);
 
   vec3 guild = uGuildColors[int(aGuild)];
   vColor = guild * (0.85 + vSelected * 1.6) + vec3(0.45, 0.32, 0.14) * ripple;
   vColor += vec3(0.3) * touchGlow(pos, 5.5);
 
-  // Unselected nodes recede but never vanish: the shape of the web is the point.
   float dim = mix(1.0, 0.3, uSelectStrength * (1.0 - selected));
-  vAlpha = (0.4 + aSize * 0.6) * grow * dim;
+  vAlpha = (0.4 + aSize * 0.6) * uReveal * dim;
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   gl_PointSize = pointSizeFor(0.22 + aSize * 1.0 + vSelected * 0.9 + ripple * 0.4, mv.z);
@@ -524,7 +719,6 @@ void main(){
 
   float core = 1.0 - smoothstep(0.0, 0.55, d);
   float halo = exp(-d * 2.6) * 0.5;
-  // Selected nodes gain a thin ring, the one hard edge in the whole piece.
   float ring = (1.0 - smoothstep(0.02, 0.06, abs(d - 0.78))) * vSelected;
 
   float a = (core + halo + ring) * vAlpha;
@@ -539,34 +733,23 @@ uniform float uReveal;
 attribute float aAlong;
 attribute float aEndA;
 attribute float aEndB;
+attribute float aStrain;
 varying float vAlpha;
 varying float vHighlight;
 varying float vAlong;
+varying float vStrain;
 
-${SIMPLEX3}
-${EASING}
 ${SELECTION}
-${TOUCH_UNIFORMS}
 
 void main(){
-  vec3 pos = position;
-  pos += vec3(snoise(vec3(pos.xy * 0.1, uTime * 0.06))) * 0.28;
-  pos += touchDisplace(pos, 5.5, 1.0);
-
   float touching = max(isSelected(aEndA), isSelected(aEndB));
   vHighlight = touching * uSelectStrength;
-  pos += normalize(pos + 1e-4) * vHighlight * 0.5;
-
-  float radius = length(position.xy);
-  float grow = easeOutQuart(clamp(uReveal * 1.4 - radius / 30.0, 0.0, 1.0));
-  pos *= mix(0.25, 1.0, grow);
-
   vAlong = aAlong;
-  // Links fade back hard when something is selected, so the chosen species' own
-  // connections are the only ones legible.
-  vAlpha = mix(0.16, 0.66, vHighlight) * mix(1.0, 0.25, uSelectStrength * (1.0 - touching)) * grow;
+  vStrain = aStrain;
 
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  vAlpha = mix(0.16, 0.66, vHighlight) * mix(1.0, 0.25, uSelectStrength * (1.0 - touching)) * uReveal;
+
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
 
@@ -578,17 +761,16 @@ uniform vec3 uBone;
 varying float vAlpha;
 varying float vHighlight;
 varying float vAlong;
+varying float vStrain;
 
 void main(){
-  // Taper toward both ends so links read as filaments, not as struts.
   float taper = sin(vAlong * 3.14159);
-  // A pulse travels along highlighted links, in the direction of the curve.
   float pulse = exp(-pow(fract(vAlong - uTime * 0.28) - 0.5, 2.0) * 26.0) * vHighlight;
 
-  // Warmed toward bone so the web sits inside the palette instead of reading
-  // as cool wireframe over a warm scene.
-  vec3 tint = mix(mix(uMist, uBone, 0.45) * 0.8, uGold, vHighlight * 0.8 + pulse);
-  float a = vAlpha * taper + pulse * 0.5;
+  // A spring under strain heats toward gold: the physics is visible as light,
+  // and a wake crossing the web reads as a run of warming threads.
+  vec3 tint = mix(mix(uMist, uBone, 0.45) * 0.8, uGold, clamp(vStrain * 2.2, 0.0, 0.85) + vHighlight * 0.8 + pulse);
+  float a = (vAlpha + vStrain * 0.5) * taper + pulse * 0.5;
   if (a < 0.003) discard;
   gl_FragColor = vec4(tint * a * 0.85, a);
 }
