@@ -40,11 +40,18 @@ export class PostFX {
   readonly sceneTarget: WebGLRenderTarget;
   readonly prevTarget: WebGLRenderTarget;
 
+  /** Ping-pong pair for the phosphor trail; see composite(). */
+  private readonly trailTargets: WebGLRenderTarget[] = [];
+  private trailWrite = 0;
+  private trailStrength = 0;
+  private trailTime = -1;
+
   private readonly bloomTargets: WebGLRenderTarget[] = [];
   private readonly brightMaterial: ShaderMaterial;
   private readonly downMaterial: ShaderMaterial;
   private readonly upMaterial: ShaderMaterial;
   private readonly compositeMaterial: ShaderMaterial;
+  private readonly trailMaterial: ShaderMaterial;
 
   private width = 1;
   private height = 1;
@@ -73,9 +80,18 @@ export class PostFX {
 
     this.sceneTarget = new WebGLRenderTarget(1, 1, targetOptions);
     this.prevTarget = new WebGLRenderTarget(1, 1, targetOptions);
+    for (let i = 0; i < 2; i += 1) {
+      this.trailTargets.push(new WebGLRenderTarget(1, 1, { ...targetOptions, depthBuffer: false }));
+    }
     for (let i = 0; i < BLOOM_LEVELS; i += 1) {
       this.bloomTargets.push(new WebGLRenderTarget(1, 1, { ...targetOptions, depthBuffer: false }));
     }
+
+    this.trailMaterial = this.makeMaterial(TRAIL_FRAGMENT, {
+      tScene: { value: null },
+      tTrail: { value: null },
+      uDecay: { value: 0 },
+    });
 
     this.brightMaterial = this.makeMaterial(BRIGHT_FRAGMENT, {
       tDiffuse: { value: null },
@@ -127,6 +143,7 @@ export class PostFX {
     this.height = Math.max(1, Math.floor(height * pixelRatio));
     this.sceneTarget.setSize(this.width, this.height);
     this.prevTarget.setSize(this.width, this.height);
+    for (const target of this.trailTargets) target.setSize(this.width, this.height);
     this.compositeMaterial.uniforms.uResolution.value.set(this.width, this.height);
 
     let w = this.width;
@@ -153,8 +170,8 @@ export class PostFX {
     this.renderer.render(this.quadScene, this.quadCamera);
   }
 
-  private buildBloom(): void {
-    this.brightMaterial.uniforms.tDiffuse.value = this.sceneTarget.texture;
+  private buildBloom(source: WebGLRenderTarget): void {
+    this.brightMaterial.uniforms.tDiffuse.value = source.texture;
     this.blit(this.brightMaterial, this.bloomTargets[0]);
 
     for (let i = 1; i < this.bloomTargets.length; i += 1) {
@@ -184,10 +201,30 @@ export class PostFX {
    * @param fade global master fade, used for the boot-in and for going dark.
    */
   composite(time: number, dissolve: number, fade: number): void {
-    this.buildBloom();
+    // The phosphor trail. The scene is folded into a persistence buffer as
+    // max(scene, previous * decay), so a moving light leaves a cooling wake and
+    // a static one can never charge the buffer past its own brightness — the
+    // failure mode of additive feedback, which climbs to white on anything that
+    // holds still. The decay is framerate-corrected, and the whole stage is
+    // skipped when the chapter asks for none.
+    let source = this.sceneTarget;
+    if (this.trailStrength > 0.001) {
+      const dt = this.trailTime < 0 ? 1 / 60 : Math.min(Math.max(time - this.trailTime, 0), 0.1);
+      const read = this.trailTargets[1 - this.trailWrite];
+      const write = this.trailTargets[this.trailWrite];
+      this.trailMaterial.uniforms.tScene.value = this.sceneTarget.texture;
+      this.trailMaterial.uniforms.tTrail.value = read.texture;
+      this.trailMaterial.uniforms.uDecay.value = Math.pow(this.trailStrength, dt * 60);
+      this.blit(this.trailMaterial, write);
+      this.trailWrite = 1 - this.trailWrite;
+      source = write;
+    }
+    this.trailTime = time;
+
+    this.buildBloom(source);
 
     const uniforms = this.compositeMaterial.uniforms;
-    uniforms.tScene.value = this.sceneTarget.texture;
+    uniforms.tScene.value = source.texture;
     uniforms.tPrev.value = this.prevTarget.texture;
     uniforms.tBloom.value = this.bloomTargets[0].texture;
     uniforms.uTime.value = time;
@@ -198,18 +235,38 @@ export class PostFX {
     this.renderer.setRenderTarget(null);
   }
 
-  setLook(options: { exposure?: number; bloom?: number; grain?: number; aberration?: number; vignette?: number }): void {
+  setLook(options: {
+    exposure?: number;
+    bloom?: number;
+    grain?: number;
+    aberration?: number;
+    vignette?: number;
+    trail?: number;
+  }): void {
     const u = this.compositeMaterial.uniforms;
     if (options.exposure !== undefined) u.uExposure.value = options.exposure;
     if (options.bloom !== undefined) u.uBloom.value = options.bloom;
     if (options.grain !== undefined) u.uGrain.value = options.grain;
     if (options.aberration !== undefined) u.uAberration.value = options.aberration;
     if (options.vignette !== undefined) u.uVignette.value = options.vignette;
+    if (options.trail !== undefined) this.trailStrength = options.trail;
+  }
+
+  /** Empties the persistence buffer, so a new chapter never wears the old one's wake. */
+  clearTrail(): void {
+    const previous = this.renderer.getRenderTarget();
+    for (const target of this.trailTargets) {
+      this.renderer.setRenderTarget(target);
+      this.renderer.clear();
+    }
+    this.renderer.setRenderTarget(previous);
   }
 
   dispose(): void {
     this.sceneTarget.dispose();
     this.prevTarget.dispose();
+    for (const target of this.trailTargets) target.dispose();
+    this.trailMaterial.dispose();
     for (const target of this.bloomTargets) target.dispose();
     this.brightMaterial.dispose();
     this.downMaterial.dispose();
@@ -277,6 +334,25 @@ void main(){
   sum += texture2D(tDiffuse, vUv + vec2( o.x,  o.y));
   sum += texture2D(tDiffuse, vUv) * 4.0;
   gl_FragColor = sum / 16.0;
+}
+`;
+
+/**
+ * Phosphor persistence. max() rather than addition — see composite() — and the
+ * decay is tinted so a dying wake cools toward the cellar's violet instead of
+ * fading in place, which is what makes it read as an afterimage rather than as
+ * motion blur.
+ */
+const TRAIL_FRAGMENT = /* glsl */ `
+uniform sampler2D tScene;
+uniform sampler2D tTrail;
+uniform float uDecay;
+varying vec2 vUv;
+
+void main(){
+  vec3 scene = texture2D(tScene, vUv).rgb;
+  vec3 wake = texture2D(tTrail, vUv).rgb * uDecay * vec3(0.988, 0.972, 1.0);
+  gl_FragColor = vec4(max(scene, wake), 1.0);
 }
 `;
 

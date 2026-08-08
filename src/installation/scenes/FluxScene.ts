@@ -37,7 +37,7 @@ const RESUME_DELAY = 4.5;
  */
 export class FluxScene extends ChapterBase {
   readonly id = 'flux' as const;
-  readonly look = { exposure: 0.98, bloom: 0.58, grain: 0.024, aberration: 1.0, vignette: 1.12 };
+  readonly look = { exposure: 0.98, bloom: 0.58, grain: 0.024, aberration: 1.0, vignette: 1.12, trail: 0.7 };
 
   private readonly ribbon: Mesh;
   private readonly embers: Points;

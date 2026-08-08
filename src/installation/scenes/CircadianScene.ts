@@ -121,7 +121,7 @@ const HOUR_GUILD = (() => {
  */
 export class CircadianScene extends ChapterBase {
   readonly id = 'circadian' as const;
-  readonly look = { exposure: 0.96, bloom: 0.5, grain: 0.022, aberration: 0.9, vignette: 1.15 };
+  readonly look = { exposure: 0.96, bloom: 0.5, grain: 0.022, aberration: 0.9, vignette: 1.15, trail: 0.76 };
 
   private readonly uniforms: ReturnType<typeof createUniforms>;
   private readonly ground: Mesh;

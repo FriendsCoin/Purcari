@@ -1,4 +1,5 @@
 import { WebGLRenderer } from 'three';
+import { Ambience } from './Ambience';
 import { Pointer } from './Pointer';
 import { PostFX } from './PostFX';
 import type { Chapter, ChapterId, FrameContext, Readout } from './Scene';
@@ -42,6 +43,7 @@ export class Engine {
   readonly renderer: WebGLRenderer;
   readonly pointer: Pointer;
   readonly post: PostFX;
+  readonly ambience = new Ambience();
 
   private readonly chapters = new Map<ChapterId, Chapter>();
   private readonly options: EngineOptions;
@@ -156,8 +158,11 @@ export class Engine {
       grain: 0.022,
       aberration: 1.0,
       vignette: 1.0,
+      trail: 0,
       ...chapter.look,
     });
+    // A chapter never wears its predecessor's wake.
+    this.post.clearTrail();
   }
 
   start(): void {
@@ -308,6 +313,7 @@ export class Engine {
     const eased = t <= 0 ? 0 : t * t * (3 - 2 * t);
     this.post.composite(this.time, eased, this.fade);
 
+    this.ambience.update(this.time);
     this.options.onReadout?.(chapter.readout(), chapter.id);
     this.governQuality(delta, performance.now() - now);
   };
@@ -318,6 +324,7 @@ export class Engine {
     window.removeEventListener('resize', this.handleResize);
     document.removeEventListener('visibilitychange', this.handleVisibility);
     this.pointer.dispose();
+    this.ambience.dispose();
     for (const chapter of this.chapters.values()) chapter.dispose();
     this.chapters.clear();
     this.post.dispose();

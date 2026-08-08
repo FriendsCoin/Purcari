@@ -92,7 +92,15 @@ export interface Chapter {
   readonly interactionPlane: { normal: Vector3; constant: number };
 
   /** Look overrides handed to the post chain while this chapter is on screen. */
-  readonly look?: { exposure?: number; bloom?: number; grain?: number; aberration?: number; vignette?: number };
+  readonly look?: {
+    exposure?: number;
+    bloom?: number;
+    grain?: number;
+    aberration?: number;
+    vignette?: number;
+    /** Phosphor persistence, 0..~0.92: per-frame decay of the wake at 60 fps. */
+    trail?: number;
+  };
 
   enter(): void;
   exit(): void;

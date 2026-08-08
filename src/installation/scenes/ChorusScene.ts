@@ -40,7 +40,7 @@ const ROAM = 13;
  */
 export class ChorusScene extends ChapterBase {
   readonly id = 'chorus' as const;
-  readonly look = { exposure: 1.0, bloom: 0.66, grain: 0.02, aberration: 1.15, vignette: 1.2 };
+  readonly look = { exposure: 1.0, bloom: 0.66, grain: 0.02, aberration: 1.15, vignette: 1.2, trail: 0.88 };
 
   private readonly cloud: Points;
   private readonly uniforms: ReturnType<typeof createUniforms>;
