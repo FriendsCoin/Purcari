@@ -10,6 +10,8 @@ import {
 } from '../core/palette';
 import { soundField, Chorus } from '../core/audio';
 import { Spectrogram, SPECTROGRAM_AXES } from '../ui/Spectrogram';
+import { Vignette } from '../ui/Vignette';
+import { VIGNETTE_SOURCE, type VignetteKind } from '../ui/vignetteData';
 import { useChapterTransition } from '../core/useChapterTransition';
 import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens, type MapAnchor } from '../gl/Constellation';
@@ -234,6 +236,22 @@ export default function IndoorApp() {
     }
     return kept;
   }, [refugeMarks, refugeSelected]);
+
+  /**
+   * Which practice stage has a diagram behind it.
+   *
+   * Only the two that are a physical thing happening to a plant. "Land kept"
+   * and "treatments cut" are shares of an estate, and a moving picture of a
+   * percentage is decoration — the column already is that picture.
+   */
+  const practiceVignette = useMemo((): { kind: VignetteKind; caption: string } | null => {
+    if (refugeMode !== 'practices' || !refugeSelected) return null;
+    if (refugeSelected === 'Drip irrigation')
+      return { kind: 'drip', caption: 'WATER GOES TO THE ROOT, NOT OVER THE LEAF — DIAGRAM' };
+    if (refugeSelected === 'Water saved')
+      return { kind: 'drip', caption: 'THE SAME VINE, ON LESS WATER — DIAGRAM' };
+    return null;
+  }, [refugeMode, refugeSelected]);
 
   /** The Unseen's rings, in the same order the scene draws them. */
   const rings = useMemo(() => (data ? buildRings(data) : []), [data]);
@@ -573,6 +591,28 @@ export default function IndoorApp() {
             <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
               {lensMeta.caption.toUpperCase()}
             </p>
+
+            {/*
+              What the lens the visitor just chose actually is. The chapter
+              rests on "cameras for the mammals, microphones for the birds" and
+              has never shown either instrument; a small moving diagram answers
+              it where the question is asked. On BOTH there is nothing to
+              explain, so nothing plays.
+            */}
+            {lens !== 'both' && (
+              <div className="inst-vignette">
+                <Vignette
+                  kind={lens === 'camera' ? 'camera' : 'sound'}
+                  active={chapter.id === 'estate'}
+                  height={150}
+                />
+                <p className="inst-mono" style={{ opacity: 0.5 }}>
+                  {lens === 'camera'
+                    ? 'A CAMERA TRAP FIRES ON MOVEMENT — DIAGRAM'
+                    : 'A RECORDER LISTENS ALL NIGHT — DIAGRAM'}
+                </p>
+              </div>
+            )}
             {/*
               The ground's own credits. ODbL requires the OSM line whenever the
               map data is shown, and the relief deserves the same courtesy —
@@ -765,6 +805,27 @@ export default function IndoorApp() {
                 <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
                   SAME COMMUNITY IN EVERY STAGE · ONE YEAR, NO BEFORE-AND-AFTER
                 </p>
+                {/*
+                  What the chosen stage does, when it is a thing that can be
+                  drawn. "300 ha drip-irrigated at 15–30% less water" is a fact
+                  about plumbing that a line of type cannot show and a moving
+                  diagram can — water arriving at the root rather than over the
+                  leaf. Only the two irrigation stages have one; the others are
+                  percentages of land, and a diagram of a percentage would be
+                  decoration.
+                */}
+                {practiceVignette && (
+                  <div className="inst-vignette inst-rise">
+                    <Vignette
+                      kind={practiceVignette.kind}
+                      active={chapter.id === 'refuge'}
+                      height={112}
+                    />
+                    <p className="inst-mono" style={{ opacity: 0.5 }}>
+                      {practiceVignette.caption}
+                    </p>
+                  </div>
+                )}
               </>
             ) : refugeMode === 'ecosystem' ? (
               /*
@@ -1345,9 +1406,9 @@ export default function IndoorApp() {
             */}
             <p
               className="inst-mono inst-rise inst-delay-4"
-              style={{ margin: '2.6rem auto 0', maxWidth: '34rem', opacity: 0.45 }}
+              style={{ margin: '2.6rem auto 0', maxWidth: '38rem', opacity: 0.45 }}
             >
-              {GLYPH_CREDIT}
+              {GLYPH_CREDIT} {VIGNETTE_SOURCE}
             </p>
           </div>
         </div>

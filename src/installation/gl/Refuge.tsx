@@ -1486,6 +1486,8 @@ export function Refuge({
   const shownRef = useRef<RefugeMode>(mode);
   const requestedRef = useRef<RefugeMode>(mode);
   const morphAt = useRef(-999);
+  /** The arrangement being drawn, for the pick. Written by the frame loop. */
+  const slotsRef = useRef<Slot[]>([]);
   const measureRef = useRef<THREE.LineSegments>(null);
   const measureY = useRef(0);
   const focusRef = useRef(0);
@@ -1622,18 +1624,26 @@ export function Refuge({
   const pick = (clientX: number, clientY: number): string | null => {
     const group = groupRef.current;
     if (!group) return null;
+    const xs = motes.uniforms.uX.value;
     const heights = motes.uniforms.uHeight.value;
     const presence = motes.uniforms.uPresence.value;
+    // The arrangement actually on screen. This used to read `columns` — the
+    // habitat layout — for both the x of each column and its name, which meant
+    // that in the practices and ecosystem readings the pick tested positions
+    // no column stood at and returned habitat names nothing could match. The
+    // symptom was total: in those two readings a column could not be selected
+    // at all.
+    const slots = slotsRef.current;
     const foot = new THREE.Vector3();
     const head = new THREE.Vector3();
     let best: string | null = null;
     let bestDistance = PICK_RADIUS;
 
-    for (let i = 0; i < columns.length; i++) {
+    for (let i = 0; i < slots.length; i++) {
       // A column that has faded out is not there to be touched.
-      if (presence[i] < 0.25) continue;
-      foot.set(columns[i].x, 0, 0).applyMatrix4(group.matrixWorld).project(camera);
-      head.set(columns[i].x, heights[i], 0).applyMatrix4(group.matrixWorld).project(camera);
+      if (presence[i] < 0.25 || slots[i].presence <= 0) continue;
+      foot.set(xs[i], 0, 0).applyMatrix4(group.matrixWorld).project(camera);
+      head.set(xs[i], heights[i], 0).applyMatrix4(group.matrixWorld).project(camera);
       const distance = distanceToSegment(
         clientX,
         clientY,
@@ -1644,7 +1654,7 @@ export function Refuge({
       );
       if (distance < bestDistance) {
         bestDistance = distance;
-        best = columns[i].landUse;
+        best = slots[i].label;
       }
     }
     return best;
@@ -1691,6 +1701,8 @@ export function Refuge({
         : shown === 'ecosystem'
           ? pillars
           : habitatSlots(columns, metricRef.current);
+
+    slotsRef.current = target;
 
     const r = revealRef.current;
     const eased = r * r * (3 - 2 * r);
