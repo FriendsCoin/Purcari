@@ -185,6 +185,38 @@ body {
   max-width: 42ch;
 }
 
+/* The chapter's configurations. Set like the eyebrow — the same letterspaced
+   small caps the piece uses for labels — so a row of instruments reads as part of
+   the type, not as browser furniture parked on the artwork. */
+.readout__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 1.3rem;
+  margin: 0;
+}
+
+.readout__mode {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  margin: 0;
+  padding: 0.45rem 0 0.3rem;
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+  font-size: clamp(0.5rem, 0.62vw, 0.62rem);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--bone) 38%, transparent);
+  transition: color 260ms ease, border-color 260ms ease;
+}
+
+.readout__mode--active {
+  color: var(--accent);
+  border-bottom-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
 .readout__stats {
   display: flex;
   flex-wrap: wrap;
@@ -738,11 +770,25 @@ body {
     letter-spacing: 0.3em;
   }
 
-  /* Collapsed: the name of what is on screen, and nothing else. */
+  /* Collapsed: the name of what is on screen, and nothing else — except the
+     configurations, which are the chapter's instrument and stay under the
+     thumb whether or not the note is open. */
   .stage--compact .readout__body,
   .stage--compact .readout__stats,
   .stage--compact .spark {
     display: none;
+  }
+
+  .readout__modes {
+    gap: 0 1.1rem;
+  }
+
+  .readout__mode {
+    font-size: 0.5rem;
+    letter-spacing: 0.22em;
+    /* A chip is a touch target before it is a label: tall enough for a thumb,
+       which on this row costs nothing but vertical air. */
+    padding: 0.85rem 0 0.7rem;
   }
 
   .sheet__toggle {

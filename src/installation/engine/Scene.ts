@@ -47,6 +47,12 @@ export interface Readout {
    */
   scale?: { metres: number; fraction: number };
   /**
+   * Alternative configurations of whatever the chapter is drawing, offered as a
+   * row of chips under the text. Selecting one calls the chapter's `setMode`.
+   * A chapter with one way of arranging its figure leaves this unset.
+   */
+  modes?: { id: string; label: string; active: boolean }[];
+  /**
    * Labelled ticks along the top edge, positioned in 0..1 of the viewport width.
    * Set by chapters whose horizontal axis carries a unit a visitor has to be
    * able to name — the eighty-night wall is unreadable without knowing where
@@ -109,6 +115,9 @@ export interface Chapter {
 
   /** Current overlay content. Polled once per frame; return the same object when nothing changed. */
   readout(): Readout;
+
+  /** Switches between the configurations the readout offers, by id. */
+  setMode?(id: string): void;
 
   dispose(): void;
 }

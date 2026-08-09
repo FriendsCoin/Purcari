@@ -29,7 +29,7 @@ so on screen.
 | — | **Le chœur** | Attract state. All 2,665 detections held in a ring whose azimuth is time of day, with a wave of light sweeping it in clock order. Because the dawn chorus is almost a third of the record, the wave arrives as a visible swell every half minute and goes quiet overnight. | Drag to turn, tap to push the cloud |
 | I | **Terroir** | The estate from above, on aerial imagery, with the five recorders marked where they actually stand and a plume of light over each one carrying its detections. It behaves like a map: drag to pan, pinch to zoom, and a scale bar in the masthead tracks the zoom. Touching a recorder **falls into it** — see *Inside a station* below. | Drag to pan, pinch to zoom, tap a recorder to enter it |
 | II | **Circadien** | A crown of twenty-four blades standing on the day itself. Each blade is an hour, its height the detections in it, and inside it every one of those detections is a mote placed by its own minute and coloured by guild. The ground is the real day for 46.52° N — gold from sunrise at 05:49 to sunset at 20:24, violet either side. The two tallest blades in the ring stand entirely on the violet. | Drag sideways to walk round it, up/down to fall from clock to skyline, pinch to close in, tap an hour to hold it |
-| III | **Espèces** | 121 species as a living spring web, Verlet-integrated every frame. Each node is anchored where the clock puts it — angle from the circular mean of its singing hours, radius from inverse abundance — and sprung to the species whose daily rhythms most resemble its own, with mass proportional to abundance so the hub holds while the rim swings. On entry the web scatters and visibly reassembles. Links heat toward gold under strain. | Drag through it and the wake travels the links; tap to pluck it and select a species; on phones, tilting the device pours gravity through the web (relative to how it's held, so it re-levels) |
+| III | **Espèces** | 121 species as a living spring web, Verlet-integrated every frame, anchored where the clock puts them and sprung to the species that share their rhythm. That figure is the reference — and the same web can be re-sorted live into guilds, into one island per recorder, or into the bare abundance ranking, with the links untouched, so what each arrangement costs shows up as tension. See *The web and its configurations*. | Pick a configuration; drag through it and the wake travels the links; tap to pluck it and select a species; on phones, tilting the device pours gravity through the web |
 | IV | **Flux** | The seventeen days of the survey as a river of light, thinning from 347 detections on 4 August to one on the last three days. | Drag left/right to scrub the day |
 | V | **Chevauchement** | Eighteen camera-trap species and the correlation between their daily rhythms, as a ring of chords. Warm means two species are out at the same hours, cool means they avoid each other. The highlight walks the ring on its own. | Tap a species to hold it |
 | VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
@@ -63,6 +63,43 @@ The scale bar is computed along the distance to what the camera is looking at
 rather than straight down. Overhead the two are the same; leaning in at a post
 they are not, and the bar would otherwise report a third of the distance it
 draws.
+
+### The web and its configurations
+
+Chapter III is a Verlet solver, not a layout. 121 nodes, ~270 springs joining
+species by similarity of daily rhythm, mass proportional to abundance, integrated
+every frame. Anchors say where the current arrangement wants each node; the
+springs say which species belong together; the picture is the argument between
+them, and it can be dragged, plucked and tilted while it runs.
+
+The reference figure — **Rythme** — is the clock arrangement, and the springs are
+calibrated on it: every rest length *is* the length that link has there. So the
+étalon is the relaxed state and reads **Tension 0 %**. The same 121 species can
+then be re-sorted live, with the links untouched:
+
+| | arranges by | what it shows | tension |
+|---|---|---|---|
+| **Rythme** | hour of song (angle), abundance (radius) | the reference figure | 0 % |
+| **Guildes** | one island per group, each a clock in miniature | the passerines are two thirds of the list; the links that must now cross the void are the rhythms the groups do not share | ~20 % |
+| **Stations** | one island per recorder, north to south, a clump per set of posts that shared a species | 47 species were heard at a single post and stay on their island; 74 travel and gather in the middle | ~30 % |
+| **Abondance** | the bare ranking, wound out as a sunflower | 8 species make half the record, 32 were heard exactly once — and gold everywhere, because rank says nothing about rhythm | ~35 % |
+
+A link burns gold in proportion to how far it has been dragged from its reference
+length, and thins as it heats, so an arrangement stays legible under the tension
+it causes. The readout totals that strain as a single percentage, which makes the
+four arrangements comparable rather than merely different.
+
+Three things make this work as physics rather than as a tween. The spring
+correction is **capped** (`MAX_PULL`): uncapped, a link stretched across the frame
+pulls proportionally to that length, hauls its node bodily out of the island it
+was put in, and every arrangement collapses back into the same blob. Anchors move
+through a **staggered morph** — each node joins the change at a delay set by its
+own mean hour — so a re-sorting arrives as a wave round the clock rather than as
+a cut. And every arrangement is centred and scaled to the same spread before use,
+so the framing never lurches.
+
+Untouched for fourteen seconds, the chapter starts walking its own configurations
+every eleven. A wall panel has to make the argument without a visitor's help.
 
 ### A note on what the piece is
 

@@ -151,6 +151,11 @@ export class Engine {
     this.options.onChapterChange?.(id);
   }
 
+  /** Hands a configuration choice to whichever chapter is on screen. */
+  setMode(id: string): void {
+    this.active?.setMode?.(id);
+  }
+
   private applyLook(chapter: Chapter): void {
     this.post.setLook({
       exposure: 1.0,

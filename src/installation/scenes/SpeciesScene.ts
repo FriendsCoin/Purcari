@@ -29,9 +29,20 @@ const TAP_RADIUS = 0.075;
 /** Physics tuning. Substepped Verlet with position-based spring relaxation. */
 const DAMPING = 0.972;
 const SPRING_ITERATIONS = 2;
-const SPRING_STIFFNESS = 0.16;
-/** Pull toward the clock anchor, per second. The web may breathe, not wander. */
-const ANCHOR_RATE = 2.1;
+const SPRING_STIFFNESS = 0.12;
+/**
+ * The most one relaxation pass may move an endpoint, in world units.
+ *
+ * This cap is what lets the chapter be re-sorted at all. Uncapped, a link
+ * stretched across the frame by a re-sorting pulls proportionally to that
+ * length and hauls its node bodily out of the island it was put in, so every
+ * arrangement collapses back into the same blob. Capped, the far links strain
+ * and burn gold — visibly, which is the point — while local links still behave
+ * like springs and carry the wake.
+ */
+const MAX_PULL = 0.09;
+/** Pull toward the configuration's anchor, per second. */
+const ANCHOR_RATE = 6.5;
 /** A held finger pushes the web open inside this radius. */
 const FINGER_RADIUS = 6.5;
 const FINGER_FORCE = 260;
@@ -39,23 +50,62 @@ const FINGER_FORCE = 260;
 const PLUCK_RADIUS = 7;
 const PLUCK_IMPULSE = 9;
 
+/** Seconds a change of configuration takes to travel through the web. */
+const MORPH_SECONDS = 2.8;
+/** Share of that spent letting the change sweep round the clock, node by node. */
+const MORPH_STAGGER = 0.45;
+/** Idle seconds before the chapter starts showing its own alternatives. */
+const AUTO_IDLE = 14;
+/** Seconds each configuration is held during that demonstration. */
+const AUTO_HOLD = 11;
+
 interface Node {
   species: AtlasSpecies;
-  /** Where the clock says it belongs; the springs argue with this. */
+  /** Where the current configuration says it belongs; the springs argue with it. */
   anchor: Vector3;
+  /** Ends of the anchor's journey while a configuration change plays. */
+  anchorFrom: Vector3;
+  anchorTo: Vector3;
+  /** 0..MORPH_STAGGER — when this node joins that change. */
+  morphDelay: number;
   position: Vector3;
   previous: Vector3;
   /** Heavier species move less — the hub holds while the rim swings. */
   mass: number;
   meanHour: number;
   concentration: number;
+  /** 0..1, log detections against the loudest species. */
+  abundance: number;
+  /** Depth, which means the same thing in every configuration. */
+  depth: number;
 }
 
 interface Spring {
   a: number;
   b: number;
+  /**
+   * The length this link has in the reference figure. It is both what the
+   * solver wants and what strain is measured against — which is what makes the
+   * étalon the relaxed state and every other arrangement legibly tense.
+   */
   rest: number;
 }
+
+/**
+ * One way of arranging the same 121 species. The springs never change; only
+ * where each node is told to stand.
+ */
+interface Configuration {
+  id: string;
+  label: string;
+  body: string;
+  /** The one number this arrangement is best placed to state. */
+  stat: { label: string; value: string };
+  anchors: Vector3[];
+}
+
+/** A planar arrangement, before it is scaled to the reference figure's spread. */
+type Plan = { x: number; y: number }[];
 
 /**
  * Chapter III — Espèces.
@@ -69,6 +119,14 @@ interface Spring {
  * disagreement is the picture: the springs keep trying to gather the web into
  * rhythm clusters, the clock keeps holding it open, and the shape on screen is
  * the settled argument, still trembling.
+ *
+ * That figure is the reference, and the springs are calibrated on it. The web
+ * can then be re-sorted live — into guilds, into one island per recorder, into
+ * the bare abundance ranking — and because the links never change, what every
+ * other arrangement costs is visible as tension: a link stretched past the
+ * length it holds in the reference figure burns gold, and the readout totals
+ * them. The alternatives are not diagrams of a different dataset; they are the
+ * same matter pulled into a different order, in front of the visitor.
  *
  * It is matter, not a diagram. Drag through it and the wake travels down the
  * links, node to node, at the speed the springs carry it. Tap and the web
@@ -119,6 +177,16 @@ export class SpeciesScene extends ChapterBase {
     );
   };
 
+  private readonly configurations: Configuration[];
+  private configuration = 0;
+  /** 0..1 through the current change of configuration; 1 when settled. */
+  private morph = 1;
+  /** Idle seconds spent on the configuration currently showing. */
+  private autoClock = 0;
+  /** Mean spring strain against the reference figure — the gold, as a number. */
+  private tension = 0;
+  private tensionRaw = 0;
+
   private selected: number | null = null;
   private selectStrength = 0;
   private flight = 0;
@@ -147,6 +215,14 @@ export class SpeciesScene extends ChapterBase {
 
     this.layout();
     this.neighbours.push(...this.buildNeighbours());
+    this.configurations = this.buildConfigurations();
+    // The reference figure is the composed one, so the springs are calibrated on
+    // exactly the shape the visitor is shown — and rest there at zero tension.
+    this.nodes.forEach((node, i) => {
+      node.anchor.copy(this.configurations[0].anchors[i]);
+      node.anchorFrom.copy(node.anchor);
+      node.anchorTo.copy(node.anchor);
+    });
     this.buildSprings();
 
     this.uniforms = createUniforms(this.touch);
@@ -203,13 +279,249 @@ export class SpeciesScene extends ChapterBase {
       this.nodes.push({
         species,
         anchor,
+        anchorFrom: anchor.clone(),
+        anchorTo: anchor.clone(),
+        // The change sweeps round the clock rather than happening at once, so a
+        // reconfiguration reads as a wave through the web — the same gesture the
+        // prologue's dawn wave makes.
+        morphDelay: (meanHour / 24) * MORPH_STAGGER,
         position: start,
         previous: start.clone(),
         mass: 0.6 + abundance * 2.6,
         meanHour,
         concentration,
+        abundance,
+        depth: z,
       });
     });
+  }
+
+  // ---------------------------------------------------------- configurations --
+
+  /**
+   * The reference figure and the three re-sortings of it.
+   *
+   * Every arrangement is scaled to the same spread and keeps the same depth
+   * rule, so what changes between them is the ordering and nothing else — the
+   * comparison is honest, and the framing does not jump.
+   */
+  private buildConfigurations(): Configuration[] {
+    const reference = this.nodes.map(n => ({ x: n.anchor.x, y: n.anchor.y }));
+    const spread = spreadRadius(reference);
+
+    const shared = atlas.species.filter(s => s.stations.length > 1).length;
+    const local = atlas.species.length - shared;
+    const once = atlas.species.filter(s => s.count === 1).length;
+    const nocturnal = atlas.species.filter(s => s.nocturnality > 0.5).length;
+    const guilds = new Set(atlas.species.map(s => s.guild)).size;
+
+    // How few species carry half the record — counted, not quoted.
+    let running = 0;
+    let half = 0;
+    for (const species of atlas.species) {
+      running += species.count;
+      half += 1;
+      if (running >= atlas.meta.total / 2) break;
+    }
+
+    return [
+      {
+        id: 'rythme',
+        label: 'Rythme',
+        body:
+          'L’étalon : chaque nœud à l’heure moyenne de son chant, le rayon donné par l’abondance, ' +
+          'et un ressort vers les espèces qui partagent son rythme. Les ressorts sont calibrés sur ' +
+          'cette figure — c’est la forme au repos. Rangez les mêmes espèces autrement et ils tirent.',
+        stat: { label: 'Nocturnes', value: String(nocturnal) },
+        anchors: this.compose(reference, spread),
+      },
+      {
+        id: 'guildes',
+        label: 'Guildes',
+        body:
+          `Les mêmes 121 espèces en ${guilds} îles, une par groupe, et chaque île est la même horloge ` +
+          'en miniature. Les ressorts, eux, n’ont pas bougé : ceux qui doivent maintenant traverser le ' +
+          'vide s’allument en or. C’est ce que ce classement coûte au rythme.',
+        stat: { label: 'Groupes', value: String(guilds) },
+        anchors: this.compose(this.guildPlan(), spread),
+      },
+      {
+        id: 'stations',
+        label: 'Stations',
+        body:
+          `Une île par enregistreur, dans l’ordre nord-sud du domaine. ${local} espèces n’ont été ` +
+          `entendues qu’à un seul poste et restent sur leur île ; ${shared} circulent entre plusieurs ` +
+          'et se rassemblent au centre. L’or, ici, ce sont les rythmes partagés d’un poste à l’autre.',
+        stat: { label: 'Partagées', value: `${shared} / ${atlas.species.length}` },
+        anchors: this.compose(this.stationPlan(), spread),
+      },
+      {
+        id: 'abondance',
+        label: 'Abondance',
+        body:
+          `Le classement pur : la plus entendue au centre, la traîne vers le bord. ${half} espèces font ` +
+          `la moitié du relevé, ${once} n’ont été entendues qu’une seule fois. L’or est partout — ` +
+          'le rang ne dit rien du rythme.',
+        stat: { label: 'Une seule fois', value: String(once) },
+        anchors: this.compose(this.abundancePlan(), spread),
+      },
+    ];
+  }
+
+  /**
+   * Centres a plan, scales it to the reference spread, and gives it the shared
+   * depth rule. Centring matters as much as scaling: an arrangement whose
+   * centre of mass sits off to one side would make the camera appear to lurch
+   * every time the configuration changes.
+   */
+  private compose(plan: Plan, spread: number): Vector3[] {
+    const cx = plan.reduce((sum, p) => sum + p.x, 0) / plan.length;
+    const cy = plan.reduce((sum, p) => sum + p.y, 0) / plan.length;
+    const centred = plan.map(p => ({ x: p.x - cx, y: p.y - cy }));
+    const scale = spread / spreadRadius(centred);
+    return centred.map((p, i) => new Vector3(p.x * scale, p.y * scale, this.nodes[i].depth));
+  }
+
+  /** One island per guild, each of them the same clock in miniature. */
+  private guildPlan(): Plan {
+    const groups = [...new Set(atlas.species.map(s => s.guild))]
+      .map(id => ({ id, members: atlas.species.filter(s => s.guild === id).length }))
+      .sort((a, b) => b.members - a.members);
+
+    // Island size follows its population, but slowly: the passerines are two
+    // thirds of the list, and an island scaled linearly to that would swallow
+    // the other five. The ring is then given half again the circumference the
+    // islands need, so the rosette keeps a hole in the middle for the stretched
+    // links to cross.
+    const radii = groups.map(g => 1.6 + 1.05 * Math.sqrt(g.members));
+    const total = radii.reduce((sum, r) => sum + r, 0);
+    const ring = (total / Math.PI) * 1.35;
+
+    const islands = new Map<string, { x: number; y: number; r: number }>();
+    let cursor = 0;
+    groups.forEach((group, i) => {
+      const share = (radii[i] / total) * Math.PI * 2;
+      const angle = Math.PI / 2 - (cursor + share / 2);
+      cursor += share;
+      islands.set(group.id, { x: Math.cos(angle) * ring, y: Math.sin(angle) * ring, r: radii[i] });
+    });
+
+    const plan: Plan = this.nodes.map(() => ({ x: 0, y: 0 }));
+    for (const group of groups) {
+      const members = this.nodes
+        .map((node, index) => ({ node, index }))
+        .filter(entry => entry.node.species.guild === group.id)
+        .map(entry => entry.index);
+      this.fillIsland(members, islands.get(group.id)!, islands.get(group.id)!.r, plan);
+    }
+    return plan;
+  }
+
+  /**
+   * Fills an island evenly: the clock still sets the angle, and the radius
+   * follows the square root of the rank, loudest at the heart. An island whose
+   * radius came straight from abundance would be a hollow ring — and six
+   * hollow rings overlapping read as one haze rather than as six groups.
+   */
+  private fillIsland(members: number[], centre: { x: number; y: number }, radius: number, out: Plan): void {
+    const ordered = [...members].sort((a, b) => this.nodes[b].abundance - this.nodes[a].abundance);
+    ordered.forEach((index, rank) => {
+      const r = radius * Math.sqrt((rank + 0.45) / ordered.length);
+      const angle = this.localAngle(this.nodes[index], index);
+      out[index] = { x: centre.x + Math.cos(angle) * r, y: centre.y + Math.sin(angle) * r };
+    });
+  }
+
+  /**
+   * One island per recorder, in the estate's own north-south order — the map
+   * itself is Chapter I's job, so this is a ring, not a plan. A species sits at
+   * the centre of gravity of the posts that heard it, which puts the ones heard
+   * everywhere in the middle and leaves the locals out on their own island.
+   */
+  private stationPlan(): Plan {
+    const ordered = [...atlas.stations].sort((a, b) => a.z - b.z);
+    const ring = 13.5;
+    const islands = new Map<number, { x: number; y: number }>();
+    ordered.forEach((station, i) => {
+      const angle = Math.PI / 2 - (i / ordered.length) * Math.PI * 2;
+      islands.set(station.id, { x: Math.cos(angle) * ring, y: Math.sin(angle) * ring });
+    });
+
+    // Species that were heard by exactly the same set of posts belong to the
+    // same clump: one island per recorder, and a clump between every pair or
+    // trio that shared a species. It is the survey's own Venn diagram.
+    const clumps = new Map<string, number[]>();
+    this.nodes.forEach((node, index) => {
+      const key = [...node.species.stations].sort((a, b) => a - b).join('-');
+      const clump = clumps.get(key);
+      if (clump) clump.push(index);
+      else clumps.set(key, [index]);
+    });
+
+    const plan: Plan = this.nodes.map(() => ({ x: 0, y: 0 }));
+    for (const [key, members] of clumps) {
+      const heard = key === '' ? [] : key.split('-').map(Number);
+      let cx = 0;
+      let cy = 0;
+      for (const id of heard) {
+        const island = islands.get(id);
+        if (!island) continue;
+        cx += island.x;
+        cy += island.y;
+      }
+      const divisor = Math.max(1, heard.length);
+      this.fillIsland(
+        members,
+        { x: cx / divisor, y: cy / divisor },
+        1.8 + 0.62 * Math.sqrt(members.length),
+        plan
+      );
+    }
+    return plan;
+  }
+
+  /** The bare ranking, wound out as a sunflower: loudest at the heart. */
+  private abundancePlan(): Plan {
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    return this.nodes.map((_, rank) => {
+      const radius = 1.55 * Math.sqrt(rank + 0.5);
+      const angle = rank * golden;
+      return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+    });
+  }
+
+  /** The clock angle a node keeps inside whatever island it lands in. */
+  private localAngle(node: Node, index: number): number {
+    return Math.PI / 2 - (node.meanHour / 24) * Math.PI * 2 + (hash(index * 12.9898) - 0.5) * 0.55;
+  }
+
+  /** Starts the web moving toward another configuration. */
+  private applyConfiguration(index: number): void {
+    const target = this.configurations[index];
+    if (!target) return;
+    this.configuration = index;
+    this.nodes.forEach((node, i) => {
+      node.anchorFrom.copy(node.anchor);
+      node.anchorTo.copy(target.anchors[i]);
+    });
+    this.morph = 0;
+    this.autoClock = 0;
+    this.readoutKey = '';
+  }
+
+  setMode(id: string): void {
+    const index = this.configurations.findIndex(c => c.id === id);
+    if (index >= 0 && index !== this.configuration) this.applyConfiguration(index);
+  }
+
+  /** Walks the anchors along, node by node, in the order the sweep reaches them. */
+  private advanceMorph(delta: number): void {
+    if (this.morph >= 1) return;
+    this.morph = Math.min(1, this.morph + delta / MORPH_SECONDS);
+    for (const node of this.nodes) {
+      const local = clamp((this.morph - node.morphDelay) / (1 - MORPH_STAGGER), 0, 1);
+      node.anchor.lerpVectors(node.anchorFrom, node.anchorTo, local * local * (3 - 2 * local));
+    }
   }
 
   /** Nearest neighbours by cosine similarity of the normalised hourly profile. */
@@ -246,7 +558,7 @@ export class SpeciesScene extends ChapterBase {
         if (seen.has(key)) continue;
         seen.add(key);
         const anchored = this.nodes[i].anchor.distanceTo(this.nodes[j].anchor);
-        this.springs.push({ a: i, b: j, rest: anchored * 0.82 });
+        this.springs.push({ a: i, b: j, rest: anchored });
       }
     });
   }
@@ -393,10 +705,10 @@ export class SpeciesScene extends ChapterBase {
           this.scratch.copy(b.position).sub(a.position);
           const distance = this.scratch.length();
           if (distance < 1e-5) continue;
-          const correction = ((distance - spring.rest) / distance) * SPRING_STIFFNESS;
+          const pull = clamp((distance - spring.rest) * SPRING_STIFFNESS, -MAX_PULL, MAX_PULL) / distance;
           const total = a.mass + b.mass;
-          a.position.addScaledVector(this.scratch, correction * (b.mass / total));
-          b.position.addScaledVector(this.scratch, -correction * (a.mass / total));
+          a.position.addScaledVector(this.scratch, pull * (b.mass / total));
+          b.position.addScaledVector(this.scratch, -pull * (a.mass / total));
         }
       }
     }
@@ -427,12 +739,16 @@ export class SpeciesScene extends ChapterBase {
     const strains = strainAttribute.array as Float32Array;
 
     let v = 0;
+    let strainTotal = 0;
     for (const spring of this.springs) {
       const a = this.nodes[spring.a].position;
       const b = this.nodes[spring.b].position;
       const distance = a.distanceTo(b);
-      // How hard the spring is working right now, for the shader to show.
+      // Measured against the length this link holds in the reference figure, so
+      // the gold means one thing everywhere: how far this arrangement has
+      // dragged the link from the shape the springs were calibrated on.
       const strain = clamp(Math.abs(distance - spring.rest) / spring.rest, 0, 1);
+      strainTotal += strain;
 
       // The spring sags: a quadratic bow whose belly follows gravity when there
       // is any, and eases toward the hub when there is none — slack rigging
@@ -455,6 +771,7 @@ export class SpeciesScene extends ChapterBase {
     }
     (this.links.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
     strainAttribute.needsUpdate = true;
+    this.tensionRaw = strainTotal / Math.max(1, this.springs.length);
   }
 
   // ------------------------------------------------------------------ update --
@@ -464,7 +781,19 @@ export class SpeciesScene extends ChapterBase {
     this.uniforms.uReveal.value = 0;
     this.selectStrength = 0;
     this.flight = 0;
+    this.autoClock = 0;
     this.desired.radius = this.restSpherical.radius * 1.3;
+
+    // A chapter always opens on the reference figure, whatever the last visitor
+    // left it sorted by.
+    this.configuration = 0;
+    this.morph = 1;
+    this.readoutKey = '';
+    this.nodes.forEach((node, i) => {
+      node.anchor.copy(this.configurations[0].anchors[i]);
+      node.anchorFrom.copy(node.anchor);
+      node.anchorTo.copy(node.anchor);
+    });
 
     // Scatter again, so every entry replays the web assembling itself.
     this.nodes.forEach((node, index) => {
@@ -503,8 +832,22 @@ export class SpeciesScene extends ChapterBase {
       this.pluck(tap.world);
     }
 
+    // Untouched, the chapter shows its own alternatives rather than waiting to
+    // be asked: the configurations are the argument, and a wall panel has to
+    // make it without a visitor's help.
+    if (ctx.pointer.idleTime > AUTO_IDLE) {
+      this.autoClock += ctx.delta;
+      if (this.autoClock >= AUTO_HOLD) {
+        this.applyConfiguration((this.configuration + 1) % this.configurations.length);
+      }
+    } else {
+      this.autoClock = 0;
+    }
+
+    this.advanceMorph(ctx.delta);
     this.simulate(ctx);
     this.upload();
+    this.tension = damp(this.tension, this.tensionRaw, 2.4, ctx.delta);
 
     this.selectStrength = damp(this.selectStrength, this.selected === null ? 0 : 1, 2.6, ctx.delta);
     this.uniforms.uSelected.value = this.selected ?? -1;
@@ -560,7 +903,11 @@ export class SpeciesScene extends ChapterBase {
   // ---------------------------------------------------------------- readout --
 
   private refreshReadout(): void {
-    const key = this.selected === null ? 'overview' : `species-${this.selected}`;
+    // The tension figure moves while the web settles, so it is part of the key:
+    // the readout is rebuilt when the number a visitor can read actually
+    // changes, and not once per frame.
+    const percent = Math.round(this.tension * 100);
+    const key = `${this.configuration}/${percent}/${this.selected === null ? 'overview' : this.selected}`;
     if (key !== this.readoutKey) {
       this.readoutKey = key;
       this.cachedReadout = this.selected === null ? this.overviewReadout() : this.speciesReadout(this.selected);
@@ -568,19 +915,26 @@ export class SpeciesScene extends ChapterBase {
     this.cachedReadout.marker = this.marker;
   }
 
+  /** The chips, rebuilt with the active one marked. */
+  private modes(): { id: string; label: string; active: boolean }[] {
+    return this.configurations.map((config, i) => ({
+      id: config.id,
+      label: config.label,
+      active: i === this.configuration,
+    }));
+  }
+
   private overviewReadout(): Readout {
-    const nocturnal = atlas.species.filter(s => s.nocturnality > 0.5).length;
+    const config = this.configurations[this.configuration];
     return {
       eyebrow: 'Chapitre III',
       title: 'Espèces',
-      body:
-        'Une toile de ressorts : chaque nœud est une espèce à l’heure moyenne de son chant, ' +
-        'reliée à celles qui partagent son rythme. Traversez-la du doigt — l’onde court de lien en lien. ' +
-        'Touchez un nœud pour le tenir.',
+      body: config.body,
+      modes: this.modes(),
       stats: [
         { label: 'Espèces', value: String(atlas.meta.speciesCount) },
-        { label: 'Nocturnes', value: String(nocturnal) },
-        { label: 'Ressorts', value: String(this.springs.length) },
+        config.stat,
+        { label: 'Tension', value: `${Math.round(this.tension * 100)} %` },
       ],
       accent: PALETTE.bone,
     };
@@ -596,6 +950,9 @@ export class SpeciesScene extends ChapterBase {
       eyebrow: guild?.label ?? 'Espèce',
       title: species.name,
       body: `Rythme proche de : ${linked.join(' · ')}.`,
+      // Kept while a species is held, so a visitor can watch one node travel
+      // between the arrangements instead of losing it at every change.
+      modes: this.modes(),
       stats: [
         { label: 'Détections', value: String(species.count) },
         { label: 'Heure moyenne', value: formatHour(Math.round(node.meanHour) % 24) },
@@ -651,6 +1008,20 @@ function circularStats(hourly: number[]): { meanHour: number; concentration: num
   const meanAngle = Math.atan2(sy, sx);
   const meanHour = (((meanAngle / (Math.PI * 2)) * 24) + 24) % 24;
   return { meanHour, concentration: Math.hypot(sx, sy) / total };
+}
+
+/**
+ * The radius all but the outermost few nodes sit inside — what every
+ * arrangement is scaled to match.
+ *
+ * A percentile rather than a mean: a rosette of islands and a sunflower can
+ * share a mean radius and still differ by half again in how much frame they
+ * fill, and the one thing a visitor must never see when the configuration
+ * changes is the picture outgrowing the panel.
+ */
+function spreadRadius(plan: Plan): number {
+  const radii = plan.map(p => Math.hypot(p.x, p.y)).sort((a, b) => a - b);
+  return radii[Math.min(radii.length - 1, Math.floor(radii.length * 0.92))] || 1;
 }
 
 function hash(n: number): number {
@@ -767,10 +1138,12 @@ void main(){
   float taper = sin(vAlong * 3.14159);
   float pulse = exp(-pow(fract(vAlong - uTime * 0.28) - 0.5, 2.0) * 26.0) * vHighlight;
 
-  // A spring under strain heats toward gold: the physics is visible as light,
-  // and a wake crossing the web reads as a run of warming threads.
+  // A spring under strain heats toward gold — and thins as it heats. A link
+  // hauled across the frame by a re-sorting is a taut filament, not a rope:
+  // the colour carries the reading, and the arrangement it crosses stays
+  // legible underneath it.
   vec3 tint = mix(mix(uMist, uBone, 0.45) * 0.8, uGold, clamp(vStrain * 2.2, 0.0, 0.85) + vHighlight * 0.8 + pulse);
-  float a = (vAlpha + vStrain * 0.5) * taper + pulse * 0.5;
+  float a = vAlpha * mix(1.0, 0.45, clamp(vStrain * 1.8, 0.0, 1.0)) * taper + pulse * 0.5;
   if (a < 0.003) discard;
   gl_FragColor = vec4(tint * a * 0.85, a);
 }

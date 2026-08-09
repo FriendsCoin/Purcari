@@ -139,6 +139,10 @@ export function Installation(): JSX.Element {
     setSheetOpen(false);
   }, [chapter]);
 
+  const handleMode = useCallback((id: string) => {
+    engineRef.current?.setMode(id);
+  }, []);
+
   /** Four taps in the corner within a few seconds opens the service panel. */
   const handleServiceTap = useCallback(() => {
     const now = performance.now();
@@ -201,7 +205,7 @@ export function Installation(): JSX.Element {
 
         <div className="stagebody">
           <div className="sheet">
-            <Readout data={readout} />
+            <Readout data={readout} onMode={handleMode} />
             {compact && (
               <button
                 type="button"
