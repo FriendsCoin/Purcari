@@ -13,7 +13,7 @@ import { ADDITIVE } from '../engine/blending';
 import { CURL, EASING, HASH, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, SPRITE, TOUCH_UNIFORMS } from '../engine/glsl';
 import { color, guildColorArray, guildCss, guildIndex, PALETTE } from '../engine/palette';
 import { speciesSelection } from '../engine/selection';
-import type { FrameContext, Readout } from '../engine/Scene';
+import type { ChapterId, FrameContext, Readout } from '../engine/Scene';
 import { atlas, maxStationTotal, points, speciesAtStation } from '../data/atlas';
 import {
   basemap,
@@ -78,7 +78,73 @@ const TILT_DEGREES = 13;
  */
 const REACH = { side: 1.25, far: 1.55, near: 0.9 };
 
-type Focus = { kind: 'station'; index: number } | { kind: 'chateau' } | null;
+type Focus =
+  | { kind: 'station'; index: number }
+  | { kind: 'chateau' }
+  | { kind: 'zone'; index: number }
+  | null;
+
+/**
+ * The map as the way in.
+ *
+ * Every other chapter is reached from the list down the side, which is a menu
+ * bolted to an artwork. These are the same chapters standing on the ground they
+ * are about: touch the plot, read what it opens, open it. The places are chosen
+ * for what each chapter is of — the ponds for the birds that live on them, the
+ * plateau blocks for the ones that cross them — and they are laid on the
+ * vineyard between the château and the southern posts, where there is room.
+ */
+const ZONES: { id: ChapterId; label: string; note: string; lon: number; lat: number }[] = [
+  {
+    id: 'circadian',
+    label: 'Circadien',
+    note: 'Le jour du domaine, heure par heure : vingt-quatre lames debout sur le vrai lever et le vrai coucher du soleil d’ici.',
+    lon: 29.8663,
+    lat: 46.52806,
+  },
+  {
+    id: 'species',
+    label: 'Espèces',
+    note: 'Les 121 espèces entendues, tenues ensemble par leurs rythmes — et les mêmes espèces rangées autrement, pour voir ce que chaque classement coûte.',
+    lon: 29.869596,
+    lat: 46.526344,
+  },
+  {
+    id: 'flux',
+    label: 'Flux',
+    note: 'Les dix-sept jours du relevé acoustique, du 31 juillet au 16 août, comme une rivière qui s’amincit.',
+    lon: 29.874141,
+    lat: 46.526323,
+  },
+  {
+    id: 'overlap',
+    label: 'Chevauchement',
+    note: 'Les dix-huit espèces des pièges photo et les heures qu’elles partagent ou qu’elles s’évitent.',
+    lon: 29.877492,
+    lat: 46.528006,
+  },
+  {
+    id: 'passages',
+    label: 'Passages',
+    note: 'Quatre-vingts nuits en quatre-vingts lignes : les 367 animaux passés devant un piège, à la minute près.',
+    lon: 29.877848,
+    lat: 46.530491,
+  },
+  {
+    id: 'status',
+    label: 'Livre rouge',
+    note: 'Les douze espèces protégées trouvées ici, debout sur le domaine, et le reste de la Carte Rouge au loin.',
+    lon: 29.875019,
+    lat: 46.532441,
+  },
+  {
+    id: 'call',
+    label: 'L’appel',
+    note: 'Le chœur autour de vous : visez une espèce du téléphone et elle se rassemble, puis elle parle.',
+    lon: 29.870524,
+    lat: 46.53281,
+  },
+];
 
 /** One species as it was heard at one station. */
 interface PostSpecies {
@@ -135,6 +201,8 @@ export class TerroirScene extends ChapterBase {
   private altitudeTarget = HOME_ALTITUDE;
 
   private focus: Focus = null;
+  private readonly zones: { id: ChapterId; label: string; note: string; position: Vector3 }[] = [];
+  private navigate: ((id: ChapterId) => void) | null = null;
   private focusStrength = 0;
   private pinchPrevious = 0;
 
@@ -249,6 +317,16 @@ export class TerroirScene extends ChapterBase {
     const chateau = lonLatToScene(CHATEAU.lon, CHATEAU.lat);
     this.markers.push({ focus: { kind: 'chateau' }, position: new Vector3(chateau.x, 0, chateau.z), label: CHATEAU.name });
 
+    // The chapters, standing on the estate. They join the markers so that
+    // picking, framing and the selection ring all treat them like any other
+    // place on the map.
+    ZONES.forEach((zone, i) => {
+      const p = lonLatToScene(zone.lon, zone.lat);
+      const position = new Vector3(p.x, 0, p.z);
+      this.zones.push({ id: zone.id, label: zone.label, note: zone.note, position });
+      this.markers.push({ focus: { kind: 'zone', index: i }, position, label: zone.label });
+    });
+
     const count = this.markers.length;
     const position = new Float32Array(count * 3);
     const weight = new Float32Array(count);
@@ -262,7 +340,7 @@ export class TerroirScene extends ChapterBase {
       const station = m.focus?.kind === 'station' ? atlas.stations[m.focus.index] : null;
       weight[i] = station ? clamp(station.total / maxStationTotal, 0.16, 1) : 0.7;
       index[i] = i;
-      isEstate[i] = m.focus?.kind === 'chateau' ? 1 : 0;
+      isEstate[i] = m.focus?.kind === 'chateau' ? 1 : m.focus?.kind === 'zone' ? 2 : 0;
     });
 
     const geometry = new BufferGeometry();
@@ -522,6 +600,18 @@ export class TerroirScene extends ChapterBase {
   }
 
   /** Drops into a station's post, from wherever the map happens to be. */
+  setNavigator(go: (id: ChapterId) => void): void {
+    this.navigate = go;
+  }
+
+  /** The chip under a zone's name: the second touch, which opens it. */
+  setMode(id: string): void {
+    if (id !== 'open' || this.focus?.kind !== 'zone') return;
+    const zone = this.zones[this.focus.index];
+    this.focus = null;
+    this.navigate?.(zone.id);
+  }
+
   private enterPost(index: number): void {
     const station = atlas.stations[index];
     const site = lonLatToScene(station.lon, station.lat);
@@ -853,7 +943,9 @@ export class TerroirScene extends ChapterBase {
           ? 'overview'
           : this.focus.kind === 'chateau'
             ? 'chateau'
-            : `station-${this.focus.index}`;
+            : this.focus.kind === 'zone'
+              ? `zone-${this.focus.index}`
+              : `station-${this.focus.index}`;
     if (key !== this.readoutKey) {
       this.readoutKey = key;
       this.cachedReadout =
@@ -865,11 +957,26 @@ export class TerroirScene extends ChapterBase {
             ? this.overviewReadout()
             : this.focus.kind === 'chateau'
               ? this.chateauReadout()
-              : this.stationReadout(this.focus.index);
+              : this.focus.kind === 'zone'
+                ? this.zoneReadout(this.focus.index)
+                : this.stationReadout(this.focus.index);
     }
     this.cachedReadout.marker = this.marker;
     this.cachedReadout.scale = this.scale;
     return;
+  }
+
+  /** A chapter standing on the estate: what it is, and the way in. */
+  private zoneReadout(index: number): Readout {
+    const zone = this.zones[index];
+    return {
+      eyebrow: 'Sur le domaine',
+      title: zone.label,
+      body: zone.note,
+      modes: [{ id: 'open', label: `Ouvrir · ${zone.label}`, active: false }],
+      accent: PALETTE.bone,
+      source: `Every1Counts & BirdNET · imagerie ${basemap.attribution}`,
+    };
   }
 
   private overviewReadout(): Readout {
@@ -1375,8 +1482,17 @@ void main(){
   float pulse = (1.0 - smoothstep(0.02, 0.06, abs(d - (0.34 + pulsePhase * 0.6)))) * (1.0 - pulsePhase) * 0.55;
   float halo = exp(-d * 3.4) * 0.16;
 
-  float mark = dot0 + ring + pulse + halo;
-  vec3 tint = mix(uGold, uBone, vEstate * 0.75 + vSelected * 0.25);
+  float isZone = step(1.5, vEstate);
+  // A zone is a doorway, not a reading: a bracketed square, so a visitor can
+  // tell at a glance which marks are places that listened and which are ways in.
+  vec2 q = abs(uv) * 2.0;
+  float box = max(q.x, q.y);
+  float frame = (1.0 - smoothstep(0.03, 0.07, abs(box - 0.44)))
+              * step(min(q.x, q.y), 0.34);
+  float centre = 1.0 - smoothstep(0.05, 0.12, box);
+  float mark = mix(dot0 + ring + pulse + halo, frame + centre * 0.7 + halo, isZone);
+  vec3 tint = mix(uGold, uBone, min(vEstate, 1.0) * 0.75 + vSelected * 0.25);
+  tint = mix(tint, uBone, isZone * 0.55);
 
   float a = mark * vAlpha * (0.72 + vSelected * 0.4);
   if (a < 0.004) discard;

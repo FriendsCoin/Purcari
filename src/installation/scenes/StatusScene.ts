@@ -9,7 +9,7 @@ import {
   Vector3,
 } from 'three';
 import { ADDITIVE } from '../engine/blending';
-import { POINT_SIZE, TOUCH_UNIFORMS } from '../engine/glsl';
+import { ENGRAVE, POINT_SIZE, TOUCH_UNIFORMS } from '../engine/glsl';
 import { color, PALETTE } from '../engine/palette';
 import { speciesSelection } from '../engine/selection';
 import type { FrameContext, Readout } from '../engine/Scene';
@@ -342,9 +342,12 @@ export class StatusScene extends ChapterBase {
         seed.push(s);
       };
 
+      // The drawing: outline, the strokes inside it, and the engraver's hatch.
       built.outline.forEach((p, i) => push(p.x, p.y, 0, hash(index * 7.1 + i * 0.37)));
-      // One mote per detection, up to what the figure can hold without
-      // becoming a solid shape.
+      built.detail.forEach((p, i) => push(p.x, p.y, 2, hash(index * 2.3 + i * 0.41)));
+      built.hatch.forEach((p, i) => push(p.x, p.y, 3, hash(index * 5.7 + i * 0.29)));
+      // Then the evidence, on top of it: one mote per detection, up to what the
+      // figure can hold without becoming a solid shape.
       const motes = Math.min(built.fill.length, resident.species.count);
       for (let i = 0; i < motes; i += 1) push(built.fill[i].x, built.fill[i].y, 1, hash(index * 3.9 + i * 1.7));
     });
@@ -760,9 +763,13 @@ uniform sampler2D uMap;
 uniform sampler2D uDetail;
 uniform float uReveal;
 uniform vec3 uGold;
+uniform vec3 uBone;
+uniform vec3 uMist;
 varying vec2 vUv;
 varying vec2 vDetailUv;
 varying vec3 vWorld;
+
+${ENGRAVE}
 
 vec3 toLinear(vec3 c){
   vec3 cutoff = step(c, vec3(0.04045));
@@ -776,11 +783,11 @@ void main(){
   vec3 sharp = toLinear(texture2D(uDetail, clamp(vDetailUv, 0.0, 1.0)).rgb);
   vec3 ground = mix(wide, sharp, inDetail);
 
-  // Held well down and cooled: the land is the stage the animals stand on, and
-  // a bright aerial photograph would take the chapter away from them.
-  ground = mix(vec3(dot(ground, vec3(0.35, 0.5, 0.15))), ground, 0.55);
-  ground *= 0.85 + inDetail * 0.35;
-  ground = mix(ground, ground * uGold * 1.7, 0.22);
+  // Inked rather than photographed, so the land is drawn in the same hand as
+  // the animals standing on it.
+  ground = engrave(ground, vWorld.xz, 0.92, 2.6,
+                   vec3(0.03, 0.02, 0.05), uMist * 0.5, uGold * 0.72);
+  ground *= 0.62 + inDetail * 0.3;
 
   // Away into the dark, so the estate reads as an island of ground under a
   // night sky rather than as a photograph with edges.
@@ -816,23 +823,33 @@ void main(){
 
   // Always square to the camera: a silhouette seen edge-on is a line.
   float breathe = 1.0 + sin(uTime * 0.7 + aWhich * 1.7) * 0.012;
+  float isEvidence = step(0.5, aRole) * step(aRole, 1.5);
+  float isStroke = step(1.5, aRole) * step(aRole, 2.5);
+  float isHatch = step(2.5, aRole);
+  float isOutline = 1.0 - isEvidence - isStroke - isHatch;
+
   vec3 pos = position + (uRight * aOffset.x + uUp * aOffset.y) * breathe;
-  // The fill drifts inside the outline, so the evidence looks alive and the
-  // shape does not.
+  // Only the evidence drifts. The drawing holds still, which is what makes it
+  // read as a drawing.
   pos += (uRight * sin(uTime * 0.9 + aSeed * 30.0) + uUp * cos(uTime * 0.75 + aSeed * 21.0))
-       * aRole * 0.11;
+       * isEvidence * 0.11;
 
   vec3 tint = uTierColors[int(aTier)];
-  vColor = mix(mix(tint * 0.9, uBone, 0.12), mix(uBone, tint, 0.35), aRole);
+  vec3 line = mix(tint * 0.95, uBone, 0.18);
+  vColor = line;
+  vColor = mix(vColor, mix(uBone, tint, 0.3), isEvidence);
+  vColor = mix(vColor, tint * 0.7, isHatch);
   vColor *= 1.0 + vSelected * 0.7;
 
-  // Outline steady and low, evidence bright: the shape says who, the light
-  // says how much.
-  vAlpha = uReveal * mix(0.52, 0.95, aRole) * (0.55 + vSelected * 0.65)
+  // The line-work is even and low, the evidence is bright, the hatch is barely
+  // there: shading must never be mistaken for a detection.
+  float weight = isOutline * 0.62 + isStroke * 0.5 + isHatch * 0.17 + isEvidence * 1.0;
+  vAlpha = uReveal * weight * (0.55 + vSelected * 0.65)
          * mix(1.0, 0.34, uSelectStrength * (1.0 - vSelected));
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = pointSizeFor(mix(0.3, 0.62, aRole) * (1.0 + vSelected * 0.5), mv.z);
+  float size = isOutline * 0.3 + isStroke * 0.26 + isHatch * 0.2 + isEvidence * 0.66;
+  gl_PointSize = pointSizeFor(size * (1.0 + vSelected * 0.5), mv.z);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -847,7 +864,8 @@ void main(){
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv) * 2.0;
   float core = 1.0 - smoothstep(0.0, 0.55, d);
-  float halo = exp(-d * 2.6) * (0.3 + vRole * 0.45 + vSelected * 0.35);
+  float evidence = step(0.5, vRole) * step(vRole, 1.5);
+  float halo = exp(-d * 2.6) * (0.22 + evidence * 0.55 + vSelected * 0.35);
   float a = (core + halo) * vAlpha;
   if (a < 0.004) discard;
   gl_FragColor = vec4(vColor * a, a);

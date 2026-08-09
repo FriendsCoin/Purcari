@@ -110,6 +110,7 @@ export class Engine {
   register(chapter: Chapter): void {
     this.chapters.set(chapter.id, chapter);
     chapter.setAmbience?.(this.ambience);
+    chapter.setNavigator?.(id => this.goTo(id));
     chapter.resize(this.width, this.height);
   }
 

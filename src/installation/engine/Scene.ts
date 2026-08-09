@@ -123,6 +123,13 @@ export interface Chapter {
   setMode?(id: string): void;
 
   /**
+   * Handed a way to open another chapter at registration. The map uses it: an
+   * estate with a chapter standing on each of its places is a better way in
+   * than a list of names down the side.
+   */
+  setNavigator?(go: (id: ChapterId) => void): void;
+
+  /**
    * Handed the soundscape at registration, for a chapter that makes a sound of
    * its own. Sharing the engine's graph rather than opening a second audio
    * context is what lets such a chapter duck the room while it speaks.

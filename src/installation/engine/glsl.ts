@@ -230,3 +230,43 @@ float rippleField(vec3 worldPos, float speed, float life, float width){
   return sum;
 }
 `;
+
+/**
+ * Photographic ground, turned into engraved ground.
+ *
+ * The estate arrives as an aerial photograph, and a photograph sits badly in a
+ * piece drawn entirely in light: next to a hand-built figure it reads as a
+ * screenshot pasted behind the artwork. This inks it instead — the luminance
+ * terraced into a few levels like a survey drawing, a hairline where the levels
+ * meet, and a hatch that thickens into the shadows — so the land is drawn in the
+ * same hand as everything standing on it.
+ *
+ * `world` is the ground position, so the hatch belongs to the estate and does
+ * not swim when the camera moves. `strength` is how far to take it: 1 is a pure
+ * engraving, and a little under keeps a memory of the vineyard's own colour.
+ */
+export const ENGRAVE = /* glsl */ `
+vec3 engrave(vec3 rgb, vec2 world, float strength, float scale,
+             vec3 low, vec3 mid, vec3 high){
+  float l = clamp(dot(rgb, vec3(0.299, 0.587, 0.114)) * 1.35, 0.0, 1.0);
+
+  const float LEVELS = 6.0;
+  float terraced = floor(l * LEVELS) / LEVELS;
+  float rise = abs(fract(l * LEVELS) - 0.5);
+  float contour = smoothstep(0.34, 0.5, rise);
+
+  vec2 p = world * scale;
+  float a = sin(p.x * 0.72 + p.y * 0.72);
+  float b = sin(p.x * 0.66 - p.y * 0.66 + 1.7);
+  float dark = 1.0 - terraced;
+  float hatch = smoothstep(0.55, 1.0, a) * dark
+              + smoothstep(0.78, 1.0, b) * dark * dark * 0.7;
+
+  vec3 ink = mix(low, mid, smoothstep(0.0, 0.5, terraced));
+  ink = mix(ink, high, smoothstep(0.5, 0.95, terraced));
+  ink += contour * high * 0.42;
+  ink += hatch * mid * 0.55;
+
+  return mix(rgb, ink, strength);
+}
+`;

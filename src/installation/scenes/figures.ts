@@ -59,9 +59,91 @@ const OUTLINES: Record<FigureId, number[]> = {
   ],
 };
 
+/**
+ * Open strokes inside the outline: the wing, the facial disc, the eye, the legs.
+ *
+ * An outline alone reads as a pictogram. These are what make it a drawing —
+ * the same marks an engraver would cut, and the reason the figure sits with the
+ * inked ground rather than on top of it.
+ */
+const DETAILS: Record<FigureId, number[][]> = {
+  owl: [
+    // Facial disc, then the two eyes.
+    [-0.34, 0.56, -0.42, 0.34, -0.36, 0.10, -0.16, -0.02, 0.16, -0.02, 0.36, 0.10, 0.42, 0.34, 0.34, 0.56],
+    [-0.24, 0.34, -0.16, 0.40, -0.08, 0.34, -0.16, 0.28, -0.24, 0.34],
+    [0.24, 0.34, 0.16, 0.40, 0.08, 0.34, 0.16, 0.28, 0.24, 0.34],
+    // Beak, and the folded wing down the flank.
+    [0.0, 0.24, -0.05, 0.10, 0.0, 0.04, 0.05, 0.10, 0.0, 0.24],
+    [-0.40, 0.02, -0.44, -0.24, -0.34, -0.48, -0.18, -0.62],
+    [0.40, 0.02, 0.44, -0.24, 0.34, -0.48, 0.18, -0.62],
+    // Breast barring.
+    [-0.26, -0.12, 0.26, -0.12],
+    [-0.30, -0.30, 0.30, -0.30],
+    [-0.24, -0.46, 0.24, -0.46],
+  ],
+  raptor: [
+    // Leading edges, and the primaries drawn as separate quills.
+    [-0.16, 0.28, -0.46, 0.24, -0.76, 0.16, -0.94, 0.06],
+    [0.16, 0.28, 0.46, 0.24, 0.76, 0.16, 0.94, 0.06],
+    [-0.40, 0.22, -0.44, 0.02],
+    [-0.58, 0.16, -0.66, -0.04],
+    [-0.76, 0.10, -0.86, -0.10],
+    [0.40, 0.22, 0.44, 0.02],
+    [0.58, 0.16, 0.66, -0.04],
+    [0.76, 0.10, 0.86, -0.10],
+    // Head and the fanned tail.
+    [-0.06, 0.30, 0.0, 0.42, 0.06, 0.30],
+    [0.0, -0.10, 0.0, -0.56],
+    [-0.10, -0.14, -0.14, -0.58],
+    [0.10, -0.14, 0.14, -0.58],
+  ],
+  water: [
+    // Neck line, eye, bill.
+    [-0.10, 0.86, -0.12, 0.56, -0.08, 0.28],
+    [0.0, 0.80, 0.06, 0.84, 0.02, 0.76],
+    [0.14, 0.86, 0.30, 0.92],
+    // Folded wing and the flank.
+    [0.10, 0.10, 0.34, -0.02, 0.48, -0.20, 0.42, -0.40],
+    [-0.20, -0.10, 0.06, -0.22, 0.28, -0.30],
+    // Legs.
+    [0.10, -0.54, 0.12, -0.76],
+    [-0.02, -0.56, -0.04, -0.74],
+  ],
+  songbird: [
+    // Eye, bill, wing, tail feathers.
+    [-0.34, 0.44, -0.28, 0.50, -0.22, 0.44, -0.28, 0.38, -0.34, 0.44],
+    [-0.46, 0.40, -0.62, 0.36],
+    [-0.24, 0.24, 0.02, 0.06, 0.22, -0.14],
+    [-0.10, 0.06, 0.12, -0.16, 0.30, -0.32],
+    [0.36, -0.40, 0.62, -0.62, 0.82, -0.76],
+    [0.32, -0.50, 0.58, -0.70],
+    // Legs.
+    [-0.06, -0.22, -0.02, -0.40],
+  ],
+  mammal: [
+    // Ear, eye, muzzle.
+    [-0.78, 0.26, -0.70, 0.44, -0.60, 0.28],
+    [-0.74, 0.16, -0.68, 0.20, -0.64, 0.14],
+    [-0.92, 0.10, -0.84, 0.06],
+    // Shoulder and haunch, and the line of the back.
+    [-0.56, 0.20, -0.48, -0.02, -0.40, -0.30],
+    [0.30, 0.28, 0.42, 0.02, 0.40, -0.28],
+    [-0.62, 0.26, -0.20, 0.24, 0.30, 0.32],
+    // Legs.
+    [-0.44, -0.04, -0.48, -0.54],
+    [-0.34, -0.06, -0.30, -0.52],
+    [0.36, -0.02, 0.32, -0.56],
+    [0.24, -0.04, 0.22, -0.58],
+  ],
+};
+
 export interface Figure {
   /** Points walked round the outline at even spacing. */
   outline: { x: number; y: number }[];
+  /** Points along the interior strokes — the drawing inside the shape. */
+  detail: { x: number; y: number }[];
+  /** Points along an interior hatch, for the shading an engraver would cut. */
+  hatch: { x: number; y: number }[];
   /** Points inside it, in a stable order — take as many as there is evidence. */
   fill: { x: number; y: number }[];
 }
@@ -114,7 +196,46 @@ export function figure(id: FigureId, steps = 150, pool = 90): Figure {
     if (inside(poly, x, y)) fill.push({ x, y });
   }
 
-  const built = { outline, fill };
+  // The interior strokes, walked at the same spacing as the outline.
+  const detail: { x: number; y: number }[] = [];
+  for (const stroke of DETAILS[id]) {
+    for (let i = 0; i + 3 < stroke.length; i += 2) {
+      const ax = stroke[i];
+      const ay = stroke[i + 1];
+      const bx = stroke[i + 2];
+      const by = stroke[i + 3];
+      const steps = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 0.022));
+      for (let k = 0; k <= steps; k += 1) {
+        detail.push({ x: ax + (bx - ax) * (k / steps), y: ay + (by - ay) * (k / steps) });
+      }
+    }
+  }
+
+  // The hatch: parallel cuts at an angle, clipped to the inside of the shape.
+  // It is what stops a filled figure from reading as a sticker, and it is
+  // deliberately dim — the bright marks inside a figure are its detections,
+  // and shading must never be mistaken for evidence.
+  const hatch: { x: number; y: number }[] = [];
+  const angle = -0.62;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  for (let line = -1.6; line <= 1.6; line += 0.115) {
+    let run = 0;
+    for (let t = -1.6; t <= 1.6; t += 0.02) {
+      const x = cos * t - sin * line;
+      const y = sin * t + cos * line;
+      if (!inside(poly, x, y)) {
+        run = 0;
+        continue;
+      }
+      run += 1;
+      // Skip the first sample of every span so the hatch stops short of the
+      // outline instead of thickening it.
+      if (run > 1 && run % 2 === 0) hatch.push({ x, y });
+    }
+  }
+
+  const built = { outline, detail, hatch, fill };
   cache.set(id, built);
   return built;
 }
