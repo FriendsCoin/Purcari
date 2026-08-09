@@ -22,4 +22,5 @@ export const CHAPTERS: ChapterEntry[] = [
   { id: 'tail', numeral: 'VII', name: 'La traîne' },
   { id: 'status', numeral: 'VIII', name: 'Livre rouge' },
   { id: 'methods', numeral: 'IX', name: 'Méthodes' },
+  { id: 'call', numeral: 'X', name: 'L’appel' },
 ];

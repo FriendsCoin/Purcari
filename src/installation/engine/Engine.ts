@@ -109,6 +109,7 @@ export class Engine {
 
   register(chapter: Chapter): void {
     this.chapters.set(chapter.id, chapter);
+    chapter.setAmbience?.(this.ambience);
     chapter.resize(this.width, this.height);
   }
 

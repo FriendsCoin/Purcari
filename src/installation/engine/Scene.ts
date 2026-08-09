@@ -1,6 +1,8 @@
 import type { PerspectiveCamera, Scene, Vector3 } from 'three';
 import type { Pointer } from './Pointer';
 
+import type { Ambience } from './Ambience';
+
 export type ChapterId =
   | 'chorus'
   | 'terroir'
@@ -11,7 +13,8 @@ export type ChapterId =
   | 'passages'
   | 'tail'
   | 'status'
-  | 'methods';
+  | 'methods'
+  | 'call';
 
 /** What the WebGL layer wants the DOM overlay to display right now. */
 export interface Readout {
@@ -118,6 +121,13 @@ export interface Chapter {
 
   /** Switches between the configurations the readout offers, by id. */
   setMode?(id: string): void;
+
+  /**
+   * Handed the soundscape at registration, for a chapter that makes a sound of
+   * its own. Sharing the engine's graph rather than opening a second audio
+   * context is what lets such a chapter duck the room while it speaks.
+   */
+  setAmbience?(ambience: Ambience): void;
 
   dispose(): void;
 }

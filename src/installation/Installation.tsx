@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Engine } from './engine/Engine';
 import type { ChapterId, Readout as ReadoutData } from './engine/Scene';
 import { GUILD_COLORS, GUILD_ORDER, guildLabel } from './engine/palette';
+import { CallScene } from './scenes/CallScene';
 import { ChorusScene } from './scenes/ChorusScene';
 import { CircadianScene } from './scenes/CircadianScene';
 import { FluxScene } from './scenes/FluxScene';
@@ -98,6 +99,7 @@ export function Installation(): JSX.Element {
     instance.register(new TailScene());
     instance.register(new StatusScene());
     instance.register(new MethodsScene());
+    instance.register(new CallScene());
     instance.setHome('chorus');
     instance.goTo('chorus', true);
     instance.start();

@@ -34,6 +34,8 @@ export class Ambience {
   private muted = false;
   private readonly level = 0.14;
   private nextChime = 0;
+  /** The engine clock as of the last update, so duck() can push the chimes. */
+  private lastTime = 0;
 
   /** Builds the graph. Must be called from a user-gesture call stack. */
   start(): void {
@@ -111,6 +113,7 @@ export class Ambience {
 
   /** Once per frame, on the engine's own clock. Cheap no-op until started. */
   update(time: number): void {
+    this.lastTime = time;
     const context = this.context;
     if (!context || !this.master || this.muted) return;
 
@@ -157,6 +160,32 @@ export class Ambience {
     pan.connect(master);
     osc.start(now);
     osc.stop(now + 3.4);
+  }
+
+  /**
+   * The graph, for a chapter that needs to make a sound of its own. Null until
+   * a gesture has started it, which is also the honest answer: before the first
+   * touch there is nowhere to play.
+   */
+  get bus(): { context: AudioContext; destination: GainNode } | null {
+    if (!this.context || !this.master || this.muted) return null;
+    return { context: this.context, destination: this.master };
+  }
+
+  /**
+   * Steps the room back for a moment. A chapter that puts one voice forward
+   * wants the drone and the chimes out of its way, and a duck reads as the
+   * room listening rather than as the sound cutting out.
+   */
+  duck(seconds: number, amount = 0.35): void {
+    const context = this.context;
+    if (!context || !this.master || this.muted) return;
+    const now = context.currentTime;
+    this.master.gain.cancelScheduledValues(now);
+    this.master.gain.setTargetAtTime(this.level * amount, now, 0.12);
+    this.master.gain.setTargetAtTime(this.level, now + seconds, 0.5);
+    // Chimes are scheduled ahead on the engine clock, so hold them off too.
+    this.nextChime = Math.max(this.nextChime, this.lastTime + seconds + 0.6);
   }
 
   setMuted(muted: boolean): void {

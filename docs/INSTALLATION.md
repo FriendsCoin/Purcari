@@ -18,7 +18,7 @@ npm run build        # emits dist/index.html and dist/installation.html
 
 ## What is on screen
 
-Ten chapters, each a full-screen realtime composition. Chapters I–IV, VII and
+Eleven chapters, each a full-screen realtime composition. Chapters I–IV, VII and
 the attract state are drawn from the 2,665 detections recorded between 31 July
 and 16 August 2025 by five acoustic recorders across 121 species; Chapters V and
 VI come from the camera traps — a different survey, a different method — and say
@@ -36,6 +36,43 @@ so on screen.
 | VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
 | IX | **Méthodes** | The two instruments on one axis of eighty days: the camera traps below, watching all of it for 367 passages; the microphones above, listening to the last seventeen days for 2,665 detections. Between the lists of 121 and 15 species there are exactly four in common, and they are the only threads that cross. | Tap an instrument, or a crossing thread |
 | VIII | **Livre rouge** | Moldova's own Red Book, as far as it has been transcribed, and the part of it that lives at Purcari. Each ring is a category and carries the whole of it — 39 critically endangered species, 9 endangered, 4 vulnerable — most of them dark marks the surveys never found. The twelve species that *were* found stand lit, each a column of its own detections whose looseness is the BirdNET score behind it. A fourth ring below carries the IUCN near-threatened, a category the national book does not use. | Drag sideways to turn the tower, up/down to climb it, tap any species — lit or dark |
+| X | **L’appel** | The chorus turned inside out: the visitor stands inside the record, all 2,665 detections on a shell around them, every species in its own patch of sky — azimuth is the hour it sings, elevation is how nocturnal it is. Aim at one and it gathers out of the cloud into a figure of its own hours, the rest of the record steps back to a ghost, and it speaks in a **synthesised** voice built from its numbers. | Aim by turning the phone (tap *Capteur* to allow the sensor), or sweep with a finger; hold a patch for a second and it gathers |
+
+### The call, and why the voice is synthetic
+
+Chapter X is the phone chapter. It is the only one that asks the device where it
+is pointed: `deviceorientation` gives yaw from the compass and pitch from the
+tilt, both against a baseline captured the moment the sensor is switched on, so
+it is relative aiming and never depends on the phone knowing true north. iOS will
+not report orientation until it has been asked and will only ask from inside a
+gesture, so the request is wired to the *Capteur* chip — a chip press is a
+gesture. Everywhere else, and if the visitor refuses, a finger sweeps the sight
+and the chapter opens in that mode so it is never dead on arrival.
+
+**Nothing here is a recording.** The survey kept detections, not audio; the
+repository holds no sound files and the artifact fetches nothing. Every sound in
+the piece, this one included, is oscillators at runtime. What the voice is made
+of is real, and the chapter states all of it on screen:
+
+| what you hear | where it comes from |
+|---|---|
+| register | nocturnality — the more of a species' record falls in the night, the lower it speaks |
+| number of syllables | the log of its detection count |
+| phrasing (trill, hoot, honk, cry, bark) | its guild |
+| the exact pitch | a hash of the name, so a species sounds like itself every time |
+
+The readout says *voix de synthèse … aucun enregistrement n'est diffusé* whenever
+a species is held, and the stats print the pitch and syllable count it is using.
+That line is not decoration: a synthesised call presented as a recording would be
+the one lie this piece cannot afford, and it is the reason the chapter names its
+own mechanism instead of hiding it.
+
+Two things are worth knowing if this is ever retuned. Elevation goes by **rank**
+of nocturnality rather than by the raw figure — nineteen species of 121 are
+properly nocturnal, so a linear mapping buries nine tenths of the record under
+the horizon and leaves the sky empty. And the sight is **weighted by abundance**:
+a third of the list was heard exactly once, and an unweighted sight spends its
+whole time locking onto single sparks the visitor cannot see.
 
 ### Inside a station
 
