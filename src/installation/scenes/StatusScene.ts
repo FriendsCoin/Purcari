@@ -4,7 +4,13 @@ import { EASING, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, TOUCH_UNIFORMS } from '.
 import { color, PALETTE } from '../engine/palette';
 import { speciesSelection } from '../engine/selection';
 import type { FrameContext, Readout } from '../engine/Scene';
-import { status, type StatusSpecies, TIER_COLORS, TIER_LABELS } from '../data/status';
+import {
+  status,
+  type RedbookEntry,
+  type StatusSpecies,
+  TIER_COLORS,
+  TIER_LABELS,
+} from '../data/status';
 import { ChapterBase, clamp, damp, type TouchUniforms } from './ChapterBase';
 
 /** Radius of the rings the tiers stand on. */
@@ -23,8 +29,18 @@ const TAP_RADIUS = 0.08;
 
 const TIERS = status.meta.tiers;
 
+/**
+ * How far a species the surveys never found stands above its ring. Enough to
+ * clear the dashed rail: at the rail's own height the marks read as more dashes
+ * rather than as the species they are.
+ */
+const MARK_HEIGHT = 0.5;
+
 interface Node {
-  species: StatusSpecies;
+  /** The record, when one of the two surveys found it. */
+  species: StatusSpecies | null;
+  /** The book's own entry, for everything on the national list. */
+  entry: RedbookEntry | null;
   tier: number;
   /** Foot of the column, on its tier's ring. */
   base: Vector3;
@@ -33,13 +49,22 @@ interface Node {
 }
 
 /**
- * Chapter VIII — Statut.
+ * Chapter VIII — Livre rouge.
  *
- * Of everything the two surveys recorded, twelve species carry a conservation
- * status: eight on Moldova's own Red Book and four on the global IUCN list.
- * They stand on four rings, one per category, worst at the top — three
- * critically endangered, four endangered, two vulnerable, three near
- * threatened.
+ * Moldova's own Red Book, as far as it has been transcribed, and the part of it
+ * that lives at Purcari.
+ *
+ * Each ring is a category of the book and carries the whole of it: thirty-nine
+ * critically endangered species on the top ring, nine endangered, four
+ * vulnerable. Most of those are dark marks — species neither the microphones
+ * nor the camera traps saw in eighty nights — and touching one gives what the
+ * book gives: its name, its category, and where in Moldova it is known from.
+ * A fourth ring below carries the near-threatened species of the global IUCN
+ * list, a category the national book does not use.
+ *
+ * Of everything the two surveys recorded, twelve species carry a status: eight
+ * of them are on those national rings, four on the global one. They are the lit
+ * ones, and each stands as a column of its own detections.
  *
  * Each species is a column of its own detections. How *loose* that column is
  * drawn is the BirdNET score behind it: a tight column was identified with
@@ -116,24 +141,59 @@ export class StatusScene extends ChapterBase {
     return (TIERS.length - 1 - tier) * TIER_GAP;
   }
 
+  /**
+   * Each ring holds a whole category of the book, not only the part of it the
+   * surveys found: thirty-nine critically endangered species stand on the top
+   * ring, and three of them are lit.
+   *
+   * The found species are dealt into evenly spaced slots around the ring rather
+   * than left wherever the alphabet put them, so their columns never bunch into
+   * one quarter of the storey and the dark marks read as the field they stand
+   * in.
+   */
   private layout(): void {
-    const perTier = TIERS.map(tier => status.species.filter(s => s.tier === tier));
+    TIERS.forEach((tier, tierIndex) => {
+      const found = status.species.filter(s => s.tier === tier);
+      const unfound = status.redbook.filter(e => e.category === tier && !e.found);
+      const total = found.length + unfound.length;
+      if (total === 0) return;
 
-    perTier.forEach((list, tier) => {
-      const y = StatusScene.heightOf(tier);
-      list.forEach((species, i) => {
-        // Spread around the ring, offset per tier so the columns of one storey
-        // do not hide the storey below.
-        const angle = (i / Math.max(1, list.length)) * Math.PI * 2 + tier * 0.6;
-        const base = new Vector3(Math.cos(angle) * R_RING, y, -Math.sin(angle) * R_RING);
-        const height =
-          0.9 + (Math.log(species.count + 1) / Math.log(56)) * MAX_COLUMN;
-        this.nodes.push({
+      const byScientific = new Map(status.redbook.map(e => [e.scientific, e]));
+      const slots: Node[] = new Array(total);
+      found.forEach((species, k) => {
+        const slot = Math.round((k * total) / found.length) % total;
+        slots[slot] = {
           species,
-          tier,
-          base,
-          top: new Vector3(base.x, y + height, base.z),
-        });
+          entry: byScientific.get(species.scientific) ?? null,
+          tier: tierIndex,
+          base: new Vector3(),
+          top: new Vector3(),
+        };
+      });
+      let cursor = 0;
+      for (let i = 0; i < total; i += 1) {
+        if (slots[i]) continue;
+        slots[i] = {
+          species: null,
+          entry: unfound[cursor],
+          tier: tierIndex,
+          base: new Vector3(),
+          top: new Vector3(),
+        };
+        cursor += 1;
+      }
+
+      const y = StatusScene.heightOf(tierIndex);
+      slots.forEach((node, i) => {
+        // Offset per tier so the columns of one storey do not hide the storey
+        // below.
+        const angle = (i / total) * Math.PI * 2 + tierIndex * 0.6;
+        node.base.set(Math.cos(angle) * R_RING, y, -Math.sin(angle) * R_RING);
+        const height = node.species
+          ? 0.9 + (Math.log(node.species.count + 1) / Math.log(56)) * MAX_COLUMN
+          : MARK_HEIGHT;
+        node.top.set(node.base.x, y + height, node.base.z);
+        this.nodes.push(node);
       });
     });
   }
@@ -199,6 +259,9 @@ export class StatusScene extends ChapterBase {
 
     this.nodes.forEach((node, i) => {
       const species = node.species;
+      // A species the surveys never found has no column, because it has no
+      // detections. It stands on the ring as a mark and nothing more.
+      if (!species) return;
       // One detection is one mote. A species heard once is drawn as what it is:
       // a single point of light, not a column pretending to be evidence.
       const motes = Math.min(MAX_MOTES, species.count);
@@ -249,6 +312,7 @@ export class StatusScene extends ChapterBase {
     const index = new Float32Array(this.nodes.length);
     const tierAttr = new Float32Array(this.nodes.length);
     const weight = new Float32Array(this.nodes.length);
+    const found = new Float32Array(this.nodes.length);
 
     this.nodes.forEach((node, i) => {
       position[i * 3] = node.top.x;
@@ -256,7 +320,10 @@ export class StatusScene extends ChapterBase {
       position[i * 3 + 2] = node.top.z;
       index[i] = i;
       tierAttr[i] = node.tier;
-      weight[i] = clamp(Math.log(node.species.count + 1) / Math.log(60), 0.25, 1);
+      weight[i] = node.species
+        ? clamp(Math.log(node.species.count + 1) / Math.log(60), 0.25, 1)
+        : 0;
+      found[i] = node.species ? 1 : 0;
     });
 
     const geometry = new BufferGeometry();
@@ -264,6 +331,7 @@ export class StatusScene extends ChapterBase {
     geometry.setAttribute('aIndex', new BufferAttribute(index, 1));
     geometry.setAttribute('aTier', new BufferAttribute(tierAttr, 1));
     geometry.setAttribute('aWeight', new BufferAttribute(weight, 1));
+    geometry.setAttribute('aFound', new BufferAttribute(found, 1));
 
     const cloud = new Points(
       geometry,
@@ -298,7 +366,7 @@ export class StatusScene extends ChapterBase {
     this.readoutKey = '';
 
     const carried = speciesSelection.name;
-    const index = carried ? this.nodes.findIndex(n => n.species.fr === carried) : -1;
+    const index = carried ? this.nodes.findIndex(n => n.species?.fr === carried) : -1;
     this.selected = index >= 0 ? index : null;
     if (index >= 0) this.levelTarget = this.nodes[index].tier;
   }
@@ -311,7 +379,11 @@ export class StatusScene extends ChapterBase {
     for (const tap of ctx.pointer.consumeTaps()) {
       const hit = this.pick(tap.ndc.x, tap.ndc.y);
       this.selected = hit === this.selected ? null : hit;
-      speciesSelection.set(this.selected === null ? null : this.nodes[this.selected].species.fr);
+      // Only a species one of the surveys actually recorded can be carried to
+      // the other chapters; the rest of the book exists nowhere else in the
+      // piece, and handing them a name they cannot find would strand them.
+      const held = this.selected === null ? null : this.nodes[this.selected].species;
+      speciesSelection.set(held?.fr ?? null);
       if (this.selected !== null) this.levelTarget = this.nodes[this.selected].tier;
     }
 
@@ -418,7 +490,11 @@ export class StatusScene extends ChapterBase {
     if (key !== this.readoutKey) {
       this.readoutKey = key;
       this.cachedReadout =
-        this.selected === null ? this.overviewReadout() : this.speciesReadout(this.selected);
+        this.selected === null
+          ? this.overviewReadout()
+          : this.nodes[this.selected].species
+            ? this.speciesReadout(this.selected)
+            : this.bookReadout(this.selected);
     }
     this.cachedReadout.marker = this.marker;
   }
@@ -435,23 +511,35 @@ export class StatusScene extends ChapterBase {
 
   private overviewReadout(): Readout {
     const tier = TIERS[clamp(Math.round(this.level), 0, TIERS.length - 1)];
-    const onTier = status.species.filter(s => s.tier === tier);
-    const national = status.species.filter(s => s.national).length;
+    const onRing = this.nodes.filter(node => TIERS[node.tier] === tier);
+    const lit = onRing.filter(node => node.species).length;
+    const national = status.meta.national;
+
+    // The near-threatened ring is the one category the national book does not
+    // use, so it needs its own sentence rather than a wrong one.
+    const body =
+      tier === 'NT'
+        ? `Cette couronne est celle de la liste mondiale : ${lit} espèces quasi menacées, ` +
+          'entendues ici. La Carte Rouge de Moldavie n’emploie pas cette catégorie — ses trois ' +
+          'échelons sont au-dessus.'
+        : `${onRing.length} espèces de la Carte Rouge de la République de Moldova portent cette ` +
+          `catégorie${lit > 0 ? `, et ${lit} d’entre elles ont été trouvées ici` : ''}. ` +
+          'Les marques sombres sont le reste du livre : des espèces que ni les micros ni les ' +
+          'pièges photo n’ont vues en quatre-vingts nuits. Touchez-en une. ' +
+          // The transcription is short of the book and the chapter has to say so
+          // where it is showing the book, not only in the credits.
+          'Relevé des tables publiées : 39 oiseaux et 14 mammifères, contre 62 et 30 dans la ' +
+          'troisième édition du livre — ce mur est donc plus court que la liste réelle.';
 
     return {
       ...this.frame(),
       eyebrow: `Chapitre VIII · ${TIER_LABELS[tier]}`,
-      title: 'Statut',
-      body:
-        `Douze espèces des deux relevés portent un statut de conservation : ${national} sur la liste ` +
-        `nationale, ${status.species.length - national} sur la liste mondiale. ` +
-        `L’épaisseur d’une colonne est la certitude de l’identification, pas l’abondance : ` +
-        `une colonne serrée a été reconnue avec confiance, un halo ne l’a pas été. ` +
-        `Touchez une espèce.`,
+      title: 'Livre rouge',
+      body,
       stats: [
-        { label: TIER_LABELS[tier], value: `${onTier.length} espèce${onTier.length > 1 ? 's' : ''}` },
-        { label: 'Liste nationale', value: `${national} / ${status.species.length}` },
-        { label: 'Seuil BirdNET', value: status.meta.confidence.threshold.toFixed(2) },
+        { label: TIER_LABELS[tier], value: `${lit} / ${onRing.length}` },
+        { label: 'Livre transcrit', value: `${national.listed} espèces` },
+        { label: 'Trouvées ici', value: `${national.found} du livre` },
         { label: 'Confiance médiane', value: status.meta.confidence.median.toFixed(2) },
       ],
       spark: status.meta.confidence.histogram.map(v => v / Math.max(...status.meta.confidence.histogram)),
@@ -459,13 +547,48 @@ export class StatusScene extends ChapterBase {
     };
   }
 
+  /**
+   * A species of the book that neither survey found. There is no evidence to
+   * show, so the readout gives what the book itself gives: the name it is
+   * listed under, its category, and where in Moldova it is known from.
+   */
+  private bookReadout(index: number): Readout {
+    const entry = this.nodes[index].entry;
+    if (!entry) return this.overviewReadout();
+
+    const name = entry.fr ?? entry.scientific;
+    const science = entry.accepted ?? entry.scientific;
+    const range = entry.whereFr ?? entry.where;
+
+    return {
+      ...this.frame(),
+      eyebrow: `${TIER_LABELS[entry.category]} · ${science}`,
+      title: name,
+      body:
+        `${entry.ro}, dans la Carte Rouge de la République de Moldova. ` +
+        `Aire connue en Moldavie : ${range}. ` +
+        'Aucun des deux relevés ne l’a trouvée à Purcari.',
+      stats: [
+        { label: 'Catégorie', value: entry.category },
+        { label: 'Groupe', value: entry.kind === 'mammal' ? 'Mammifère' : 'Oiseau' },
+        { label: 'À Purcari', value: 'non trouvée' },
+      ],
+      accent: TIER_COLORS[entry.category],
+    };
+  }
+
   private speciesReadout(index: number): Readout {
-    const { species } = this.nodes[index];
+    const species = this.nodes[index].species;
+    if (!species) return this.overviewReadout();
     const where = species.stations.join(' · ');
     const peak = species.hourly.indexOf(Math.max(...species.hourly));
 
     const listing = species.national
-      ? `Cartea Roșie a Republicii Moldova : ${species.national.category}`
+      ? `Carte Rouge de Moldavie : ${species.national.category}` +
+        (species.national.whereFr ? `, connue en Moldavie ${prefixed(species.national.whereFr)}` : '') +
+        // A bird can be protected here and unremarkable elsewhere; saying both
+        // is the whole point of carrying two lists.
+        (species.globalLabel === 'least concern' ? ', préoccupation mineure au niveau mondial' : '')
       : `Liste rouge mondiale UICN : ${species.global}`;
     const evidence = species.confidence
       ? `Confiance BirdNET ${species.confidence.median.toFixed(2)} sur ${species.confidence.n} ` +
@@ -476,7 +599,10 @@ export class StatusScene extends ChapterBase {
       ...this.frame(),
       eyebrow: `${TIER_LABELS[species.tier]} · ${species.scientific}`,
       title: species.fr,
-      body: `${listing}. ${evidence} Entendue à ${where}, heure de pointe ${String(peak).padStart(2, '0')}:00.`,
+      body:
+        `${listing}. ${evidence} ` +
+        `${species.survey === 'camera' ? 'Photographiée' : 'Entendue'} à ${where}, ` +
+        `heure de pointe ${String(peak).padStart(2, '0')}:00.`,
       stats: [
         { label: species.survey === 'camera' ? 'Passages' : 'Détections', value: String(species.count) },
         { label: species.survey === 'camera' ? 'Pièges' : 'Stations', value: String(species.stations.length) },
@@ -510,6 +636,15 @@ function createUniforms(touch: TouchUniforms) {
     uMist: { value: color(PALETTE.mist) },
     ...touch,
   };
+}
+
+/**
+ * The book's range notes are bare noun phrases — "cours inférieur du Prut",
+ * "partout, mais en faible densité" — and want different French prepositions.
+ * Anything that already opens with an adverb is left to stand on its own.
+ */
+function prefixed(range: string): string {
+  return /^(partout|rare|tout le)/i.test(range) ? `— ${range}` : `dans ${range}`;
 }
 
 function normalise(values: number[]): number[] {
@@ -661,6 +796,7 @@ uniform vec3 uBone;
 attribute float aIndex;
 attribute float aTier;
 attribute float aWeight;
+attribute float aFound;
 varying vec3 vColor;
 varying float vAlpha;
 varying float vSelected;
@@ -677,12 +813,17 @@ void main(){
   pos += touchDisplace(pos, 4.0, 0.5);
 
   float focus = tierFocus(aTier);
-  vColor = mix(uTierColors[int(aTier)], uBone, 0.25 + vSelected * 0.5) * (1.0 + vSelected * 0.6);
-  vAlpha = (0.5 + focus * 0.7) * easeOutQuart(clamp(uReveal * 1.6, 0.0, 1.0))
+  // A species the surveys never found is on the ring as a dark mark: the book's
+  // own colour, kept low, so a lit column reads as a find against a field of
+  // species this estate has not seen.
+  float lit = mix(0.44, 1.0, aFound);
+  vColor = mix(uTierColors[int(aTier)], uBone, 0.25 + vSelected * 0.5)
+         * (1.0 + vSelected * 0.6) * mix(0.75, 1.0, aFound);
+  vAlpha = (0.5 + focus * 0.7) * lit * easeOutQuart(clamp(uReveal * 1.6, 0.0, 1.0))
          * mix(1.0, 0.35, uSelectStrength * (1.0 - vSelected));
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = pointSizeFor(0.34 + aWeight * 0.42 + vSelected * 0.3, mv.z);
+  gl_PointSize = pointSizeFor(mix(0.2, 0.34 + aWeight * 0.42, aFound) + vSelected * 0.3, mv.z);
   gl_Position = projectionMatrix * mv;
 }
 `;

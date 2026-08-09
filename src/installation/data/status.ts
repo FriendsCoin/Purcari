@@ -9,7 +9,7 @@ export interface StatusSpecies {
   /** Which of the two surveys recorded it. */
   survey: 'acoustic' | 'camera';
   /** Category on Moldova's own list, when the transcription carries it. */
-  national: { category: Tier; where: string } | null;
+  national: { category: Tier; where: string; whereFr: string | null } | null;
   /** Global IUCN category, when it is worse than least concern. */
   global: Tier | null;
   globalLabel: string | null;
@@ -30,10 +30,42 @@ export interface StatusSpecies {
   tier: Tier;
 }
 
+/**
+ * An entry of the national list as transcribed — whether or not either survey
+ * found it. Most of the book is species this estate never recorded, and saying
+ * so is the point of showing the whole list.
+ */
+export interface RedbookEntry {
+  /** The name the book gives it, in Romanian. */
+  ro: string;
+  scientific: string;
+  /** The accepted spelling, where the transcription carries a variant. */
+  accepted: string | null;
+  /** French vernacular name, where Wikidata has one. */
+  fr: string | null;
+  kind: 'bird' | 'mammal' | null;
+  category: Tier;
+  /** The book's range note, in Romanian and in French. */
+  where: string;
+  whereFr: string | null;
+  /** True when one of the two surveys recorded it at Purcari. */
+  found: boolean;
+}
+
 interface StatusFile {
   meta: {
     generatedFrom: string;
-    national: { title: string; transcribedFrom: string; retrieved: string; note: string };
+    national: {
+      title: string;
+      transcribedFrom: string;
+      retrieved: string;
+      note: string;
+      names: { endpoint: string; retrieved: string; what: string; note: string };
+      counts: Partial<Record<Tier, number>>;
+      listed: number;
+      found: number;
+      uncategorised: number;
+    };
     global: { endpoint: string; retrieved: string; what: string; note: string };
     tiers: Tier[];
     confidence: {
@@ -46,6 +78,8 @@ interface StatusFile {
     counted: { acousticSpecies: number; cameraSpecies: number; resolved: number };
   };
   species: StatusSpecies[];
+  /** The transcribed national list, worst category first. */
+  redbook: RedbookEntry[];
 }
 
 export const status = raw as unknown as StatusFile;

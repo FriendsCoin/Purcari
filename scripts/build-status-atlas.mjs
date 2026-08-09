@@ -42,8 +42,84 @@ const read = path => JSON.parse(readFileSync(resolve(ROOT, path), 'utf8'));
 const atlas = read('src/installation/data/atlas.json');
 const passages = read('src/installation/data/passages.json');
 const redbook = read('scripts/sources/redbook-md.json');
+const redbookFr = read('scripts/sources/redbook-fr.json');
 const taxa = read('scripts/sources/wikidata-taxa.json');
 const raw = read('data.geojson');
+
+/**
+ * The book's range notes, in French.
+ *
+ * The Red Book is a Romanian-language work and the transcription keeps its
+ * wording; this is the reading, phrase by phrase, for a panel whose language is
+ * French. Only the vocabulary is translated — the toponyms stand (Codri, Prut,
+ * Nistru as its French exonym Dniestr, Pădurea Domnească) — and the Romanian
+ * original travels with every entry as `where` so the source is never lost.
+ * A phrase with no entry here is shown in Romanian rather than guessed at.
+ */
+const WHERE_FR = {
+  'Codri, cursul inferior al Prutului și Nistrului': 'Codri, cours inférieur du Prut et du Dniestr',
+  'Codri, luncile Prutului și Nistrului': 'Codri, plaines alluviales du Prut et du Dniestr',
+  'Codri, pădurile din lucinile Prutului și Nistrului':
+    'Codri, forêts des plaines alluviales du Prut et du Dniestr',
+  'Codri, pădurile din lunca Prutului,  în Rezervația „Pădurea Domnească”':
+    'Codri, forêts de la plaine du Prut, réserve « Pădurea Domnească »',
+  'Codri, văile Nistrului și Prutului': 'Codri, vallées du Dniestr et du Prut',
+  'Codrii Centrali': 'Codrii Centraux',
+  'Codrii Centrali, pădurile din cursurile mijlociu  și inferior al Prutului și  din cursul inferior la Nistrului':
+    'Codrii Centraux, forêts des cours moyen et inférieur du Prut et du cours inférieur du Dniestr',
+  'centrul și sudul țării': 'centre et sud du pays',
+  'centrul și sudul țării ultima oară semnalată în 1963':
+    'centre et sud du pays ; signalée pour la dernière fois en 1963',
+  'centrul țării': 'centre du pays',
+  'cursul inferior al Nistrului și al Prutului': 'cours inférieur du Dniestr et du Prut',
+  'cursul inferior al Nistrului,  pădurea Cuhnești pe malul Prutului':
+    'cours inférieur du Dniestr, forêt de Cuhnești sur la rive du Prut',
+  'cursul inferior al Nistrului, în timpul migrației':
+    'cours inférieur du Dniestr, pendant la migration',
+  'cursul inferior al Prutului': 'cours inférieur du Prut',
+  'cursul inferior al Prutului și al Nistrului': 'cours inférieur du Prut et du Dniestr',
+  'cursul superior și de mijloc al Nistrului': 'cours supérieur et moyen du Dniestr',
+  'luncile Nistrului, Prutului și Răutului': 'plaines alluviales du Dniestr, du Prut et du Răut',
+  'malurile stâncoase al Nistrului  din raionul Orhei':
+    'rives rocheuses du Dniestr, district d’Orhei',
+  'nordul și centrul țării': 'nord et centre du pays',
+  'nordul, centrul și sud-estul țării ultima oară semnalată în 1962':
+    'nord, centre et sud-est du pays ; signalée pour la dernière fois en 1962',
+  'parcurile din Chișinău și Tiraspol': 'parcs de Chișinău et de Tiraspol',
+  'pretutindeni, dar are o densitate mică': 'partout, mais en faible densité',
+  'pădurile Orheiului și Corneștiului (?)': 'forêts d’Orhei et de Cornești (?)',
+  'pădurile din centrul țării': 'forêts du centre du pays',
+  'pădurile din centrul țării (r. Sângerei, Telenști)':
+    'forêts du centre du pays (districts de Sângerei, Telenești)',
+  'pădurile din luncile Prutului (r. Glodeni, Leova),  Nistrului (r. Căușeni), Codri (r. Hânceșit)':
+    'forêts des plaines du Prut (districts de Glodeni, Leova) et du Dniestr (district de Căușeni), Codri (district de Hâncești)',
+  'rar, pe tot teritoriul țării': 'rare, sur tout le territoire du pays',
+  'stepa Bălțiului, stepa Bugeacului (1962)': 'steppe de Bălți, steppe du Boudjak (1962)',
+  'stepa Bălțului și stepa Bugeacului,  zonele neîmpădurite din centrul țării':
+    'steppe de Bălți et steppe du Boudjak, zones non boisées du centre du pays',
+  'sudul țării (1982)': 'sud du pays (1982)',
+  'sudul țării ultima oară semnalată în 1965':
+    'sud du pays ; signalée pour la dernière fois en 1965',
+  'terasele superioare și versantele Nistrului și Răutului':
+    'terrasses hautes et versants du Dniestr et du Răut',
+  'tot teritoriul țării': 'tout le territoire du pays',
+  'valea Prutului, Codri': 'vallée du Prut, Codri',
+  'în apropiere de Nistru, în raioanele Soroca și Grigoriopol':
+    'à proximité du Dniestr, districts de Soroca et Grigoriopol',
+  'în cursurile inferioare ale Nistrului și Prutului':
+    'cours inférieurs du Dniestr et du Prut',
+  'în lunca Prutlui și în cursul inferior al Nistrului':
+    'plaine du Prut et cours inférieur du Dniestr',
+  'în luncile Prutului, Nistrului și râurilor interioare':
+    'plaines du Prut, du Dniestr et des rivières intérieures',
+  'în luncile inundabile din cursurile inferioare  ale Nistrului și Prutului, în Codri':
+    'plaines inondables des cours inférieurs du Dniestr et du Prut, Codri',
+  'în raioanele Orhei și Strășeni': 'districts d’Orhei et Strășeni',
+  'în unele peșteri sau mine de extragere  a pietrei din [[raionul Orhei]]':
+    'quelques grottes et carrières de pierre du district d’Orhei',
+};
+
+const whereFr = where => WHERE_FR[where.trim()] ?? WHERE_FR[where] ?? null;
 
 /** Severity, worst first. The order the chapter stacks its tiers in. */
 const RANK = { CR: 0, EN: 1, VU: 2, NT: 3 };
@@ -109,7 +185,9 @@ for (const species of atlas.species) {
     scientific: taxon.sci,
     kind: taxon.class,
     survey: 'acoustic',
-    national: national ? { category: national.category, where: national.where } : null,
+    national: national
+      ? { category: national.category, where: national.where, whereFr: whereFr(national.where) }
+      : null,
     global: global && RANK[global] !== undefined ? global : null,
     globalLabel: taxon.iucn ?? null,
     count: species.count,
@@ -133,7 +211,9 @@ for (const species of passages.species) {
     scientific: species.scientific,
     kind: species.kind === 'bird' ? 'bird' : 'mammal',
     survey: 'camera',
-    national: national ? { category: national.category, where: national.where } : null,
+    national: national
+      ? { category: national.category, where: national.where, whereFr: whereFr(national.where) }
+      : null,
     global: global && RANK[global] !== undefined ? global : null,
     globalLabel: taxon?.iucn ?? null,
     count: species.count,
@@ -158,6 +238,46 @@ entries.forEach(entry => {
 });
 entries.sort((a, b) => (RANK[a.tier] - RANK[b.tier]) || b.count - a.count);
 
+// ----------------------------------------------------------- national list --
+
+/**
+ * The whole transcribed national list, not only the part of it the surveys
+ * found.
+ *
+ * This is what makes the chapter a section about the Red Book rather than a
+ * list of eight lucky detections: the estate's records stand inside the book
+ * they belong to, and most of that book stays dark. One transcribed entry —
+ * Circus macrourus, the pallid harrier, last reported in Moldova in 1962 —
+ * carries no category in the published table, and is left out rather than
+ * assigned one.
+ */
+const foundScientific = new Set(entries.map(entry => entry.scientific));
+const nationalList = [...redbook.birds, ...redbook.mammals]
+  .filter(entry => RANK[entry.category] !== undefined)
+  .map(entry => {
+    const wiki = redbookFr.names[entry.scientific] ?? null;
+    return {
+      ro: entry.ro,
+      scientific: entry.scientific,
+      // The accepted spelling, where the transcription carries a variant.
+      accepted: wiki?.accepted ?? null,
+      fr: wiki?.fr ?? null,
+      kind: wiki?.class ?? null,
+      category: entry.category,
+      where: entry.where.trim(),
+      whereFr: whereFr(entry.where),
+      found: foundScientific.has(entry.scientific),
+    };
+  })
+  .sort(
+    (a, b) => RANK[a.category] - RANK[b.category] || (a.fr ?? a.ro).localeCompare(b.fr ?? b.ro)
+  );
+
+const listCounts = nationalList.reduce(
+  (acc, entry) => ((acc[entry.category] = (acc[entry.category] ?? 0) + 1), acc),
+  {}
+);
+
 // ---------------------------------------------------------------- histogram --
 
 /** The whole run of BirdNET scores, in tenths — the chapter draws it as a bar. */
@@ -175,7 +295,18 @@ const all = [...scores.values()].flat().sort((a, b) => a - b);
 const status = {
   meta: {
     generatedFrom: 'scripts/build-status-atlas.mjs',
-    national: redbook.source,
+    national: {
+      ...redbook.source,
+      names: redbookFr.source,
+      /** How many transcribed entries stand on each category's ring. */
+      counts: listCounts,
+      listed: nationalList.length,
+      found: nationalList.filter(entry => entry.found).length,
+      /** Circus macrourus, transcribed without a category. */
+      uncategorised: [...redbook.birds, ...redbook.mammals].filter(
+        entry => RANK[entry.category] === undefined
+      ).length,
+    },
     global: taxa.source,
     tiers: ['CR', 'EN', 'VU', 'NT'],
     // What the acoustic half of the survey was scored at, for the chapter's own
@@ -194,6 +325,7 @@ const status = {
     },
   },
   species: entries,
+  redbook: nationalList,
 };
 
 writeFileSync(TARGET, JSON.stringify(status));
@@ -204,7 +336,11 @@ console.log(
     `${entries.length} species carrying a status ` +
     `(${Object.entries(byTier).map(([k, v]) => `${k}:${v}`).join(' ')}), ` +
     `${entries.filter(e => e.national).length} on the national list, ` +
-    `${entries.filter(e => e.global).length} on the global one`
+    `${entries.filter(e => e.global).length} on the global one; ` +
+    `national list ${nationalList.length} entries ` +
+    `(${Object.entries(listCounts).map(([k, v]) => `${k}:${v}`).join(' ')}), ` +
+    `${nationalList.filter(e => e.found).length} of them found here, ` +
+    `${nationalList.filter(e => !e.whereFr).length} without a French range note`
 );
 
 function round(value, decimals) {

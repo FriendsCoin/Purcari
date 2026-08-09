@@ -35,7 +35,7 @@ so on screen.
 | VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
 | VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
 | IX | **Méthodes** | The two instruments on one axis of eighty days: the camera traps below, watching all of it for 367 passages; the microphones above, listening to the last seventeen days for 2,665 detections. Between the lists of 121 and 15 species there are exactly four in common, and they are the only threads that cross. | Tap an instrument, or a crossing thread |
-| VIII | **Statut** | The twelve species out of both surveys that carry a conservation status, on four rings — one per category, worst at the top. Each is a column of its own detections, and how *loosely* that column is drawn is the BirdNET score behind it: a tight column was identified with confidence, a haze was not. | Drag sideways to turn the tower, up/down to climb it, tap a species |
+| VIII | **Livre rouge** | Moldova's own Red Book, as far as it has been transcribed, and the part of it that lives at Purcari. Each ring is a category and carries the whole of it — 39 critically endangered species, 9 endangered, 4 vulnerable — most of them dark marks the surveys never found. The twelve species that *were* found stand lit, each a column of its own detections whose looseness is the BirdNET score behind it. A fourth ring below carries the IUCN near-threatened, a category the national book does not use. | Drag sideways to turn the tower, up/down to climb it, tap any species — lit or dark |
 
 ### Inside a station
 
@@ -125,14 +125,31 @@ with the data.
 | | source | what it gives |
 |---|---|---|
 | global | Wikidata SPARQL (`P225` taxon name, `P141` IUCN category), retrieved 7 Aug 2026 | scientific name and IUCN Red List category for every vernacular name in both surveys |
-| national | *Cartea Roșie a Republicii Moldova*, transcribed from the tables on Romanian Wikipedia, retrieved 7 Aug 2026 | category (CR/EN/VU) for 39 birds and 14 mammals |
+| national | *Cartea Roșie a Republicii Moldova*, transcribed from the tables on Romanian Wikipedia, retrieved 7 Aug 2026 | category (CR/EN/VU) and known Moldovan range for 39 birds and 14 mammals |
+| names | Wikidata SPARQL (`rdfs:label @fr` on the taxon matched by `P225`), retrieved 9 Aug 2026 | French vernacular name for every species on that national list, so the book can be read on a French panel |
 
-The result is twelve species: three critically endangered, four endangered, two
-vulnerable, three near threatened. Eight are on the national list — including the
-whooper swan, the eagle owl and the barn owl among the recordings, and the pine
-marten and the wildcat on the camera traps. Four are on the global one, of which
-the only one that is genuinely common here is the **European turtle dove**,
+The result is twelve species found: three critically endangered, four endangered,
+two vulnerable, three near threatened. Eight are on the national list — including
+the whooper swan, the eagle owl and the barn owl among the recordings, and the
+pine marten and the wildcat on the camera traps. Four are on the global one, of
+which the only one that is genuinely common here is the **European turtle dove**,
 globally vulnerable, 54 detections.
+
+**The chapter shows the whole book, not only those twelve.** Every transcribed
+entry stands on its category's ring — 39 critically endangered, 9 endangered, 4
+vulnerable — and the ones no survey found are dark marks. Touching one gives what
+the book gives and nothing more: the Romanian name it is listed under, the
+accepted scientific name, the category, and the range note translated phrase by
+phrase (`WHERE_FR` in the build script, with the Romanian original travelling
+alongside as `where`). This is the point of the chapter as a section rather than
+a tally: eight lit species read very differently standing in a field of fifty-two.
+
+Two transcription details are handled explicitly rather than silently. Two
+entries carry a spelling variant — *Aquila chrysaetus* and *Mustela eversmanni* —
+and the accepted spelling that matched Wikidata is kept as `accepted`. One entry,
+*Circus macrourus*, carries no category in the published table (its range note
+reads "last reported in 1962"), and is left off the rings rather than assigned
+one.
 
 **The national layer under-reports and the chapter says so on screen.** The
 transcription carries 39 birds against the third edition's 62, and 14 mammals
@@ -477,7 +494,7 @@ src/installation/
     terrain.ts / terrain.json     elevations, now only quoted as figures
     overlap.ts / overlap.json     the camera-trap correlation matrix
     passages.ts / passages.json   the camera-trap records, one row per passage
-    status.ts / status.json       conservation status, with the evidence behind it
+    status.ts / status.json       the national Red Book and what the surveys found in it
     solar.ts                      sunrise and sunset, for the night band in VI
   ui/                             Readout, ChapterNav, Sparkline, Diagnostics
   styles/installation.css         overlay chrome (no Tailwind in this bundle)
@@ -495,7 +512,7 @@ npm run basemap    # aerial       380 map tiles         -> basemap*.jpg (3.1 MB)
 npm run terrain    # elevation    SRTM via opentopodata -> terrain.json (17 KB)
 npm run overlap -- <heatmap.png>   # chapter V matrix   -> overlap.json  (7 KB)
 npm run passages   # camera traps 20251110_100018.csv    -> passages.json (14 KB)
-npm run status     # conservation  scripts/sources/*.json  -> status.json   (6 KB)
+npm run status     # conservation  scripts/sources/*.json  -> status.json   (20 KB)
 ```
 
 `npm run basemap` needs a raster library that the project deliberately does not

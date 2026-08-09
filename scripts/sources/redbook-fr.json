@@ -1,0 +1,277 @@
+{
+ "source": {
+  "endpoint": "https://query.wikidata.org/sparql",
+  "retrieved": "2026-08-09",
+  "what": "French vernacular label (rdfs:label @fr) and a class check for every scientific name in scripts/sources/redbook-md.json, matched on taxon name (P225).",
+  "note": "The class check (Aves Q5113 / Mammalia Q7377) is kept from the other Wikidata snapshot for the same reason: a bare name match is not a taxon match. Two entries in the transcription carry a spelling variant — 'Aquila chrysaetus' and 'Mustela eversmanni' — and the accepted spelling that matched is recorded as `accepted`. Mustela eversmanii has no French vernacular label on Wikidata, so it is left null and the chapter shows the scientific name."
+ },
+ "names": {
+  "Aquila chrysaetus": {
+   "fr": "Aigle royal",
+   "taxon": "http://www.wikidata.org/entity/Q41181",
+   "class": "bird",
+   "accepted": "Aquila chrysaetos"
+  },
+  "Aquila clanga": {
+   "fr": "Aigle criard",
+   "taxon": "http://www.wikidata.org/entity/Q228009",
+   "class": "bird"
+  },
+  "Aquila heliaca": {
+   "fr": "Aigle impérial",
+   "taxon": "http://www.wikidata.org/entity/Q168976",
+   "class": "bird"
+  },
+  "Aquila pomarina": {
+   "fr": "Aquila pomarina",
+   "taxon": "http://www.wikidata.org/entity/Q23759697",
+   "class": "bird"
+  },
+  "Aquila rapax": {
+   "fr": "Aigle ravisseur",
+   "taxon": "http://www.wikidata.org/entity/Q374141",
+   "class": "bird"
+  },
+  "Ardeola ralloides": {
+   "fr": "Crabier chevelu",
+   "taxon": "http://www.wikidata.org/entity/Q191394",
+   "class": "bird"
+  },
+  "Asio flammeus": {
+   "fr": "Hibou des marais",
+   "taxon": "http://www.wikidata.org/entity/Q25769",
+   "class": "bird"
+  },
+  "Aythya nyroca": {
+   "fr": "Fuligule nyroca",
+   "taxon": "http://www.wikidata.org/entity/Q191723",
+   "class": "bird"
+  },
+  "Barbastella barbastellus": {
+   "fr": "Barbastella barbastellus",
+   "taxon": "http://www.wikidata.org/entity/Q215907",
+   "class": "mammal"
+  },
+  "Bubo bubo": {
+   "fr": "Hibou grand-duc",
+   "taxon": "http://www.wikidata.org/entity/Q130933",
+   "class": "bird"
+  },
+  "Ciconia nigra": {
+   "fr": "Cigogne noire",
+   "taxon": "http://www.wikidata.org/entity/Q25398",
+   "class": "bird"
+  },
+  "Circaetus gallicus": {
+   "fr": "Circaète Jean-le-Blanc",
+   "taxon": "http://www.wikidata.org/entity/Q170251",
+   "class": "bird"
+  },
+  "Circus cyaneus": {
+   "fr": "Busard Saint-Martin",
+   "taxon": "http://www.wikidata.org/entity/Q25572",
+   "class": "bird"
+  },
+  "Circus macrourus": {
+   "fr": "Busard pâle",
+   "taxon": "http://www.wikidata.org/entity/Q230837",
+   "class": "bird"
+  },
+  "Circus pygargus": {
+   "fr": "Busard cendré",
+   "taxon": "http://www.wikidata.org/entity/Q26574",
+   "class": "bird"
+  },
+  "Columba oenas": {
+   "fr": "Pigeon colombin",
+   "taxon": "http://www.wikidata.org/entity/Q26140",
+   "class": "bird"
+  },
+  "Crex crex": {
+   "fr": "Râle des genêts",
+   "taxon": "http://www.wikidata.org/entity/Q26017",
+   "class": "bird"
+  },
+  "Crocidura leucodon": {
+   "fr": "Crocidura leucodon",
+   "taxon": "http://www.wikidata.org/entity/Q626921",
+   "class": "mammal"
+  },
+  "Cygnus cygnus": {
+   "fr": "Cygne chanteur",
+   "taxon": "http://www.wikidata.org/entity/Q25612",
+   "class": "bird"
+  },
+  "Cygnus olor": {
+   "fr": "Cygne tuberculé",
+   "taxon": "http://www.wikidata.org/entity/Q25402",
+   "class": "bird"
+  },
+  "Dryocopus martius": {
+   "fr": "Pic noir",
+   "taxon": "http://www.wikidata.org/entity/Q143284",
+   "class": "bird"
+  },
+  "Egretta alba": {
+   "fr": "Egretta alba",
+   "taxon": "http://www.wikidata.org/entity/Q40654417",
+   "class": "bird"
+  },
+  "Falco cherrug": {
+   "fr": "Faucon sacre",
+   "taxon": "http://www.wikidata.org/entity/Q165974",
+   "class": "bird"
+  },
+  "Falco naumanni": {
+   "fr": "Faucon crécerellette",
+   "taxon": "http://www.wikidata.org/entity/Q229408",
+   "class": "bird"
+  },
+  "Felis silvestris": {
+   "fr": "Felis silvestris",
+   "taxon": "http://www.wikidata.org/entity/Q43576",
+   "class": "mammal"
+  },
+  "Haliaeetus albicilla": {
+   "fr": "Pygargue à queue blanche",
+   "taxon": "http://www.wikidata.org/entity/Q25438",
+   "class": "bird"
+  },
+  "Hieraaetus pennatus": {
+   "fr": "Aigle botté",
+   "taxon": "http://www.wikidata.org/entity/Q182971",
+   "class": "bird"
+  },
+  "Lutra lutra": {
+   "fr": "Lutra lutra",
+   "taxon": "http://www.wikidata.org/entity/Q29995",
+   "class": "mammal"
+  },
+  "Martes martes": {
+   "fr": "Martre des pins",
+   "taxon": "http://www.wikidata.org/entity/Q26046",
+   "class": "mammal"
+  },
+  "Milvus milvus": {
+   "fr": "Milan royal",
+   "taxon": "http://www.wikidata.org/entity/Q156250",
+   "class": "bird"
+  },
+  "Monticola saxatilis": {
+   "fr": "Monticole merle-de-roche",
+   "taxon": "http://www.wikidata.org/entity/Q235057",
+   "class": "bird"
+  },
+  "Mustela erminea": {
+   "fr": "Mustela erminea",
+   "taxon": "http://www.wikidata.org/entity/Q25345",
+   "class": "mammal"
+  },
+  "Mustela eversmanni": {
+   "fr": null,
+   "taxon": "http://www.wikidata.org/entity/Q732127",
+   "class": "mammal",
+   "accepted": "Mustela eversmanii"
+  },
+  "Mustela lutreola": {
+   "fr": "Mustela lutreola",
+   "taxon": "http://www.wikidata.org/entity/Q26559",
+   "class": "mammal"
+  },
+  "Myotis bechsteinii": {
+   "fr": "Myotis bechsteinii",
+   "taxon": "http://www.wikidata.org/entity/Q756687",
+   "class": "mammal"
+  },
+  "Myotis nattereri": {
+   "fr": "Myotis nattereri",
+   "taxon": "http://www.wikidata.org/entity/Q723123",
+   "class": "mammal"
+  },
+  "Neophron percnopterus": {
+   "fr": "Percnoptère",
+   "taxon": "http://www.wikidata.org/entity/Q33504",
+   "class": "bird"
+  },
+  "Nyctalus lasiopterus": {
+   "fr": "Nyctalus lasiopterus",
+   "taxon": "http://www.wikidata.org/entity/Q756108",
+   "class": "mammal"
+  },
+  "Otis tarda": {
+   "fr": "Grande Outarde",
+   "taxon": "http://www.wikidata.org/entity/Q171655",
+   "class": "bird"
+  },
+  "Pandion haliaetus": {
+   "fr": "balbuzard pêcheur",
+   "taxon": "http://www.wikidata.org/entity/Q25332",
+   "class": "bird"
+  },
+  "Pelecanus crispus": {
+   "fr": "Pélican frisé",
+   "taxon": "http://www.wikidata.org/entity/Q184751",
+   "class": "bird"
+  },
+  "Pelecanus onocrotalus": {
+   "fr": "Pélican blanc",
+   "taxon": "http://www.wikidata.org/entity/Q199427",
+   "class": "bird"
+  },
+  "Pernis apivorus": {
+   "fr": "Bondrée apivore",
+   "taxon": "http://www.wikidata.org/entity/Q170466",
+   "class": "bird"
+  },
+  "Phalacrocorax pygmeus": {
+   "fr": "Phalacrocorax pygmeus",
+   "taxon": "http://www.wikidata.org/entity/Q50407550",
+   "class": "bird"
+  },
+  "Picus viridis": {
+   "fr": "Pic vert",
+   "taxon": "http://www.wikidata.org/entity/Q166171",
+   "class": "bird"
+  },
+  "Platalea leucorodia": {
+   "fr": "Spatule blanche",
+   "taxon": "http://www.wikidata.org/entity/Q171360",
+   "class": "bird"
+  },
+  "Plegadis falcinellus": {
+   "fr": "Ibis falcinelle",
+   "taxon": "http://www.wikidata.org/entity/Q178811",
+   "class": "bird"
+  },
+  "Rhinolophus ferrumequinum": {
+   "fr": "Rhinolophus ferrumequinum",
+   "taxon": "http://www.wikidata.org/entity/Q737413",
+   "class": "mammal"
+  },
+  "Serinus serinus": {
+   "fr": "Serin cini",
+   "taxon": "http://www.wikidata.org/entity/Q271807",
+   "class": "bird"
+  },
+  "Spermophilus citellus": {
+   "fr": "Spermophilus citellus",
+   "taxon": "http://www.wikidata.org/entity/Q623466",
+   "class": "mammal"
+  },
+  "Tetrax tetrax": {
+   "fr": "Outarde canepetière",
+   "taxon": "http://www.wikidata.org/entity/Q188601",
+   "class": "bird"
+  },
+  "Tyto alba": {
+   "fr": "Effraie des clochers",
+   "taxon": "http://www.wikidata.org/entity/Q25317",
+   "class": "bird"
+  },
+  "Vespertilio murinus": {
+   "fr": "Vespertilio murinus",
+   "taxon": "http://www.wikidata.org/entity/Q232644",
+   "class": "mammal"
+  }
+ }
+}
