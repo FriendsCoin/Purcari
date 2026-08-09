@@ -35,7 +35,7 @@ so on screen.
 | VI | **Passages** | Eighty nights as eighty rows — an actogram. Midnight at both edges, noon in the middle, and every light is one of the 367 animals that crossed a camera trap between 29 May and 16 August, at the minute it crossed. The violet field is the real night for 46.52° N, computed per day, so it narrows into the solstice and reopens through August. Half the passages fall inside it. | Drag to travel the nights, pinch to zoom, tap a passage |
 | VII | **La traîne** | The 121 species ranked from most heard to rarest, as a receding colonnade, with the running total climbing away behind it. Eight species make half the record; thirty-two were heard exactly once. Height is logarithmic and the chapter says so — on a linear scale the tail would be invisible. | Drag to travel the ranking, tap a filament |
 | IX | **Méthodes** | The two instruments on one axis of eighty days: the camera traps below, watching all of it for 367 passages; the microphones above, listening to the last seventeen days for 2,665 detections. Between the lists of 121 and 15 species there are exactly four in common, and they are the only threads that cross. | Tap an instrument, or a crossing thread |
-| VIII | **Livre rouge** | Moldova's own Red Book, as far as it has been transcribed, and the part of it that lives at Purcari. Each ring is a category and carries the whole of it — 39 critically endangered species, 9 endangered, 4 vulnerable — most of them dark marks the surveys never found. The twelve species that *were* found stand lit, each a column of its own detections whose looseness is the BirdNET score behind it. A fourth ring below carries the IUCN near-threatened, a category the national book does not use. | Drag sideways to turn the tower, up/down to climb it, tap any species — lit or dark |
+| VIII | **Livre rouge** | The protected animals of the estate, standing on the estate. The ground is Purcari's real aerial imagery — vineyard blocks, park ponds, the château — and above it stand the twelve species from both surveys that carry a status, each a figure of its guild drawn as an outline and filled with its own detections, with a thread down to every post that recorded it. Colour is how threatened; the light inside is how often it was found. Far out on the dark, the 44 species of the transcribed national list that neither instrument found here. | Drag to orbit the estate, tap an animal to go to it, tap a distant mark to read its entry |
 | X | **L’appel** | The chorus turned inside out: the visitor stands inside the record, all 2,665 detections on a shell around them, every species in its own patch of sky — azimuth is the hour it sings, elevation is how nocturnal it is. Aim at one and it gathers out of the cloud into a figure of its own hours, the rest of the record steps back to a ghost, and it speaks in a **synthesised** voice built from its numbers. | Aim by turning the phone (tap *Capteur* to allow the sensor), or sweep with a finger; hold a patch for a second and it gathers |
 
 ### The call, and why the voice is synthetic
@@ -179,7 +179,16 @@ the book gives and nothing more: the Romanian name it is listed under, the
 accepted scientific name, the category, and the range note translated phrase by
 phrase (`WHERE_FR` in the build script, with the Romanian original travelling
 alongside as `where`). This is the point of the chapter as a section rather than
-a tally: eight lit species read very differently standing in a field of fifty-two.
+a tally: eight species read very differently standing on the ground that holds
+them, with the rest of the national list out in the dark where they are not.
+
+The figures are **guild outlines, not portraits** (`scenes/figures.ts`): one owl
+for every owl, one quadruped for the marten and the wildcat. What makes a figure
+a particular species is the name beside it and the detections inside it — an
+outline filled with exactly as many motes as there is evidence, so a species
+recorded once is a shape with a single spark in it. Drawing a species-accurate
+silhouette from memory would be inventing a claim about an animal; an obviously
+schematic figure claims nothing.
 
 Two transcription details are handled explicitly rather than silently. Two
 entries carry a spelling variant — *Aquila chrysaetus* and *Mustela eversmanni* —
