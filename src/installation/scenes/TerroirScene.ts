@@ -10,7 +10,7 @@ import {
   Vector3,
 } from 'three';
 import { ADDITIVE } from '../engine/blending';
-import { CURL, EASING, HASH, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, SPRITE, TOUCH_UNIFORMS } from '../engine/glsl';
+import { CURL, EASING, HASH, RAMP3, POINT_SIZE, RIPPLE_UNIFORMS, SIMPLEX3, SPRITE, TOUCH_UNIFORMS } from '../engine/glsl';
 import { color, guildColorArray, guildCss, guildIndex, PALETTE } from '../engine/palette';
 import { speciesSelection } from '../engine/selection';
 import type { ChapterId, FrameContext, Readout } from '../engine/Scene';
@@ -1375,6 +1375,7 @@ varying vec2 vDetailUv;
 varying vec3 vWorld;
 
 ${SIMPLEX3}
+${RAMP3}
 ${STATION_FIELD}
 ${TOUCH_UNIFORMS}
 ${RIPPLE_UNIFORMS}
@@ -1404,6 +1405,19 @@ void main(){
   // saturated end of the range to the markers and the detections.
   vec3 graded = mix(vec3(luma), photo, 0.62);
   graded = mix(graded, graded * mix(uWine * 1.4, uGold, luma) * 1.3, 0.34);
+
+  // Painted, not posterised. The luminance is walked along three colours of the
+  // cellar palette with softly banded, noise-wobbled edges — so the estate is
+  // rendered in the piece's own hand while keeping the vineyard rows and the
+  // treeline that make it recognisable as this place. The ramp is bounded by
+  // the two colours it is given, which is what makes it safe: it cannot blow
+  // the map out and it cannot crush it to black.
+  float band = clamp(luma * 2.3, 0.0, 1.0);
+  float wobble = snoise(vec3(vWorld.xz * 0.24, 4.7)) * 0.07;
+  // Shade almost at the void, a cool grey through the middle, gold only at the
+  // top: the estate at night, not a wine stain. Wine belongs to the markers.
+  vec3 painted = ramp3(band, vec3(0.045, 0.033, 0.062), mix(uBone, uWine, 0.55) * 0.4, uGold * 1.05, 0.2, wobble);
+  graded = mix(graded, painted, 0.58);
   graded *= 1.25;
   // Toe and shoulder in one: a gain of about four near black, so the woodland
   // and the vine rows keep their shape instead of blocking up, and a roll-off at

@@ -270,3 +270,23 @@ vec3 engrave(vec3 rgb, vec2 world, float strength, float scale,
   return mix(rgb, ink, strength);
 }
 `;
+
+/**
+ * The painter's ramp: a luminance walked along three chosen colours, banded
+ * softly, with the band edges wobbled by noise.
+ *
+ * Adapted from the approach in Paulius Kairevicius' Ghibli-style landscape pen,
+ * which solved the problem three earlier attempts here did not. Posterising a
+ * photograph's luminance either blows it out or crushes it to black, because
+ * the output brightness is whatever the arithmetic lands on. A ramp cannot do
+ * that: the darkest thing it can produce is `shade` and the brightest is `lit`,
+ * both chosen from the palette. The wobble is what stops the bands reading as a
+ * broken JPEG — a painted edge is uneven, a posterised one is not.
+ */
+export const RAMP3 = /* glsl */ `
+vec3 ramp3(float t, vec3 shade, vec3 mid, vec3 lit, float soft, float jit){
+  float a = smoothstep(0.17 - soft + jit, 0.17 + soft + jit, t);
+  float b = smoothstep(0.58 - soft + jit, 0.58 + soft + jit, t);
+  return mix(mix(shade, mid, a), lit, b);
+}
+`;
