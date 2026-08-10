@@ -38,6 +38,24 @@ const BOOK_RADIUS = 210;
 
 const TAP_RADIUS = 0.085;
 
+/**
+ * Birth choreography. A resident is not standing there by default — its
+ * territory is: a faint shivering hint of the outline over the posts that
+ * recorded it. Touch it and the animal is *performed into being*, in the order
+ * a draughtsman would work: the outline draws itself around the perimeter,
+ * the interior strokes follow, the hatch breathes in last — and all the while
+ * its detections stream up the threads from the posts that heard it and take
+ * their places inside the figure. What assembles the animal is literally its
+ * own evidence arriving.
+ */
+const RESIDENT_SLOTS = 16;
+const BIRTH_SECONDS = 2.6;
+const FADE_SECONDS = 1.1;
+/** Idle seconds before the chapter starts performing its residents itself. */
+const SHOWCASE_IDLE = 9;
+/** Seconds each showcased animal is held before the next is drawn. */
+const SHOWCASE_HOLD = 8;
+
 interface Resident {
   species: StatusSpecies;
   entry: RedbookEntry | null;
@@ -102,6 +120,12 @@ export class StatusScene extends ChapterBase {
   private selected: number | null = null;
   private selectStrength = 0;
   private flight = 0;
+
+  /** 0..1 per resident: how far through its birth it is drawn. */
+  private readonly births = new Float32Array(RESIDENT_SLOTS);
+  /** Which resident the idle showcase is currently performing. */
+  private showcase = -1;
+  private showcaseClock = SHOWCASE_HOLD;
 
   private cachedReadout: Readout;
   private readoutKey = '';
@@ -329,27 +353,40 @@ export class StatusScene extends ChapterBase {
     const tier: number[] = [];
     const role: number[] = [];
     const seed: number[] = [];
+    const order: number[] = [];
+    const home: number[] = [];
 
     this.residents.forEach((resident, index) => {
       const built = figure(resident.shape, OUTLINE_STEPS);
       const scale = FIGURE_SIZE * (0.78 + Math.min(0.5, Math.log(resident.species.count + 1) / 9));
-      const push = (x: number, y: number, kind: number, s: number): void => {
+      const push = (x: number, y: number, kind: number, s: number, o: number, h: Vector3): void => {
         offset.push(x * scale, y * scale);
         anchor.push(resident.anchor.x, resident.anchor.y, resident.anchor.z);
         which.push(index);
         tier.push(resident.tier);
         role.push(kind);
         seed.push(s);
+        order.push(o);
+        home.push(h.x, h.y, h.z);
       };
 
       // The drawing: outline, the strokes inside it, and the engraver's hatch.
-      built.outline.forEach((p, i) => push(p.x, p.y, 0, hash(index * 7.1 + i * 0.37)));
-      built.detail.forEach((p, i) => push(p.x, p.y, 2, hash(index * 2.3 + i * 0.41)));
-      built.hatch.forEach((p, i) => push(p.x, p.y, 3, hash(index * 5.7 + i * 0.29)));
-      // Then the evidence, on top of it: one mote per detection, up to what the
-      // figure can hold without becoming a solid shape.
+      // aOrder is where each point stands in its own pass — the outline is in
+      // perimeter order, the strokes in the order a hand would cut them — and
+      // it is what lets the shader draw the figure rather than fade it in.
+      built.outline.forEach((p, i) =>
+        push(p.x, p.y, 0, hash(index * 7.1 + i * 0.37), i / built.outline.length, resident.anchor));
+      built.detail.forEach((p, i) =>
+        push(p.x, p.y, 2, hash(index * 2.3 + i * 0.41), i / built.detail.length, resident.anchor));
+      built.hatch.forEach((p, i) =>
+        push(p.x, p.y, 3, hash(index * 5.7 + i * 0.29), i / built.hatch.length, resident.anchor));
+      // Then the evidence: one mote per detection, each flying up from one of
+      // the posts that actually recorded this species.
       const motes = Math.min(built.fill.length, resident.species.count);
-      for (let i = 0; i < motes; i += 1) push(built.fill[i].x, built.fill[i].y, 1, hash(index * 3.9 + i * 1.7));
+      for (let i = 0; i < motes; i += 1) {
+        const post = resident.posts[i % resident.posts.length];
+        push(built.fill[i].x, built.fill[i].y, 1, hash(index * 3.9 + i * 1.7), i / motes, post.position);
+      }
     });
 
     const geometry = new BufferGeometry();
@@ -361,6 +398,8 @@ export class StatusScene extends ChapterBase {
     geometry.setAttribute('aTier', new BufferAttribute(Float32Array.from(tier), 1));
     geometry.setAttribute('aRole', new BufferAttribute(Float32Array.from(role), 1));
     geometry.setAttribute('aSeed', new BufferAttribute(Float32Array.from(seed), 1));
+    geometry.setAttribute('aOrder', new BufferAttribute(Float32Array.from(order), 1));
+    geometry.setAttribute('aHome', new BufferAttribute(Float32Array.from(home), 3));
 
     const cloud = new Points(
       geometry,
@@ -506,6 +545,10 @@ export class StatusScene extends ChapterBase {
     this.desired.copy(this.restSpherical);
     this.desired.radius *= 1.35;
 
+    this.births.fill(0);
+    this.showcase = -1;
+    this.showcaseClock = SHOWCASE_HOLD * 0.8;
+
     const carried = speciesSelection.name;
     const index = carried ? this.residents.findIndex(r => r.species.fr === carried) : -1;
     this.selected = index >= 0 ? index : null;
@@ -523,6 +566,30 @@ export class StatusScene extends ChapterBase {
         ? this.residents[this.selected].species.fr
         : null;
       speciesSelection.set(held);
+    }
+
+    // Untouched, the chapter performs its own residents: one animal at a time
+    // draws itself over its territory, holds, and hands over to the next — a
+    // wall panel has to make the argument without a visitor's finger.
+    if (this.selected === null && ctx.pointer.idleTime > SHOWCASE_IDLE) {
+      this.showcaseClock += ctx.delta;
+      if (this.showcaseClock >= SHOWCASE_HOLD) {
+        this.showcaseClock = 0;
+        this.showcase = (this.showcase + 1) % this.residents.length;
+      }
+    } else if (this.selected !== null) {
+      this.showcase = -1;
+      this.showcaseClock = SHOWCASE_HOLD * 0.6;
+    }
+
+    // Births run on their own clock, not on a damp: a drawing has a beginning,
+    // a middle and an end, and an exponential approach has none of them.
+    const uBirth = this.uniforms.uBirth.value as number[];
+    for (let i = 0; i < this.residents.length; i += 1) {
+      const wanted = i === this.selected || (this.selected === null && i === this.showcase);
+      const step = ctx.delta / (wanted ? BIRTH_SECONDS : -FADE_SECONDS);
+      this.births[i] = Math.min(1, Math.max(0, this.births[i] + step));
+      uBirth[i] = this.births[i];
     }
 
     // The camera keeps the billboards square to it, so a figure is an animal
@@ -626,8 +693,8 @@ export class StatusScene extends ChapterBase {
       body:
         `Le domaine, et les ${this.residents.length} espèces protégées que les deux relevés y ont ` +
         'trouvées. Chacune se tient au-dessus des postes qui l’ont enregistrée — un fil par poste — ' +
-        'et sa silhouette est remplie de ses propres détections : une espèce entendue une seule fois ' +
-        'est une forme avec une seule étincelle dedans. Au loin, dans le noir, le reste de la Carte ' +
+        'et son territoire n’est qu’un frisson de lumière — touchez-le, et l’animal se dessine : ' +
+        'le trait d’abord, puis ses propres détections montent des postes le remplir. Au loin, dans le noir, le reste de la Carte ' +
         `Rouge : ${national.listed - national.found} espèces du livre qu’on n’a pas vues ici. ` +
         'Touchez un animal.',
       stats: [
@@ -717,6 +784,7 @@ function createUniforms(touch: TouchUniforms) {
     uReveal: { value: 0 },
     uSelected: { value: -1 },
     uSelectStrength: { value: 0 },
+    uBirth: { value: Array.from({ length: RESIDENT_SLOTS }, () => 0) },
     uRight: { value: new Vector3(1, 0, 0) },
     uUp: { value: new Vector3(0, 1, 0) },
     uMap: { value: loadLayerTexture(basemap.context) },
@@ -785,8 +853,11 @@ void main(){
 
   // Inked rather than photographed, so the land is drawn in the same hand as
   // the animals standing on it.
-  ground = engrave(ground, vWorld.xz, 0.92, 2.6,
-                   vec3(0.03, 0.02, 0.05), uMist * 0.5, uGold * 0.72);
+  // Wider and quieter than the default: the selected-animal camera comes down
+  // to fifty units, and a tight bright hatch at that range reads as a net
+  // thrown over the vineyard rather than as engraving.
+  ground = engrave(ground, vWorld.xz, 0.78, 1.3,
+                   vec3(0.03, 0.02, 0.05), uMist * 0.32, uGold * 0.6);
   ground *= 0.62 + inDetail * 0.3;
 
   // Away into the dark, so the estate reads as an island of ground under a
@@ -799,19 +870,24 @@ void main(){
 const FIGURE_VERTEX = /* glsl */ `
 uniform float uTime;
 uniform float uReveal;
+uniform float uBirth[16];
 uniform vec3 uRight;
 uniform vec3 uUp;
 uniform vec3 uTierColors[4];
 uniform vec3 uBone;
+uniform vec3 uGold;
 attribute vec2 aOffset;
 attribute float aWhich;
 attribute float aTier;
 attribute float aRole;
 attribute float aSeed;
+attribute float aOrder;
+attribute vec3 aHome;
 varying vec3 vColor;
 varying float vAlpha;
 varying float vSelected;
 varying float vRole;
+varying float vFlight;
 
 ${SELECTION}
 ${TOUCH_UNIFORMS}
@@ -821,6 +897,8 @@ void main(){
   vSelected = isSelected(aWhich) * uSelectStrength;
   vRole = aRole;
 
+  float birth = uBirth[int(aWhich + 0.5)];
+
   // Always square to the camera: a silhouette seen edge-on is a line.
   float breathe = 1.0 + sin(uTime * 0.7 + aWhich * 1.7) * 0.012;
   float isEvidence = step(0.5, aRole) * step(aRole, 1.5);
@@ -828,28 +906,56 @@ void main(){
   float isHatch = step(2.5, aRole);
   float isOutline = 1.0 - isEvidence - isStroke - isHatch;
 
-  vec3 pos = position + (uRight * aOffset.x + uUp * aOffset.y) * breathe;
-  // Only the evidence drifts. The drawing holds still, which is what makes it
-  // read as a drawing.
-  pos += (uRight * sin(uTime * 0.9 + aSeed * 30.0) + uUp * cos(uTime * 0.75 + aSeed * 21.0))
+  // The draughtsman's schedule. The outline is drawn around the perimeter over
+  // the first two thirds of the birth; the interior strokes are cut once it is
+  // half there; the hatch breathes in last. Each pass follows aOrder, so the
+  // figure appears the way a hand would make it, not the way a fade would.
+  float outlineP = smoothstep(aOrder, aOrder + 0.1, birth * 1.55);
+  float strokeP = smoothstep(aOrder, aOrder + 0.14, clamp(birth * 2.2 - 0.9, 0.0, 1.0));
+  float hatchP = clamp(birth * 3.4 - 2.4, 0.0, 1.0) * smoothstep(aOrder, aOrder + 0.3, birth * 3.0 - 1.9);
+
+  // The evidence flies: each mote leaves its own post as its turn comes and
+  // arcs up the height of the stand into its place inside the figure.
+  float flightP = clamp(birth * 1.9 - aOrder * 0.8, 0.0, 1.0);
+  flightP = flightP * flightP * (3.0 - 2.0 * flightP);
+  vFlight = flightP * (1.0 - flightP) * 4.0;
+
+  vec3 figurePos = position + (uRight * aOffset.x + uUp * aOffset.y) * breathe;
+  figurePos += (uRight * sin(uTime * 0.9 + aSeed * 30.0) + uUp * cos(uTime * 0.75 + aSeed * 21.0))
        * isEvidence * 0.11;
+
+  // Mid-flight the mote swings sideways and overshoots upward a little, so the
+  // stream up the thread reads as a flock arriving rather than as an elevator.
+  vec3 flightPos = mix(aHome, figurePos, flightP)
+    + vec3(0.0, sin(flightP * 3.14159) * (3.0 + aSeed * 4.0), 0.0)
+    + uRight * sin(flightP * 6.28318 + aSeed * 21.0) * (1.0 - flightP) * 2.2;
+
+  vec3 pos = mix(figurePos, flightPos, isEvidence);
 
   vec3 tint = uTierColors[int(aTier)];
   vec3 line = mix(tint * 0.95, uBone, 0.18);
   vColor = line;
   vColor = mix(vColor, mix(uBone, tint, 0.3), isEvidence);
   vColor = mix(vColor, tint * 0.7, isHatch);
+  // The pen's nib: the freshly drawn tip of the outline runs hot.
+  float nib = smoothstep(0.08, 0.0, abs(birth * 1.55 - aOrder)) * isOutline * step(birth, 0.99);
+  vColor = mix(vColor, uGold * 1.6, nib * 0.8 + vFlight * 0.35 * isEvidence);
   vColor *= 1.0 + vSelected * 0.7;
 
-  // The line-work is even and low, the evidence is bright, the hatch is barely
-  // there: shading must never be mistaken for a detection.
+  // Ungrown, a territory is a hint: the outline shivers at the edge of
+  // visibility over the posts, so a visitor knows where to touch — and the
+  // whole drawing above that hint is earned by the birth.
+  float ghost = isOutline * 0.12 * (0.55 + 0.45 * sin(uTime * 1.4 + aSeed * 40.0));
+  float drawn = outlineP * isOutline + strokeP * isStroke + hatchP * isHatch + flightP * isEvidence;
+
   float weight = isOutline * 0.62 + isStroke * 0.5 + isHatch * 0.17 + isEvidence * 1.0;
-  vAlpha = uReveal * weight * (0.55 + vSelected * 0.65)
-         * mix(1.0, 0.34, uSelectStrength * (1.0 - vSelected));
+  vAlpha = uReveal * (0.55 + vSelected * 0.65)
+         * mix(1.0, 0.34, uSelectStrength * (1.0 - vSelected))
+         * max(ghost, weight * drawn + nib * 0.5 + vFlight * 0.4 * isEvidence);
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   float size = isOutline * 0.3 + isStroke * 0.26 + isHatch * 0.2 + isEvidence * 0.66;
-  gl_PointSize = pointSizeFor(size * (1.0 + vSelected * 0.5), mv.z);
+  gl_PointSize = pointSizeFor(size * (1.0 + vSelected * 0.5 + nib * 0.8 + vFlight * 0.4), mv.z);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -859,13 +965,14 @@ varying vec3 vColor;
 varying float vAlpha;
 varying float vSelected;
 varying float vRole;
+varying float vFlight;
 
 void main(){
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv) * 2.0;
   float core = 1.0 - smoothstep(0.0, 0.55, d);
   float evidence = step(0.5, vRole) * step(vRole, 1.5);
-  float halo = exp(-d * 2.6) * (0.22 + evidence * 0.55 + vSelected * 0.35);
+  float halo = exp(-d * 2.6) * (0.22 + evidence * 0.55 + vSelected * 0.35 + vFlight * 0.4);
   float a = (core + halo) * vAlpha;
   if (a < 0.004) discard;
   gl_FragColor = vec4(vColor * a, a);
@@ -875,6 +982,7 @@ void main(){
 const THREAD_VERTEX = /* glsl */ `
 uniform float uTime;
 uniform float uReveal;
+uniform float uBirth[16];
 uniform vec3 uTierColors[4];
 uniform vec3 uMist;
 attribute float aAlong;
@@ -890,11 +998,14 @@ ${SELECTION}
 void main(){
   vSelected = isSelected(aWhich) * uSelectStrength;
   vAlong = aAlong;
-  vColor = mix(uMist, uTierColors[int(aTier)], 0.4 + vSelected * 0.5);
-  // A pulse runs down the thread toward the post, so the link reads as a
-  // direction: this animal was recorded *there*.
-  float pulse = exp(-pow(fract(aAlong - uTime * 0.16) - 0.5, 2.0) * 30.0);
-  vAlpha = uReveal * (0.1 + pulse * 0.3 + vSelected * 0.5)
+  float birth = uBirth[int(aWhich + 0.5)];
+  vColor = mix(uMist, uTierColors[int(aTier)], 0.4 + vSelected * 0.5 + birth * 0.3);
+  // At rest a slow pulse runs down toward the post — the link is a direction.
+  // While the animal is being born the thread reverses and hurries: the
+  // evidence is streaming up it, and the line carries the same traffic.
+  float pulse = exp(-pow(fract(aAlong - uTime * 0.16) - 0.5, 2.0) * 30.0) * (1.0 - birth);
+  float rush = exp(-pow(fract(aAlong + uTime * 0.55) - 0.5, 2.0) * 22.0) * birth;
+  vAlpha = uReveal * (0.1 + pulse * 0.3 + rush * 0.55 + vSelected * 0.5 + birth * 0.12)
          * mix(1.0, 0.25, uSelectStrength * (1.0 - vSelected));
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
