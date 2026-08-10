@@ -26,7 +26,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 /** Points per animal. Enough to read as a form, few enough to stay a drawing. */
-const POINTS = 900;
+// Raised from 900 after the first build: a surface cloud reads as its density,
+// and at 900 the deer's haunch thinned into scatter at kiosk size. 1500 keeps
+// the file at ~56 kB — still nothing against the meshes it replaces.
+const POINTS = 1500;
 
 /* ------------------------------------------------------------------- glTF */
 

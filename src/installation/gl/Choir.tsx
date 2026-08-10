@@ -811,7 +811,8 @@ export function Choir({
       uGlyph: { value: 0 },
       uTurn: { value: 0 },
       uScale: { value: GLYPH_SCALE },
-      uSize: { value: 0.58 },
+      // Down a step with the denser cloud: brightness is points × size.
+      uSize: { value: 0.5 },
       uColor: { value: new THREE.Color(PALETTE.foil) },
       uStagger: { value: 9 },
       uSwirl: { value: 0 },

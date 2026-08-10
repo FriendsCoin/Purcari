@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { InstallationData, LandscapeData, Site } from '../core/types';
-import { layoutSites, loadLandscape, logScale } from '../core/data';
+import { activityAtHour, layoutSites, loadLandscape, logScale, speciesAtSite } from '../core/data';
 import type { DayClock } from '../core/dayClock';
-import { PALETTE, toRGB, TYPOLOGY_COLORS, CLASS_COLORS } from '../core/palette';
+import { GUILD_COLORS, PALETTE, toRGB, TYPOLOGY_COLORS, CLASS_COLORS } from '../core/palette';
 import { SIMPLEX_3D, DITHER, SPRITE, TONEMAP } from './chunks';
 import {
   AREA_HATCHED,
@@ -506,6 +506,63 @@ void main(){
 }
 `;
 
+/* ------------------------------------------------------------------- court */
+
+/**
+ * The station's own court: its residents, in orbit.
+ *
+ * Flying down to a station used to reveal nothing but a bigger view of the
+ * same mark — the panel named the residents, the scene stayed mute. Now the
+ * species recorded at that station come out and circle it, each in its guild's
+ * colour, each sized by how often this station recorded it, and each burning
+ * on its own measured schedule: scrub the day and the pheasant's mark hands
+ * over to the badger's exactly when the counts say the ground changes hands.
+ * Positions are updated from JavaScript — it is at most sixteen marks — so the
+ * per-species activity can come straight from `activityAtHour`, the same
+ * measured profile everything else in the piece answers to.
+ */
+const COURT_VERT = /* glsl */ `
+attribute vec3 aColor;
+attribute float aAwake;
+attribute float aSize;
+
+uniform float uReveal;
+
+varying vec3 vColor;
+varying float vAwake;
+
+void main(){
+  vColor = aColor;
+  vAwake = aAwake;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = aSize * (0.5 + aAwake * 0.5) * uReveal * (300.0 / -mv.z);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+const COURT_FRAG = /* glsl */ `
+uniform float uReveal;
+
+varying vec3 vColor;
+varying float vAwake;
+
+void main(){
+  vec2 coord = gl_PointCoord - 0.5;
+  float d = length(coord) * 2.0;
+  if (d > 1.0) discard;
+  float core = 1.0 - smoothstep(0.0, 0.3, d);
+  float halo = pow(1.0 - d, 2.6);
+  // Asleep is present but banked — the court is a census of residents, not
+  // only of this hour; the hour decides who burns.
+  float a = (core + halo * 0.5) * (0.10 + vAwake * 0.52) * uReveal;
+  vec3 color = vColor + vec3(1.0, 0.93, 0.78) * core * vAwake * 0.6;
+  gl_FragColor = vec4(color * a, a);
+}
+`;
+
+/** How many residents come out. Enough for a court, few enough to stay one. */
+const COURT_SIZE = 14;
+
 /* ------------------------------------------------------------------ shared */
 
 interface ConstellationProps {
@@ -568,6 +625,8 @@ export function Constellation({
   onFocus,
 }: ConstellationProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const courtRef = useRef<THREE.Points>(null);
+  const courtReveal = useRef(0);
   const lastAnchors = useRef(0);
   /** Eased pointer yaw, so the orbit follows the mouse without jitter. */
   const orbitRef = useRef(0);
@@ -878,6 +937,86 @@ export function Constellation({
       furniture.bronze.dispose();
     },
     [furniture],
+  );
+
+  /* ---- the station's court ---- */
+  /**
+   * Everything static about the selected station's residents. Orbit positions
+   * are written per frame — at most sixteen marks, and JavaScript is where
+   * `activityAtHour` lives — but colours, sizes and orbital elements are baked
+   * here once per selection. Speed and phase come from each species' own name,
+   * so the same court always turns the same way.
+   */
+  const court = useMemo(() => {
+    if (!selectedSite) return null;
+    const entry = placed.find((item) => item.site.id === selectedSite);
+    if (!entry) return null;
+    const residents = speciesAtSite(data, selectedSite).slice(0, COURT_SIZE);
+    if (!residents.length) return null;
+
+    const n = residents.length;
+    const positions = new Float32Array(n * 3);
+    const colors = new Float32Array(n * 3);
+    const sizes = new Float32Array(n);
+    const awake = new Float32Array(n);
+    const most = residents[0].sites[selectedSite] ?? 1;
+
+    residents.forEach((species, i) => {
+      const [r, g, b] = toRGB(GUILD_COLORS[species.guild] ?? PALETTE.foil);
+      colors[i * 3] = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
+      // Log-scaled against the station's own most-recorded resident: the court
+      // shows this station's proportions, not the estate's.
+      const share = (species.sites[selectedSite] ?? 0) / most;
+      // Small on purpose: the fly-in camera stands close, the marks sit under
+      // bloom, and at the first size the whole court fused into one fireball.
+      sizes[i] = 2.6 + logScale(1 + share * 9, 10) * 3.6;
+    });
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('aAwake', new THREE.BufferAttribute(awake, 1));
+    geometry.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(entry.position[0], 1, entry.position[2]),
+      4
+    );
+
+    const ground = projection
+      ? terrainHeightAt(projection, entry.site.x, entry.site.y)
+      : 0;
+
+    // Orbital elements per resident, derived from the name so they are stable.
+    const seeds = residents.map((species) => {
+      let h = 0;
+      for (let i = 0; i < species.sci.length; i++) h = (h * 31 + species.sci.charCodeAt(i)) >>> 0;
+      return (h % 1000) / 1000;
+    });
+
+    return { entry, residents, geometry, ground, seeds };
+  }, [selectedSite, data, placed, projection]);
+
+  useEffect(
+    () => () => {
+      court?.geometry.dispose();
+    },
+    [court]
+  );
+
+  const courtUniforms = useMemo(() => ({ uReveal: { value: 0 } }), []);
+  const courtMaterial = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: COURT_VERT,
+        fragmentShader: COURT_FRAG,
+        uniforms: courtUniforms,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    [courtUniforms]
   );
 
   /* ---- the anchors the DOM will caption ---- */
@@ -1232,6 +1371,37 @@ export function Constellation({
       groupRef.current.rotation.y = Math.sin(t * 0.035) * 0.09 + orbitRef.current;
     }
 
+    /* ---- the court turns ---- */
+    // Ease the court in a beat after the camera starts its descent, out as soon
+    // as the choice clears; positions and wakefulness are written every frame.
+    courtReveal.current +=
+      ((court ? 1 : 0) - courtReveal.current) * Math.min(1, delta * (court ? 1.4 : 3));
+    courtUniforms.uReveal.value = courtReveal.current * r;
+    if (court && courtRef.current) {
+      const position = court.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const awake = court.geometry.getAttribute('aAwake') as THREE.BufferAttribute;
+      const [sx, , sz] = court.entry.position;
+      for (let i = 0; i < court.residents.length; i++) {
+        const seed = court.seeds[i];
+        // Inner orbits for the most-recorded, spreading outward down the list;
+        // each resident keeps its own pace and starting bearing.
+        const radius = 0.62 + (i / Math.max(1, court.residents.length - 1)) * 1.25;
+        const angle = seed * Math.PI * 2 + t * (0.10 + seed * 0.16) * (seed > 0.5 ? 1 : -1);
+        const bob = Math.sin(t * 0.7 + seed * 12.6) * 0.05;
+        position.setXYZ(
+          i,
+          sx + Math.cos(angle) * radius,
+          court.ground + 0.34 + bob + (i % 3) * 0.09,
+          sz + Math.sin(angle) * radius * 0.82
+        );
+        // The measured schedule, against the same looping day as everything
+        // else: this is who is genuinely awake at this station at this hour.
+        awake.setX(i, activityAtHour(court.residents[i], hourRef.current));
+      }
+      position.needsUpdate = true;
+      awake.needsUpdate = true;
+    }
+
     /* ---- caption anchors, ~11 Hz ---- */
     // Through the group's own matrixWorld, so the labels ride the sway instead
     // of drifting off their marks. Same cadence as Refuge's captions: fast
@@ -1312,6 +1482,16 @@ export function Constellation({
         renderOrder={6}
         userData={{ stationOrder }}
       />
+
+      {/* The chosen station's residents, in orbit around its mark. */}
+      {court && (
+        <points
+          ref={courtRef}
+          geometry={court.geometry}
+          material={courtMaterial}
+          renderOrder={7}
+        />
+      )}
     </group>
   );
 }
