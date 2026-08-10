@@ -11,6 +11,7 @@ import {
 import { soundField, Chorus } from '../core/audio';
 import { Spectrogram, SPECTROGRAM_AXES } from '../ui/Spectrogram';
 import { Vignette } from '../ui/Vignette';
+import { Dossier } from '../ui/Dossier';
 import { VIGNETTE_SOURCE, type VignetteKind } from '../ui/vignetteData';
 import { useChapterTransition } from '../core/useChapterTransition';
 import { useDayClock } from '../core/dayClock';
@@ -194,6 +195,8 @@ export default function IndoorApp() {
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
   /** Named anchors on the estate map — the château, the villages, the scale. */
   const [mapAnchors, setMapAnchors] = useState<MapAnchor[]>([]);
+  /** Which chapter's detail drawer is open, if any. */
+  const [dossier, setDossier] = useState<ChapterId | null>(null);
   /** Where the chosen station stands, for the fly-to. Null at the overview. */
   const [estateFocus, setEstateFocus] = useState<[number, number, number] | null>(null);
   /** Which ring of The Unseen is chosen — a station id, 'ESTATE', or null. */
@@ -638,14 +641,13 @@ export default function IndoorApp() {
               </div>
             )}
             {/*
-              The ground's own credits. ODbL requires the OSM line whenever the
-              map data is shown, and the relief deserves the same courtesy —
-              besides which, naming public sources is half of what makes the
-              sheet read as a survey of a real place rather than scenography.
+              The sources move into the drawer with everything else that is
+              reading rather than looking. ODbL requires the OSM line wherever
+              the map data is shown — the drawer is where it is now shown.
             */}
-            <p className="inst-mono" style={{ marginTop: '0.6rem', opacity: 0.5 }}>
-              RELIEF SRTM 30 M · MAP © OPENSTREETMAP (ODBL)
-            </p>
+            <button className="inst-more" onClick={() => { touch(); setDossier('estate'); }}>
+              Sources &amp; method
+            </button>
           </div>
         )}
 
@@ -820,21 +822,19 @@ export default function IndoorApp() {
                   {notInProduction.toFixed(1)}%
                 </p>
                 <p className="inst-mono">OF THE ESTATE IS NOT IN PRODUCTION</p>
-                <p
-                  className="inst-body"
-                  style={{ maxWidth: '40ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
-                >
-                  {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha drip-irrigated
-                  at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
-                  {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water;{' '}
-                  {formatNumber(data.narrative.estate.organicConversionHectares)} ha converting to
-                  organic; treatments down{' '}
-                  {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%. The two
-                  hectare stages stand open-topped: their share of the estate is not published.
-                </p>
                 <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
                   SAME COMMUNITY IN EVERY STAGE · ONE YEAR, NO BEFORE-AND-AFTER
                 </p>
+                {/*
+                  The hectares, the ranges and the reason for two scales used to
+                  sit here as a paragraph. All of it is true and some of it
+                  matters a great deal — but a wall reads a figure and a shape,
+                  not four lines of prose, and the prose was crowding the row it
+                  was describing. It moves one keystroke away; nothing is cut.
+                */}
+                <button className="inst-more" onClick={() => { touch(); setDossier('refuge'); }}>
+                  The working
+                </button>
                 {/*
                   What the chosen stage does, when it is a thing that can be
                   drawn. "300 ha drip-irrigated at 15–30% less water" is a fact
@@ -1407,6 +1407,84 @@ export default function IndoorApp() {
           </div>
         )}
       </div>
+
+      {/* ---------------------------------------------------------- dossier */}
+      {data && (
+        <Dossier
+          open={dossier === 'refuge'}
+          onClose={() => setDossier(null)}
+          title="What the estate does"
+          standfirst="the programme, in its own units"
+        >
+          <p>
+            {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha are drip-irrigated,
+            at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
+            {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water than the
+            method it replaced. {formatNumber(data.narrative.estate.organicConversionHectares)} ha
+            are converting to organic. Phytosanitary treatments are down{' '}
+            {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%, and{' '}
+            {notInProduction.toFixed(1)}% of the estate is not in production at all.
+          </p>
+          <p>
+            The row carries two scales, and the break in the skyline is where one ends and the
+            other begins. Three stages are shares of the estate and can stand against a common
+            axis. Two are hectare figures, and the estate&rsquo;s total area is not published
+            anywhere in this survey — so there is no honest conversion between them. Those two
+            stand open-topped: a capital asserts a position on an axis, and they have none.
+          </p>
+          <p>
+            The living community inside every column is the same community. This is one year of
+            recording with no before-and-after, so nothing here says a practice caused what is
+            living in it — only that both are true of the same estate at the same time. The
+            mote density is deliberately uniform across the stages for that reason.
+          </p>
+          <p>
+            In the ground reading, each column carries both surveys at once: the shaft stands at
+            whichever instrument found more effective species, and the cool collar cut into it
+            marks where the other put the same ground. Cameras and recorders disagree because
+            they are answering different questions, and the gap between the two marks is that
+            disagreement.
+          </p>
+        </Dossier>
+      )}
+
+      {data && (
+        <Dossier
+          open={dossier === 'estate'}
+          onClose={() => setDossier(null)}
+          title="The ground under the marks"
+          standfirst="sources, and what is measured versus drawn"
+        >
+          <p>
+            The relief is a 72×72 grid of SRTM 30 m elevation over the estate&rsquo;s bounding
+            box — real altitude, from about −4 m on the Dniester floodplain to 164 m on the
+            southern ridge. Height is exaggerated threefold, which is ordinary practice for a
+            relief model and is what makes the ravine and the river terrace read at all under a
+            near-plan camera. Shape is honest; gradients are not, and no slope is quoted in
+            degrees anywhere in this piece.
+          </p>
+          <p>
+            The parcels, the woods, the tracks, the streams, the ponds and the château are
+            OpenStreetMap geometry, projected to metres about the estate origin. Of 539 mapped
+            buildings only the château complex is drawn: every shed in the village at the same
+            emphasis was noise pretending to be information. The ring around the house encloses
+            whichever substantial buildings sit within 250 m of OSM&rsquo;s own winery node, so
+            nothing is placed by hand.
+          </p>
+          <p>
+            The twelve stations stand at their true relative positions. Their brightness and size
+            follow measured hourly detection profiles, each read against its own daily peak — so
+            a quiet station still shows its own rhythm rather than staying dark all day. The sun
+            moves on a real arc through the looping day; the colour of the hours is a rendering
+            choice, the activity underneath it is not.
+          </p>
+          <p>
+            Elevation: SRTM 30 m via opentopodata.org. Map data © OpenStreetMap contributors,
+            ODbL. Survey: {data.narrative.credits.survey}, {data.meta.surveyStart} —{' '}
+            {data.meta.surveyEnd}.
+          </p>
+        </Dossier>
+      )}
 
       {/* ------------------------------------------------------------- gate */}
       {!started && (
