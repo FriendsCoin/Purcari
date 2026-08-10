@@ -17,6 +17,7 @@ import { atlas } from './data/atlas';
 import { ChapterNav } from './ui/ChapterNav';
 import { Diagnostics } from './ui/Diagnostics';
 import { Readout } from './ui/Readout';
+import { translateReadout, ui, type Lang } from './ui/i18n';
 
 /** Taps in the top-left corner needed to open the commissioning panel. */
 const SERVICE_TAPS = 4;
@@ -57,6 +58,7 @@ export function Installation(): JSX.Element {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [engine, setEngine] = useState<Engine | null>(null);
   const compact = useCompactLayout();
+  const [lang, setLang] = useState<Lang>('fr');
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const serviceTaps = useRef<number[]>([]);
@@ -166,6 +168,8 @@ export function Installation(): JSX.Element {
     return () => window.removeEventListener('pointerdown', arm);
   }, []);
 
+  const shown = translateReadout(readout, lang);
+
   const stageClass = [
     'stage',
     compact ? 'stage--compact' : '',
@@ -186,7 +190,19 @@ export function Installation(): JSX.Element {
         <header className="masthead">
           <div>
             <p className="masthead__mark">Château Purcari</p>
-            <p className="masthead__sub">Observatoire de la biodiversité</p>
+            <p className="masthead__sub">{ui('sub', lang)}</p>
+            <div className="langs">
+              {(['fr', 'en', 'ru'] as const).map(code => (
+                <button
+                  key={code}
+                  type="button"
+                  className={code === lang ? 'langs__pick langs__pick--active' : 'langs__pick'}
+                  onPointerDown={() => setLang(code)}
+                >
+                  {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="masthead__meta">
             <div>{readout.period ?? '31 juillet — 16 août 2025'}</div>
@@ -207,7 +223,7 @@ export function Installation(): JSX.Element {
 
         <div className="stagebody">
           <div className="sheet">
-            <Readout data={readout} onMode={handleMode} />
+            <Readout data={shown} onMode={handleMode} />
             {compact && (
               <button
                 type="button"
@@ -215,7 +231,7 @@ export function Installation(): JSX.Element {
                 aria-expanded={sheetOpen}
                 onPointerDown={() => setSheetOpen(open => !open)}
               >
-                {sheetOpen ? 'Fermer' : 'En savoir plus'}
+                {sheetOpen ? ui('close', lang) : ui('more', lang)}
               </button>
             )}
           </div>
@@ -225,11 +241,16 @@ export function Installation(): JSX.Element {
         <footer className="footer">
           <div className="footer__legend">
             {(
-              readout.legend ??
-              GUILD_ORDER.filter(id => id !== 'unknown').map(id => ({
-                label: guildLabel(id),
-                color: GUILD_COLORS[id],
-              }))
+              shown.legend ??
+              translateReadout(
+                {
+                  legend: GUILD_ORDER.filter(id => id !== 'unknown').map(id => ({
+                    label: guildLabel(id),
+                    color: GUILD_COLORS[id],
+                  })),
+                },
+                lang
+              ).legend!
             ).map(entry => (
               <span className="legend__item" key={entry.label} style={{ color: entry.color }}>
                 <span className="legend__swatch" aria-hidden="true" />
@@ -238,14 +259,14 @@ export function Installation(): JSX.Element {
             ))}
           </div>
           <div>
-            {readout.source ??
+            {shown.source ??
               `${atlas.meta.total.toLocaleString('fr-FR')} détections · Every1Counts & BirdNET`}
           </div>
         </footer>
       </div>
 
       <p ref={hintRef} className="hint">
-        Touchez pour explorer
+        {ui('hint', lang)}
       </p>
 
       <div ref={markerRef} className="marker" aria-hidden="true">
