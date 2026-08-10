@@ -325,6 +325,24 @@ interface Slot {
    * groups exist to prevent.
    */
   group: number;
+  /**
+   * The second survey's reading of the same ground, as a fraction of `height`.
+   *
+   * This is the merge. The habitat row used to be two readings behind two
+   * buttons, cross-faded — which asked the visitor to hold one row in memory
+   * while looking at the other, and then to notice a difference. The chapter's
+   * whole argument is that difference, so both now stand in the same column:
+   * the shaft rises to what the cameras found, and a collar marks where the
+   * recorders put the same ground. Zero when a column carries only one reading.
+   */
+  alt: number;
+  /**
+   * Which family of thing this column is. Practices, ground and pillars are
+   * not the same kind of claim, and drawing them all as the same fluted column
+   * said they were — the form now changes with the data: 0 = a practice stage,
+   * 1 = ground under survey, 2 = a pillar of the published score.
+   */
+  form: number;
 }
 
 const EMPTY_SLOT = (x: number): Slot => ({
@@ -337,6 +355,8 @@ const EMPTY_SLOT = (x: number): Slot => ({
   self: false,
   capital: 0,
   group: 0,
+  alt: 0,
+  form: 1,
 });
 
 /** Pad an arrangement out to the uniform arrays' fixed length. */
@@ -395,6 +415,8 @@ function buildPractices(data: InstallationData): Slot[] {
       self: true,
       capital: 1,
       group: 0,
+      alt: 0,
+      form: 0,
     });
   });
 
@@ -410,6 +432,8 @@ function buildPractices(data: InstallationData): Slot[] {
       self: false,
       capital: 0,
       group: 1,
+      alt: 0,
+      form: 0,
     });
   });
 
@@ -455,6 +479,8 @@ function buildPillars(data: InstallationData): Slot[] {
       self: entry.value >= score.overall,
       capital: 1,
       group: 0,
+      alt: 0,
+      form: 2,
     }))
   );
 }
@@ -466,23 +492,28 @@ function buildPillars(data: InstallationData): Slot[] {
  * and the row has to bend through it: a habitat missing from one survey holds
  * the other's shape while its presence fades, so nothing collapses to the floor.
  */
-function habitatSlots(columns: ColumnLayout[], metric: number): Slot[] {
+function habitatSlots(columns: ColumnLayout[]): Slot[] {
   return padded(
     columns.map(column => {
-      const cam = column.camera ?? column.bird;
-      const bird = column.bird ?? column.camera;
-      const height = cam && bird ? cam.height * (1 - metric) + bird.height * metric : 0;
-      const fill = cam && bird ? cam.fill * (1 - metric) + bird.fill * metric : 0;
+      const cam = column.camera;
+      const bird = column.bird;
+      // The shaft stands at whichever survey found more, so the collar always
+      // marks the *other* reading somewhere on the shaft rather than floating
+      // above its own column with nothing under it.
+      const high = Math.max(cam?.height ?? 0, bird?.height ?? 0);
+      const low = cam && bird ? Math.min(cam.height, bird.height) : 0;
       return {
         label: column.landUse,
         x: column.x,
-        height,
-        fill,
-        presence: (column.camera ? 1 - metric : 0) + (column.bird ? metric : 0),
+        height: high,
+        fill: Math.max(cam?.fill ?? 0, bird?.fill ?? 0),
+        presence: cam || bird ? 1 : 0,
         color: column.color,
         self: column.self,
         capital: 1,
         group: 0,
+        alt: high > 0 ? low / high : 0,
+        form: 1,
       };
     })
   );
@@ -1118,6 +1149,8 @@ float morphDip(float column){
 }
 uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uCapital[MAX_COLUMNS];
+uniform float uAlt[MAX_COLUMNS];
+uniform float uForm[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
@@ -1130,6 +1163,7 @@ varying float vAlpha;
 varying float vSelect;
 varying float vPhase;
 varying float vCrown;
+varying float vCollar;   // 0..1 nearness to the second survey's reading
 varying vec3  vColor;
 
 void main(){
@@ -1153,7 +1187,19 @@ void main(){
   float crown   = uCapital[idx];
   float capital = 1.0 + 0.28 * crown * smoothstep(0.88, 0.955, aUp)
                        * (1.0 - smoothstep(0.985, 1.0, aUp));
-  float radius  = 0.32 * 1.45 * plinth * shaft * capital;
+
+  // The three families do not share a silhouette. A stage of a programme, a
+  // piece of ground under survey and a pillar of a published score are three
+  // different kinds of claim, and drawing them identically said they were one.
+  float form = uForm[idx];
+  float isPractice = 1.0 - smoothstep(0.0, 1.0, form);
+  float isPillar   = smoothstep(1.0, 2.0, form);
+  // A practice stage tapers upward like a measure being poured — narrow at the
+  // rim, so the eye reads a quantity rather than a building.
+  float taper = mix(1.0, 1.28 - 0.5 * aUp, isPractice);
+  // A pillar is heavier and squarer: it is holding something up.
+  float stout = mix(1.0, 1.22 + 0.10 * (1.0 - aUp), isPillar);
+  float radius  = 0.32 * 1.45 * plinth * shaft * capital * taper * stout;
 
   vec3 p = vec3(uX[idx] + aRadial.x * radius, aUp * height * rv, aRadial.y * radius);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -1162,6 +1208,11 @@ void main(){
   vUp = aUp;
   vSelect = sel;
   vColor = uColumnColor[idx];
+  // A band around the shaft exactly where the other survey put this ground.
+  // The gap between it and the capital is the chapter's whole argument, now
+  // readable in one object instead of by remembering the other button.
+  float alt = uAlt[idx];
+  vCollar = alt <= 0.001 ? 0.0 : (1.0 - smoothstep(0.0, 0.035, abs(aUp - alt)));
   // Per-column phase, so the light climbing the shafts runs down the row as a
   // procession instead of every column pulsing as one organism.
   vPhase = fract(uTime * 0.085 + aColumn * 0.37);
@@ -1182,6 +1233,7 @@ varying float vAlpha;
 varying float vSelect;
 varying float vPhase;
 varying float vCrown;
+varying float vCollar;
 varying vec3  vColor;
 
 void main(){
@@ -1204,11 +1256,19 @@ void main(){
   // A light climbing the shaft — the one moving thing on the stone.
   float climb = exp(-pow((vUp - vPhase) * 7.0, 2.0)) * 0.5;
 
+  // The other survey's reading of the same ground, cut into the shaft as a
+  // band. Deliberately cool and unlike the capital: the capital is where this
+  // column stands, the collar is where the same ground stood when a different
+  // instrument was asked. Two claims, one object, told apart by colour.
+  float collar = vCollar * 0.9;
+
   float glow = (body * carve + plinth + capital + openTop + climb * carve) * vAlpha * 0.36;
   glow *= 1.0 + vSelect * 0.9;
+  vec3 tint = vColor + vec3(0.10, 0.42, 0.72) * collar * 1.7;
+  glow += collar * vAlpha * 0.30;
   if (glow <= 0.002) discard;
 
-  gl_FragColor = vec4(dither(aces(vColor * glow), gl_FragCoord.xy), clamp(glow, 0.0, 1.0));
+  gl_FragColor = vec4(dither(aces(tint * glow), gl_FragCoord.xy), clamp(glow, 0.0, 1.0));
 }
 `;
 
@@ -1300,6 +1360,8 @@ type MoteUniforms = {
   uDatum: Uniform<number>;
   uColumnColor: Uniform<THREE.Color[]>;
   uCapital: Uniform<number[]>;
+  uAlt: Uniform<number[]>;
+  uForm: Uniform<number[]>;
   uGroup: Uniform<number[]>;
   uX: Uniform<number[]>;
   uHeight: Uniform<number[]>;
@@ -1351,6 +1413,8 @@ function createMoteMaterial(): Shaded<MoteUniforms> {
       value: Array.from({ length: MAX_COLUMNS }, () => hexColor(PALETTE.ash)),
     },
     uCapital: { value: new Array<number>(MAX_COLUMNS).fill(1) },
+    uAlt: { value: new Array<number>(MAX_COLUMNS).fill(0) },
+    uForm: { value: new Array<number>(MAX_COLUMNS).fill(1) },
     uGroup: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uX: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uHeight: { value: new Array<number>(MAX_COLUMNS).fill(0) },
@@ -1700,7 +1764,7 @@ export function Refuge({
         ? practices
         : shown === 'ecosystem'
           ? pillars
-          : habitatSlots(columns, metricRef.current);
+          : habitatSlots(columns);
 
     slotsRef.current = target;
 
@@ -1719,6 +1783,10 @@ export function Refuge({
       u.uFill.value[i] = ease(u.uFill.value[i], slot.fill, rate);
       u.uPresence.value[i] = ease(u.uPresence.value[i], slot.presence, rate);
       u.uCapital.value[i] = ease(u.uCapital.value[i], slot.capital, rate);
+      u.uAlt.value[i] = ease(u.uAlt.value[i], slot.alt, rate);
+      // Not eased: a shaft halfway between a practice taper and a pillar's bulk
+      // is neither, and the morph wave already hides the swap.
+      u.uForm.value[i] = slot.form;
       // Not eased: a half-broken thread is worse than either state.
       u.uGroup.value[i] = slot.group;
       u.uColumnColor.value[i].lerp(slot.color, 1 - Math.exp(-dt * rate));

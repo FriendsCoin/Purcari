@@ -55,8 +55,13 @@ interface RefugeMark {
  */
 const REFUGE_READINGS: { label: string; mode: RefugeMode; metric: number }[] = [
   { label: 'Practices', mode: 'practices', metric: 0 },
-  { label: 'Mammals', mode: 'habitat', metric: 0 },
-  { label: 'Birds', mode: 'habitat', metric: 1 },
+  // One reading, not two. Mammals and birds used to be separate buttons that
+  // cross-faded, which asked a visitor to hold one row in memory and notice a
+  // difference against the other. That difference is the chapter's whole
+  // argument, so both surveys now stand in the same column: the shaft rises to
+  // whichever found more, and a cool collar marks where the other put the same
+  // ground.
+  { label: 'The ground', mode: 'habitat', metric: 0 },
   { label: 'Ecosystem', mode: 'ecosystem', metric: 0 },
 ];
 
@@ -797,9 +802,7 @@ export default function IndoorApp() {
                 ? 'LEFT: SHARE ACHIEVED · RIGHT: HECTARES — TWO SCALES, NOT ONE'
                 : refugeMode === 'ecosystem'
                   ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
-                  : refugeMetric === 0
-                    ? 'EFFECTIVE SPECIES PER HABITAT · CAMERA TRAPS'
-                    : 'EFFECTIVE SPECIES PER HABITAT · RECORDERS'
+                  : 'EFFECTIVE SPECIES PER HABITAT · SHAFT THE HIGHER SURVEY, COLLAR THE OTHER'
               ).toUpperCase()}
             </p>
 
