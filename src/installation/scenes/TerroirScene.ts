@@ -718,6 +718,19 @@ export class TerroirScene extends ChapterBase {
       };
       built.outline.forEach((pt, i) => push(pt.x, pt.y, 0, i / built.outline.length, i));
       built.detail.forEach((pt, i) => push(pt.x, pt.y, 1, i / built.detail.length, i));
+      // The body: the fill pool stamped four times with a little jitter, so the
+      // creature is a solid painted volume rather than a dotted line — each
+      // point dim on its own, dense enough to sum to flesh under the ramp.
+      built.fill.forEach((pt, i) => {
+        for (let copy = 0; copy < 7; copy += 1) {
+          const jx = (hash(rank * 3.1 + i * 1.7 + copy * 9.3) - 0.5) * 0.2;
+          const jy = (hash(rank * 5.9 + i * 2.3 + copy * 4.1) - 0.5) * 0.2;
+          push(pt.x + jx, pt.y + jy, 2, (i * 7 + copy) / (built.fill.length * 7), i * 7 + copy);
+        }
+      });
+      // And the ground under it: one huge soft point as a pool of light, so the
+      // animal stands somewhere instead of floating.
+      push(0, -1.32, 3, 0, 0);
     });
 
     const fig = new BufferGeometry();
@@ -1766,15 +1779,13 @@ void main(){
               * step(min(q.x, q.y), 0.34);
   float centre = 1.0 - smoothstep(0.05, 0.12, box);
   float mark = mix(dot0 + ring + pulse + halo, frame + centre * 0.7 + halo, isZone);
-  // A camera is a diamond with a shutter dot: distinct from the recorder's
-  // ring at a glance, because they stand side by side on this estate.
-  vec2 r45 = abs(vec2(uv.x + uv.y, uv.x - uv.y)) * 1.41421;
-  float dia = max(r45.x, r45.y);
-  float diamond = (1.0 - smoothstep(0.02, 0.055, abs(dia - 0.42))) + (1.0 - smoothstep(0.04, 0.1, dia)) * 0.7;
-  mark = mix(mark, diamond + halo * 0.6, isCam);
+  // One family of observation marks: circles. A camera is the same ring and
+  // dot as a recorder — only its colour says which instrument watched — so the
+  // map speaks a single vocabulary and every circle promises the same thing:
+  // touch it, and fall into what it recorded.
   vec3 tint = mix(uGold, uBone, min(vEstate, 1.0) * 0.75 + vSelected * 0.25);
   tint = mix(tint, uBone, isZone * 0.55);
-  tint = mix(tint, mix(uWine * 1.9, uBone, 0.42), isCam);
+  tint = mix(tint, mix(uWine * 2.1, uBone, 0.3), isCam);
 
   float a = mark * vAlpha * (0.72 + vSelected * 0.4);
   if (a < 0.004) discard;
@@ -1876,30 +1887,62 @@ attribute float aOrder;
 attribute float aSeed;
 varying vec3 vColor;
 varying float vAlpha;
+varying float vSoft;
 
+${RAMP3}
 ${TOUCH_UNIFORMS}
 ${POINT_SIZE}
 
 void main(){
-  // Each member of the cast draws itself in turn, outline first, the interior
-  // strokes once it is half there — the same draughtsman's schedule as the
-  // Red Book, at hand scale.
+  // Roles: 0 rim outline, 1 interior strokes, 2 painted body, 3 ground pool.
+  float isRim = step(aRole, 0.5);
+  float isStroke = step(0.5, aRole) * step(aRole, 1.5);
+  float isBody = step(1.5, aRole) * step(aRole, 2.5);
+  float isPool = step(2.5, aRole);
+
+  // Each member of the cast arrives in turn: the body condenses first, the
+  // strokes are cut into it, the rim lights last — a creature of paint rather
+  // than a line drawing.
   float start = aRank * 0.34;
-  float local = clamp((uTrapTime * 0.8 - start), 0.0, 1.0);
-  float draw = aRole < 0.5
-    ? smoothstep(aOrder, aOrder + 0.09, local * 1.35)
-    : smoothstep(aOrder, aOrder + 0.12, clamp(local * 1.8 - 0.7, 0.0, 1.0));
+  float local = clamp(uTrapTime * 0.8 - start, 0.0, 1.0);
+  float draw =
+      isBody * smoothstep(aOrder, aOrder + 0.2, local * 1.5)
+    + isStroke * smoothstep(aOrder, aOrder + 0.12, clamp(local * 1.9 - 0.55, 0.0, 1.0))
+    + isRim * smoothstep(aOrder, aOrder + 0.09, clamp(local * 1.8 - 0.8, 0.0, 1.0))
+    + isPool * smoothstep(0.0, 1.0, local);
 
   float held = uTrapSel < -0.5 ? 0.0 : step(abs(uTrapSel - aRank), 0.5);
-  float nib = smoothstep(0.07, 0.0, abs(local * 1.35 - aOrder)) * (1.0 - step(1.0, local));
+  float nib = smoothstep(0.06, 0.0, abs(local * 1.8 - 0.8 - aOrder)) * isRim * (1.0 - step(1.0, local));
 
-  vec3 pos = position + (uFigRight * aOffset.x + uFigUp * aOffset.y) * (1.0 + sin(uTime * 0.8 + aRank) * 0.015);
+  // The creature breathes, and condenses from a slight scatter as it arrives.
+  float breathe = 1.0 + sin(uTime * 0.8 + aRank) * 0.02;
+  float settle = mix(1.25, 1.0, draw);
+  vec3 pos = position + (uFigRight * aOffset.x + uFigUp * aOffset.y) * breathe * settle;
 
-  vColor = mix(mix(uWine * 1.6, uBone, 0.42), uGold * 1.3, held * 0.6 + nib * 0.8);
-  vAlpha = draw * mix(0.55, 1.0, held) * (uTrapSel < -0.5 ? 1.0 : mix(0.3, 1.0, held));
+  // The painter's light: a fake round normal from the offset, a low warm sun,
+  // and the same three-band ramp the estate is washed with — so the animal is
+  // painted in the piece's own hand, banded shade to lit with a wobbled edge.
+  vec3 n = normalize(vec3(aOffset.x * 0.55, aOffset.y * 0.8, 0.9));
+  float lam = clamp(dot(n, normalize(vec3(-0.5, 0.8, 0.55))) * 0.62 + 0.46, 0.0, 1.0);
+  float jit = (aSeed - 0.5) * 0.1;
+  vec3 body = ramp3(lam, uWine * 0.5, mix(uWine, uBone, 0.42) * 0.9, mix(uBone, uGold, 0.4) * 1.25, 0.14, jit);
+  // Feather-shimmer: a slow twinkle wandering across the body.
+  body *= 1.0 + sin(uTime * 1.7 + aSeed * 47.0) * 0.13 * isBody;
+
+  vColor = body * isBody
+         + mix(uGold * 1.45, uBone, 0.2) * isRim
+         + mix(uWine * 1.7, uBone, 0.5) * isStroke
+         + uGold * 0.55 * isPool;
+  vColor = mix(vColor, uGold * 1.7, nib * 0.85);
+  vColor *= 1.0 + held * 0.55;
+
+  vAlpha = draw * (isBody * 0.2 + isRim * 0.85 + isStroke * 0.5 + isPool * 0.05)
+         * (uTrapSel < -0.5 ? 1.0 : mix(0.3, 1.0, held));
+  vSoft = isPool;
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = pointSizeFor((aRole < 0.5 ? 0.055 : 0.045) * (1.0 + held * 0.4 + nib * 0.9), mv.z);
+  float size = isBody * 0.115 + isRim * 0.05 + isStroke * 0.042 + isPool * 1.9;
+  gl_PointSize = pointSizeFor(size * (1.0 + held * 0.35 + nib * 0.9), mv.z);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -1907,12 +1950,14 @@ void main(){
 const TRAP_FIGURE_FRAGMENT = /* glsl */ `
 varying vec3 vColor;
 varying float vAlpha;
+varying float vSoft;
 void main(){
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv) * 2.0;
-  float core = 1.0 - smoothstep(0.0, 0.6, d);
-  float a = (core + exp(-d * 2.8) * 0.3) * vAlpha;
-  if (a < 0.004) discard;
+  // Bodies and lines are soft dots; the ground pool is a wide radial wash.
+  float core = 1.0 - smoothstep(0.0, mix(0.6, 1.0, vSoft), d);
+  float a = (core + exp(-d * 2.8) * 0.3 * (1.0 - vSoft)) * vAlpha;
+  if (a < 0.003) discard;
   gl_FragColor = vec4(vColor * a, a);
 }
 `;
