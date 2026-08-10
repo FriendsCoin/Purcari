@@ -46,6 +46,7 @@ interface RefugeMark {
   y: number;
   self: boolean;
   value: number;
+  form: number;
 }
 
 /**
@@ -54,16 +55,17 @@ interface RefugeMark {
  * cameras see it and as the recorders hear it, and what its published ecosystem
  * score stands on.
  */
-const REFUGE_READINGS: { label: string; mode: RefugeMode; metric: number }[] = [
-  { label: 'Practices', mode: 'practices', metric: 0 },
-  // One reading, not two. Mammals and birds used to be separate buttons that
-  // cross-faded, which asked a visitor to hold one row in memory and notice a
-  // difference against the other. That difference is the chapter's whole
-  // argument, so both surveys now stand in the same column: the shaft rises to
-  // whichever found more, and a cool collar marks where the other put the same
-  // ground.
-  { label: 'The ground', mode: 'habitat', metric: 0 },
-  { label: 'Ecosystem', mode: 'ecosystem', metric: 0 },
+/**
+ * One scene, four ways of lighting it. The buttons stopped swapping data when
+ * the readings merged; now the whole argument stands on stage at once —
+ * practices on the terrace, grounds in the colonnade, the score's pillars
+ * behind — and a button only moves the light to one tier of it.
+ */
+const REFUGE_READINGS: { label: string; mode: RefugeMode }[] = [
+  { label: 'Everything', mode: 'all' },
+  { label: 'Practices', mode: 'practices' },
+  { label: 'The ground', mode: 'habitat' },
+  { label: 'Ecosystem', mode: 'ecosystem' },
 ];
 
 /**
@@ -141,8 +143,10 @@ const CHAPTERS: Chapter[] = [
     dwell: 38,
     // The widest row in the piece — ten habitat columns — so the camera stands
     // off far enough that every capital is in frame at once.
-    camera: [0, 2.6, 16.5],
-    lookAt: [0, 1.9, 0],
+    // Raised: the chapter is a three-tier diorama now, and depth only reads
+    // from above — a frontal camera flattened the terrace into the colonnade.
+    camera: [0, 5.4, 15.6],
+    lookAt: [0, 1.4, 0],
     subjectAspect: 2.3,
     // A ten-column colonnade is genuinely three times wider than it is tall, and
     // on a phone in portrait the default limit left it running off both edges.
@@ -184,13 +188,12 @@ export default function IndoorApp() {
   const [focusMonth, setFocusMonth] = useState<number | null>(null);
   const [clusterGuilds, setClusterGuilds] = useState(false);
   const [flagshipOnly, setFlagshipOnly] = useState(false);
-  const [refugeMetric, setRefugeMetric] = useState(0);
   /**
    * Which question the Refuge row answers: what the estate does, what its own
    * ground carries under each survey method, or what its published ecosystem
    * score stands on.
    */
-  const [refugeMode, setRefugeMode] = useState<RefugeMode>('practices');
+  const [refugeMode, setRefugeMode] = useState<RefugeMode>('all');
   const [refugeSelected, setRefugeSelected] = useState<string | null>(null);
   const [refugeMarks, setRefugeMarks] = useState<RefugeMark[]>([]);
   /** Named anchors on the estate map — the château, the villages, the scale. */
@@ -236,8 +239,19 @@ export default function IndoorApp() {
     // two of the ten columns are in production, and dropping *those* two labels
     // to fit the rest leaves a row that looks entirely like habitat. The rare
     // case is the informative one.
+    // The focused tier's captions survive collisions first: with eighteen
+    // columns on one stage, whatever the light is on is what the visitor is
+    // reading, and losing *its* names to a background tier's is backwards.
+    const focusForm =
+      refugeMode === 'practices' ? 0 : refugeMode === 'habitat' ? 1 : refugeMode === 'ecosystem' ? 2 : -1;
     const rank = (mark: RefugeMark) =>
-      refugeSelected === mark.landUse ? 0 : mark.self ? 2 : 1;
+      refugeSelected === mark.landUse
+        ? 0
+        : mark.form === focusForm
+          ? 1
+          : mark.self
+            ? 3
+            : 2;
     const ordered = [...refugeMarks].sort((a, b) => rank(a) - rank(b) || a.x - b.x);
     const taken: { left: number; right: number }[] = [];
     const kept: RefugeMark[] = [];
@@ -252,7 +266,7 @@ export default function IndoorApp() {
       kept.push(mark);
     }
     return kept;
-  }, [refugeMarks, refugeSelected]);
+  }, [refugeMarks, refugeSelected, refugeMode]);
 
   /**
    * Which practice stage has a diagram behind it.
@@ -262,13 +276,15 @@ export default function IndoorApp() {
    * percentage is decoration — the column already is that picture.
    */
   const practiceVignette = useMemo((): { kind: VignetteKind; caption: string } | null => {
-    if (refugeMode !== 'practices' || !refugeSelected) return null;
+    // Any focus: the stage is one now, and a visitor who taps the drip column
+    // from the overview asked the same question.
+    if (!refugeSelected) return null;
     if (refugeSelected === 'Drip irrigation')
       return { kind: 'drip', caption: 'WATER GOES TO THE ROOT, NOT OVER THE LEAF — DIAGRAM' };
     if (refugeSelected === 'Water saved')
       return { kind: 'drip', caption: 'THE SAME VINE, ON LESS WATER — DIAGRAM' };
     return null;
-  }, [refugeMode, refugeSelected]);
+  }, [refugeSelected]);
 
   /** The Unseen's rings, in the same order the scene draws them. */
   const rings = useMemo(() => (data ? buildRings(data) : []), [data]);
@@ -449,7 +465,6 @@ export default function IndoorApp() {
             key="refuge"
             data={data}
             reveal={reveal}
-            metric={refugeMetric}
             mode={refugeMode}
             selected={refugeSelected}
             onSelect={
@@ -775,22 +790,19 @@ export default function IndoorApp() {
         {id === 'refuge' && data && (
           <div className="inst-corner inst-corner--bl">
             <p className="inst-label" style={{ marginBottom: '0.5rem' }}>
-              Compare by
+              Light on
             </p>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
+            {/* Four buttons overflow a phone in a single row; the wrap costs
+                nothing on the kiosk, where they still fit on one line. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
               {REFUGE_READINGS.map((entry) => (
                 <button
                   key={entry.label}
                   className="inst-nav-item"
-                  data-active={
-                    entry.mode === 'habitat'
-                      ? refugeMode === 'habitat' && refugeMetric === entry.metric
-                      : refugeMode === entry.mode
-                  }
+                  data-active={refugeMode === entry.mode}
                   onClick={() => {
                     touch();
                     setRefugeMode(entry.mode);
-                    if (entry.mode === 'habitat') setRefugeMetric(entry.metric);
                     setRefugeSelected(null);
                   }}
                   style={{ minHeight: 56, padding: '0.9rem 1.1rem' }}
@@ -801,10 +813,12 @@ export default function IndoorApp() {
             </div>
             <p className="inst-mono" style={{ marginTop: '0.3rem' }}>
               {(refugeMode === 'practices'
-                ? 'LEFT: SHARE ACHIEVED · RIGHT: HECTARES — TWO SCALES, NOT ONE'
+                ? 'WHAT IT DOES · SHARES LEFT, HECTARES RIGHT — TWO SCALES'
                 : refugeMode === 'ecosystem'
-                  ? 'THREE PILLARS · MEASURED AGAINST THE OVERALL SCORE'
-                  : 'EFFECTIVE SPECIES PER HABITAT · SHAFT THE HIGHER SURVEY, COLLAR THE OTHER'
+                  ? 'WHAT IT ADDS UP TO · THE PUBLISHED SCORE ON ITS PILLARS'
+                  : refugeMode === 'habitat'
+                    ? 'THE GROUND · SHAFT ONE SURVEY, COLLAR THE OTHER'
+                    : 'TOUCH ANYTHING — ITS THREADS LIGHT WHAT IT TOUCHES'
               ).toUpperCase()}
             </p>
 
@@ -835,27 +849,6 @@ export default function IndoorApp() {
                 <button className="inst-more" onClick={() => { touch(); setDossier('refuge'); }}>
                   The working
                 </button>
-                {/*
-                  What the chosen stage does, when it is a thing that can be
-                  drawn. "300 ha drip-irrigated at 15–30% less water" is a fact
-                  about plumbing that a line of type cannot show and a moving
-                  diagram can — water arriving at the root rather than over the
-                  leaf. Only the two irrigation stages have one; the others are
-                  percentages of land, and a diagram of a percentage would be
-                  decoration.
-                */}
-                {practiceVignette && (
-                  <div className="inst-vignette inst-rise">
-                    <Vignette
-                      kind={practiceVignette.kind}
-                      active={chapter.id === 'refuge'}
-                      height={112}
-                    />
-                    <p className="inst-mono" style={{ opacity: 0.5 }}>
-                      {practiceVignette.caption}
-                    </p>
-                  </div>
-                )}
               </>
             ) : refugeMode === 'ecosystem' ? (
               /*
@@ -882,31 +875,39 @@ export default function IndoorApp() {
               </>
             ) : (
               /*
-                What the estate does, and what the survey concludes about doing
-                it. The figure is the estate's own land cover — the share it is
-                not farming — and the practices under it are its own investment,
-                not a comparison with anybody.
+                The default and the ground focus share one short block: the
+                diorama is the statement now, and the corner only names its
+                three tiers and offers the working. Prose lives in the drawer.
               */
               <>
                 <p className="inst-figure" style={{ fontSize: '2.4rem' }}>
                   {notInProduction.toFixed(1)}%
                 </p>
                 <p className="inst-mono">OF THE ESTATE IS NOT IN PRODUCTION</p>
-                <p
-                  className="inst-body"
-                  style={{ maxWidth: '38ch', fontSize: '0.86rem', marginTop: '0.6rem' }}
-                >
-                  {formatNumber(data.narrative.estate.dripIrrigationHectares)} ha drip-irrigated
-                  at {Math.round(data.narrative.estate.waterSavingLow * 100)}–
-                  {Math.round(data.narrative.estate.waterSavingHigh * 100)}% less water;{' '}
-                  {formatNumber(data.narrative.estate.organicConversionHectares)} ha converting to
-                  organic; treatments down{' '}
-                  {Math.round(data.narrative.estate.phytosanitaryReduction * 100)}%.
-                </p>
                 <p className="inst-mono" style={{ marginTop: '0.5rem' }}>
-                  HABITAT MOSAICS AND STRUCTURAL COMPLEXITY — EVERY1COUNTS
+                  ONE ESTATE · WHAT IT DOES, WHAT LIVES THERE, WHAT IT ADDS UP TO
                 </p>
+                <button className="inst-more" onClick={() => { touch(); setDossier('refuge'); }}>
+                  The working
+                </button>
               </>
+            )}
+            {/*
+              What the chosen stage does, when it is a thing that can be drawn —
+              water arriving at the root rather than over the leaf. Follows the
+              selection in any focus: the stage is one scene now.
+            */}
+            {practiceVignette && (
+              <div className="inst-vignette inst-rise">
+                <Vignette
+                  kind={practiceVignette.kind}
+                  active={chapter.id === 'refuge'}
+                  height={112}
+                />
+                <p className="inst-mono" style={{ opacity: 0.5 }}>
+                  {practiceVignette.caption}
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -1439,11 +1440,21 @@ export default function IndoorApp() {
             mote density is deliberately uniform across the stages for that reason.
           </p>
           <p>
-            In the ground reading, each column carries both surveys at once: the shaft stands at
+            In the colonnade, each column carries both surveys at once: the shaft stands at
             whichever instrument found more effective species, and the cool collar cut into it
             marks where the other put the same ground. Cameras and recorders disagree because
             they are answering different questions, and the gap between the two marks is that
             disagreement.
+          </p>
+          <p>
+            The threads between the tiers are relations the data actually states, and all of
+            them are composition or address, never cause. &ldquo;Land kept&rdquo; is tied to the
+            kept grounds because they are the same hectares named twice; the four worked stages
+            are tied to the vineyard because that is where drip lines, treatments and conversion
+            physically happen; and every ground is tied to the three pillars because it is part
+            of the estate they assess. A thread says &ldquo;these touch&rdquo; — with one year
+            of recording and no before-and-after, it cannot and does not say &ldquo;this caused
+            that&rdquo;.
           </p>
         </Dossier>
       )}

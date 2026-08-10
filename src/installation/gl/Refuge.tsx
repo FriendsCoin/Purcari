@@ -50,7 +50,27 @@ import { DITHER, SIMPLEX_3D, SPRITE, TONEMAP } from './chunks';
  * silently overflowing the arrays, which on some drivers is a black screen
  * instead of an error.
  */
-const MAX_COLUMNS = 10;
+const MAX_COLUMNS = 18;
+
+/*
+ * The unified stage. One scene now holds all three families at once — the
+ * five practice stages on a small terrace in front, the ten grounds as the
+ * central colonnade, the three pillars of the published score behind and
+ * apart — with threads run between the claims that genuinely touch. The
+ * reading buttons stopped swapping data long ago in spirit; now they only
+ * move the light.
+ */
+const PRACTICE_TIER_Z = 3.9;
+const PRACTICE_TIER_X = -4.7;
+const PRACTICE_TIER_SCALE = 0.5;
+const PRACTICE_HEIGHT_SCALE = 0.52;
+const PRACTICE_SPAN = 0.56;
+const PRACTICE_TIER_LIFT = -0.42;
+const PILLAR_TIER_Z = -5.2;
+const PILLAR_TIER_X = 5.1;
+const PILLAR_TIER_SCALE = 0.78;
+const PILLAR_SPAN = 1.12;
+const PILLAR_TIER_LIFT = 1.0;
 
 /** Capacity of one column. The density gate lights a fraction of these. */
 const MOTES_PER_COLUMN = 300;
@@ -292,6 +312,127 @@ function buildHabitats(data: InstallationData): ColumnLayout[] {
   }));
 }
 
+/* -------------------------------------------------------------------- links */
+
+/**
+ * The threads between claims that touch.
+ *
+ * Every vertex carries the indices of its two columns and its position along
+ * the curve, and resolves everything else from the same live uniform arrays
+ * the columns read — so a thread is *incapable* of pointing at a place its
+ * column is not. At rest the web is barely there; select either end and the
+ * thread brightens and a bead of light runs along it, from the claim to the
+ * thing it touches.
+ */
+const LINK_SEGMENTS = 26;
+
+const LINK_VERT = /* glsl */ `
+#define MAX_COLUMNS ${MAX_COLUMNS}
+
+attribute float aEndA;
+attribute float aEndB;
+attribute float aT;
+
+uniform float uTime;
+uniform float uReveal;
+uniform float uCount;
+uniform vec3  uColumnColor[MAX_COLUMNS];
+uniform float uX[MAX_COLUMNS];
+uniform float uHeight[MAX_COLUMNS];
+uniform float uPresence[MAX_COLUMNS];
+uniform float uSelect[MAX_COLUMNS];
+uniform float uForm[MAX_COLUMNS];
+uniform float uZ[MAX_COLUMNS];
+uniform float uLift[MAX_COLUMNS];
+uniform float uTierGlow[3];
+
+varying vec3 vColor;
+varying float vAlpha;
+varying float vBead;
+
+void main(){
+  int ia = int(aEndA + 0.5);
+  int ib = int(aEndB + 0.5);
+
+  vec3 a = vec3(uX[ia], uLift[ia] + uHeight[ia], uZ[ia]);
+  vec3 b = vec3(uX[ib], uLift[ib] + uHeight[ib], uZ[ib]);
+  // The arc lifts with the distance it has to cross, so a short neighbourly
+  // thread stays low and a practice-to-ground thread rises over the terrace.
+  // Low arcs: at 0.14 per unit a terrace-to-colonnade thread rose clean out of
+  // the frame and read as a cut line. The web should sit among the columns,
+  // not vault over them.
+  float lift = 0.18 + distance(a, b) * 0.055;
+  vec3 mid = mix(a, b, 0.5) + vec3(0.0, lift, 0.0);
+
+  float t = aT;
+  vec3 p = mix(mix(a, mid, t), mix(mid, b, t), t);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+
+  float sel = max(uSelect[ia], uSelect[ib]);
+  float presence = min(uPresence[ia], uPresence[ib]);
+  // Both tiers have to hold at least some light for the thread to show.
+  float tg = min(uTierGlow[int(min(uForm[ia], 2.0) + 0.5)],
+                 uTierGlow[int(min(uForm[ib], 2.0) + 0.5)]);
+  // A chosen thread is the one thing on stage the light must not step down
+  // from: it overrides the tier dimming exactly as far as it is selected.
+  tg = mix(tg, 1.0, sel);
+
+  // A bead running from the claim toward what it touches, only while chosen.
+  vBead = sel * exp(-pow((fract(uTime * 0.3) - t) * 7.0, 2.0));
+
+  vColor = mix(uColumnColor[ia], uColumnColor[ib], t);
+  // Ends taper so the web reads as strokes of light, not wires.
+  float taper = smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.88, 1.0, t));
+  vAlpha = presence * uReveal * tg * taper * (0.045 + sel * 0.75);
+}
+`;
+
+const LINK_FRAG = /* glsl */ `
+${TONEMAP}
+${DITHER}
+
+varying vec3 vColor;
+varying float vAlpha;
+varying float vBead;
+
+void main(){
+  vec3 color = vColor + vec3(1.0, 0.92, 0.75) * vBead;
+  float a = vAlpha + vBead * 0.5;
+  if (a <= 0.002) discard;
+  gl_FragColor = vec4(dither(aces(color * a), gl_FragCoord.xy), clamp(a, 0.0, 1.0));
+}
+`;
+
+/** One segment run per link, resolved entirely in the vertex stage. */
+function buildLinkGeometry(links: [number, number][]): THREE.BufferGeometry {
+  const endA: number[] = [];
+  const endB: number[] = [];
+  const ts: number[] = [];
+  const positions: number[] = [];
+
+  for (const [a, b] of links) {
+    for (let sIndex = 0; sIndex < LINK_SEGMENTS; sIndex++) {
+      for (const step of [sIndex, sIndex + 1]) {
+        endA.push(a);
+        endB.push(b);
+        ts.push(step / LINK_SEGMENTS);
+        positions.push(0, 0, 0);
+      }
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aEndA', new THREE.Float32BufferAttribute(endA, 1));
+  geometry.setAttribute('aEndB', new THREE.Float32BufferAttribute(endB, 1));
+  geometry.setAttribute('aT', new THREE.Float32BufferAttribute(ts, 1));
+  geometry.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
+    Math.hypot(11, MAX_HEIGHT, Math.abs(PILLAR_TIER_Z)) + 2
+  );
+  return geometry;
+}
+
 /* ------------------------------------------------------------- arrangements */
 
 /**
@@ -343,6 +484,12 @@ interface Slot {
    * 1 = ground under survey, 2 = a pillar of the published score.
    */
   form: number;
+  /** Depth of this column's tier, world units. */
+  z: number;
+  /** Radius multiplier — the front terrace is small, the pillars are heavy. */
+  span: number;
+  /** The floor this tier stands on: the terrace sits low, the pillars on a dais. */
+  lift: number;
 }
 
 const EMPTY_SLOT = (x: number): Slot => ({
@@ -357,6 +504,9 @@ const EMPTY_SLOT = (x: number): Slot => ({
   group: 0,
   alt: 0,
   form: 1,
+  z: 0,
+  span: 1,
+  lift: 0,
 });
 
 /** Pad an arrangement out to the uniform arrays' fixed length. */
@@ -414,9 +564,12 @@ function buildPractices(data: InstallationData): Slot[] {
       color: kept.clone(),
       self: true,
       capital: 1,
-      group: 0,
+      group: 1,
       alt: 0,
       form: 0,
+      z: 0,
+      span: 1,
+      lift: 0,
     });
   });
 
@@ -431,16 +584,19 @@ function buildPractices(data: InstallationData): Slot[] {
       color: measured.clone(),
       self: false,
       capital: 0,
-      group: 1,
+      group: 2,
       alt: 0,
       form: 0,
+      z: 0,
+      span: 1,
+      lift: 0,
     });
   });
 
   // Centre the whole row on the origin, gap and all.
   const centre = (slots[0].x + slots[slots.length - 1].x) / 2;
   for (const slot of slots) slot.x -= centre;
-  return padded(slots);
+  return slots;
 }
 
 /**
@@ -465,8 +621,7 @@ function buildPillars(data: InstallationData): Slot[] {
     { label: 'Connectivity', value: score.connectivity },
   ];
   const span = (entries.length - 1) * PILLAR_GAP;
-  return padded(
-    entries.map((entry, i) => ({
+  return entries.map((entry, i) => ({
       label: entry.label,
       x: i * PILLAR_GAP - span / 2,
       height: (entry.value / 100) * MAX_HEIGHT,
@@ -478,11 +633,13 @@ function buildPillars(data: InstallationData): Slot[] {
           : hexColor(PALETTE.dusk).lerp(hexColor(PALETTE.parchment), 0.4),
       self: entry.value >= score.overall,
       capital: 1,
-      group: 0,
+      group: 3,
       alt: 0,
       form: 2,
-    }))
-  );
+      z: 0,
+      span: 1,
+      lift: 0,
+    }));
 }
 
 /**
@@ -493,8 +650,7 @@ function buildPillars(data: InstallationData): Slot[] {
  * the other's shape while its presence fades, so nothing collapses to the floor.
  */
 function habitatSlots(columns: ColumnLayout[]): Slot[] {
-  return padded(
-    columns.map(column => {
+  return columns.map(column => {
       const cam = column.camera;
       const bird = column.bird;
       // The shaft stands at whichever survey found more, so the collar always
@@ -514,9 +670,85 @@ function habitatSlots(columns: ColumnLayout[]): Slot[] {
         group: 0,
         alt: high > 0 ? low / high : 0,
         form: 1,
+        z: 0,
+        span: 1,
+        lift: 0,
       };
-    })
+    });
+}
+
+/**
+ * The whole chapter on one stage, and the threads between its claims.
+ *
+ * Composition: the grounds are the subject and hold the centre; the practice
+ * stages stand on a smaller terrace in front, because they are what the estate
+ * *does* to that ground; the pillars of the published score stand behind and
+ * apart, because they are what the ground *adds up to*. Three scales coexist by
+ * being separated in space and never joined by a thread — the skyline still
+ * refuses to cross groups.
+ *
+ * The links are only the relations the data actually states, and all of them
+ * are composition or address, never cause:
+ *   · "Land kept" IS the kept grounds — the same hectares, named once as a
+ *     share and once as habitats.
+ *   · The other four stages act on the vineyard — that is where drip lines,
+ *     treatments and conversion physically happen.
+ *   · Every ground is part of the estate the three score pillars assess.
+ * One year, no before-and-after: a thread here says "these touch", not "this
+ * caused that", and the dossier says so in words.
+ */
+function buildUnified(
+  columns: ColumnLayout[],
+  data: InstallationData
+): { slots: Slot[]; links: [number, number][] } {
+  const ground = habitatSlots(columns);
+  const practices = buildPractices(data).map(slot => ({
+    ...slot,
+    x: slot.x * PRACTICE_TIER_SCALE + PRACTICE_TIER_X,
+    height: slot.height * PRACTICE_HEIGHT_SCALE,
+    z: PRACTICE_TIER_Z,
+    span: PRACTICE_SPAN,
+    lift: PRACTICE_TIER_LIFT,
+  }));
+  const pillars = buildPillars(data).map(slot => ({
+    ...slot,
+    x: slot.x * PILLAR_TIER_SCALE + PILLAR_TIER_X,
+    z: PILLAR_TIER_Z,
+    span: PILLAR_SPAN,
+    lift: PILLAR_TIER_LIFT,
+  }));
+
+  const slots = padded([...ground, ...practices, ...pillars]);
+
+  const indexOf = (label: string) => slots.findIndex(slot => slot.label === label);
+  const links: [number, number][] = [];
+
+  // The estate's own share of kept ground, tied to the grounds it names.
+  const keptIndex = indexOf('Land kept');
+  if (keptIndex >= 0)
+    slots.forEach((slot, i) => {
+      if (slot.form === 1 && slot.self && slot.presence > 0) links.push([keptIndex, i]);
+    });
+
+  // The worked stages, tied to the worked ground.
+  const vineyardIndex = slots.findIndex(
+    slot => slot.form === 1 && /vineyard/i.test(slot.label)
   );
+  if (vineyardIndex >= 0)
+    for (const label of ['Treatments cut', 'Water saved', 'Drip irrigation', 'Organic conversion']) {
+      const i = indexOf(label);
+      if (i >= 0) links.push([i, vineyardIndex]);
+    }
+
+  // Every ground, part of the whole the score assesses.
+  slots.forEach((slot, i) => {
+    if (slot.form !== 1 || slot.presence <= 0) return;
+    slots.forEach((other, j) => {
+      if (other.form === 2) links.push([i, j]);
+    });
+  });
+
+  return { slots, links };
 }
 
 /* --------------------------------------------------------------- geometries */
@@ -527,8 +759,8 @@ function habitatSlots(columns: ColumnLayout[]): Slot[] {
  * the height along it are attributes the vertex shader resolves per frame, which
  * is what lets height and density change without touching the buffer.
  */
-function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
-  const count = columns.length * MOTES_PER_COLUMN;
+function buildMoteGeometry(slots: Slot[]): THREE.BufferGeometry {
+  const count = slots.length * MOTES_PER_COLUMN;
   const positions = new Float32Array(count * 3);
   const offsets = new Float32Array(count * 2);
   const columnIndex = new Float32Array(count);
@@ -540,13 +772,14 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   const heroes = new Float32Array(count);
 
   let k = 0;
-  columns.forEach((column, ci) => {
+  slots.forEach((column, ci) => {
+    const key = column.label || `pad${ci}`;
     const radius = column.self ? COLUMN_RADIUS * 1.15 : COLUMN_RADIUS;
     for (let m = 0; m < MOTES_PER_COLUMN; m++) {
       const salt = m * 8;
       // sqrt of a uniform sample fills the disc evenly instead of crowding the axis.
-      const r = radius * Math.sqrt(rand(column.landUse, salt + 1));
-      const theta = rand(column.landUse, salt + 2) * Math.PI * 2;
+      const r = radius * Math.sqrt(rand(key, salt + 1));
+      const theta = rand(key, salt + 2) * Math.PI * 2;
 
       positions[k * 3] = column.x;
       positions[k * 3 + 1] = 0;
@@ -555,15 +788,15 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
       offsets[k * 2 + 1] = Math.sin(theta) * r;
 
       columnIndex[k] = ci;
-      phases[k] = rand(column.landUse, salt + 3);
+      phases[k] = rand(key, salt + 3);
       // The density gate keeps motes whose rank falls under the current fill.
       // A random rank rather than a sequential one means the motes that drop out
       // are scattered through the column instead of shearing off its top.
-      ranks[k] = rand(column.landUse, salt + 4);
-      speeds[k] = 0.55 + rand(column.landUse, salt + 5) * 0.9;
-      seeds[k] = rand(column.landUse, salt + 6);
+      ranks[k] = rand(key, salt + 4);
+      speeds[k] = 0.55 + rand(key, salt + 5) * 0.9;
+      seeds[k] = rand(key, salt + 6);
       scales[k] =
-        MOTE_SIZE * (0.7 + rand(column.landUse, salt + 7) * 0.7) * (column.self ? 1.3 : 1);
+        MOTE_SIZE * (0.7 + rand(key, salt + 7) * 0.7) * (column.self ? 1.3 : 1);
 
       heroes[k] = column.self ? 1 : 0;
       k++;
@@ -584,10 +817,10 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   // Every mote's stored position sits on the baseline; the rise happens in the
   // shader, so an automatic bounding sphere would be a flat line and the row
   // would cull itself away the moment the camera looked slightly down.
-  const half = (columns.length - 1) * columnGap(columns.length) * 0.5 + COLUMN_RADIUS;
+  // Wide enough for the whole diorama — the tiers spread in x and z now.
   geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
-    Math.hypot(half, MAX_HEIGHT * 0.5) + 1
+    Math.hypot(11, MAX_HEIGHT * 0.5, Math.abs(PILLAR_TIER_Z)) + 1
   );
   return geometry;
 }
@@ -606,7 +839,7 @@ function buildMoteGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
  * No JavaScript touches this buffer after it is built: every vertex carries the
  * two columns it lies between and resolves its own height in the vertex shader.
  */
-function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
+function buildSkylineGeometry(slots: Slot[]): THREE.BufferGeometry {
   const positions: number[] = [];
   const columnA: number[] = [];
   const columnB: number[] = [];
@@ -619,9 +852,12 @@ function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
     blends.push(blend);
   };
 
-  for (let i = 0; i < columns.length - 1; i++) {
-    const left = columns[i];
-    const right = columns[i + 1];
+  for (let i = 0; i < slots.length - 1; i++) {
+    const left = slots[i];
+    const right = slots[i + 1];
+    // A thread only ever joins neighbours of the same family; the group break
+    // in the shader then splits sub-groups within a family.
+    if (left.form !== right.form) continue;
     for (let s = 0; s < SKYLINE_STEPS; s++) {
       for (const step of [s, s + 1]) {
         const blend = step / SKYLINE_STEPS;
@@ -631,8 +867,8 @@ function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   }
 
   // A tick across each head — the reading itself, where the thread passes through.
-  for (let i = 0; i < columns.length; i++) {
-    const column = columns[i];
+  for (let i = 0; i < slots.length; i++) {
+    const column = slots[i];
     for (const sign of [-1, 1]) {
       push(column.x, i, i, 0);
       push(column.x + SKYLINE_TICK * sign, i, i, 0);
@@ -646,10 +882,9 @@ function buildSkylineGeometry(columns: ColumnLayout[]): THREE.BufferGeometry {
   geometry.setAttribute('aBlend', new THREE.Float32BufferAttribute(blends, 1));
   // Heights are resolved in the shader, so the stored geometry is a flat line and
   // an automatic bounding sphere would cull the thread the moment it lifted.
-  const half = (columns.length - 1) * columnGap(columns.length) * 0.5 + SKYLINE_TICK;
   geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(0, MAX_HEIGHT * 0.5, 0),
-    Math.hypot(half, MAX_HEIGHT * 0.5) + 1
+    Math.hypot(11, MAX_HEIGHT * 0.5, Math.abs(PILLAR_TIER_Z)) + 1
   );
   return geometry;
 }
@@ -853,6 +1088,11 @@ uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
+uniform float uForm[MAX_COLUMNS];
+uniform float uZ[MAX_COLUMNS];
+uniform float uSpan[MAX_COLUMNS];
+uniform float uLift[MAX_COLUMNS];
+uniform float uTierGlow[3];
 uniform float uSelect[MAX_COLUMNS];
 
 varying vec3 vColor;
@@ -878,7 +1118,7 @@ void main(){
 
   // Motes drift up the column and recycle at its foot.
   float rise = fract(aPhase + uTime * uRise * aSpeed);
-  float y = rise * height * rv;
+  float y = uLift[idx] * rv + rise * height * rv;
 
   // Fade at both ends so the recycle is a disappearance, not a jump; the top
   // fade also gives the core a soft tip instead of a cut edge.
@@ -896,9 +1136,9 @@ void main(){
     snoise(vec3(aOffset.y * 1.4, y * 0.45, t + 13.0))
   );
   vec3 p = vec3(
-    uX[idx] + aOffset.x * taper + wander.x * uSway,
+    uX[idx] + (aOffset.x * taper + wander.x * uSway) * uSpan[idx],
     y,
-    position.z + aOffset.y * taper + wander.y * uSway
+    uZ[idx] + (aOffset.y * taper + wander.y * uSway) * uSpan[idx]
   );
 
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -918,7 +1158,8 @@ void main(){
   // read as an equivalence between "vineyard" and "connectivity", which is not
   // a claim the survey makes. Dissolving and re-forming says what it is: a
   // different question being asked of the same estate.
-  vAlpha = alive * ends * presence * rv * (1.0 - morphDip(aColumn) * 0.72);
+  vAlpha = alive * ends * presence * rv * (1.0 - morphDip(aColumn) * 0.72)
+         * uTierGlow[int(min(uForm[idx], 2.0) + 0.5)];
 }
 `;
 
@@ -979,6 +1220,11 @@ uniform float uGroup[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
+uniform float uForm[MAX_COLUMNS];
+uniform float uZ[MAX_COLUMNS];
+uniform float uSpan[MAX_COLUMNS];
+uniform float uLift[MAX_COLUMNS];
+uniform float uTierGlow[3];
 uniform float uSelect[MAX_COLUMNS];
 
 varying vec3  vColor;
@@ -1007,7 +1253,11 @@ void main(){
   float rv = clamp(uReveal * 1.3 - order * 0.3, 0.0, 1.0);
   rv = rv * rv * (3.0 - 2.0 * rv);
 
-  vec3 p = vec3(mix(uX[ia], uX[ib], aBlend), y * rv, position.z);
+  vec3 p = vec3(
+    mix(uX[ia], uX[ib], aBlend),
+    (y + mix(uLift[ia], uLift[ib], aBlend)) * rv,
+    mix(uZ[ia], uZ[ib], aBlend)
+  );
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 
   vRun = order;
@@ -1015,7 +1265,8 @@ void main(){
   // than dragging it to the floor: the segment fades, it does not lie.
   vColor = mix(mix(uColumnColor[ia], uColumnColor[ib], aBlend), vec3(1.0, 0.93, 0.78), level);
   vAlpha = presence * rv * (0.46 + sel * 0.60) * mix(1.0, mix(0.45, 1.35, sel), uFocus)
-         * (1.0 - morphDip((aColumnA + aColumnB) * 0.5) * 0.6);
+         * (1.0 - morphDip((aColumnA + aColumnB) * 0.5) * 0.6)
+         * uTierGlow[int(min(uForm[ia], 2.0) + 0.5)];
 }
 `;
 
@@ -1066,6 +1317,11 @@ uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
+uniform float uForm[MAX_COLUMNS];
+uniform float uZ[MAX_COLUMNS];
+uniform float uSpan[MAX_COLUMNS];
+uniform float uLift[MAX_COLUMNS];
+uniform float uTierGlow[3];
 uniform float uSelect[MAX_COLUMNS];
 
 varying vec3  vColor;
@@ -1085,13 +1341,18 @@ void main(){
 
   // The pool widens with the column's density, and breathes very slightly.
   float scale = (0.45 + fill * 0.85) * (1.0 + sin(uTime * 0.35 + aColumn) * 0.03 + sel * 0.10);
-  vec3 p = vec3(uX[idx] + aRadial.x * scale, 0.004, position.z + aRadial.y * scale);
+  vec3 p = vec3(
+    uX[idx] + aRadial.x * scale * uSpan[idx],
+    uLift[idx] + 0.004,
+    uZ[idx] + aRadial.y * scale * uSpan[idx]
+  );
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 
   vColor = uColumnColor[idx];
   vRadial = aRadial;
   vSelect = sel;
-  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus) * (1.0 - morphDip(aColumn) * 0.6);
+  vAlpha = presence * rv * mix(1.0, mix(0.30, 1.5, sel), uFocus) * (1.0 - morphDip(aColumn) * 0.6)
+         * uTierGlow[int(min(uForm[idx], 2.0) + 0.5)];
 }
 `;
 
@@ -1150,11 +1411,15 @@ float morphDip(float column){
 uniform vec3  uColumnColor[MAX_COLUMNS];
 uniform float uCapital[MAX_COLUMNS];
 uniform float uAlt[MAX_COLUMNS];
-uniform float uForm[MAX_COLUMNS];
 uniform float uX[MAX_COLUMNS];
 uniform float uHeight[MAX_COLUMNS];
 uniform float uFill[MAX_COLUMNS];
 uniform float uPresence[MAX_COLUMNS];
+uniform float uForm[MAX_COLUMNS];
+uniform float uZ[MAX_COLUMNS];
+uniform float uSpan[MAX_COLUMNS];
+uniform float uLift[MAX_COLUMNS];
+uniform float uTierGlow[3];
 uniform float uSelect[MAX_COLUMNS];
 
 varying float vAngle;
@@ -1199,9 +1464,13 @@ void main(){
   float taper = mix(1.0, 1.28 - 0.5 * aUp, isPractice);
   // A pillar is heavier and squarer: it is holding something up.
   float stout = mix(1.0, 1.22 + 0.10 * (1.0 - aUp), isPillar);
-  float radius  = 0.32 * 1.45 * plinth * shaft * capital * taper * stout;
+  float radius  = 0.32 * 1.45 * plinth * shaft * capital * taper * stout * uSpan[idx];
 
-  vec3 p = vec3(uX[idx] + aRadial.x * radius, aUp * height * rv, aRadial.y * radius);
+  vec3 p = vec3(
+    uX[idx] + aRadial.x * radius,
+    (uLift[idx] + aUp * height) * rv,
+    uZ[idx] + aRadial.y * radius
+  );
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 
   vAngle = aAngle;
@@ -1219,7 +1488,8 @@ void main(){
   vCrown = crown;
   vAlpha = presence * rv * (0.55 + uFill[idx] * 0.45)
          * mix(1.0, mix(0.35, 1.5, sel), uFocus)
-         * (1.0 - morphDip(aColumn) * 0.72);
+         * (1.0 - morphDip(aColumn) * 0.72)
+         * uTierGlow[int(min(uForm[idx], 2.0) + 0.5)];
 }
 `;
 
@@ -1362,6 +1632,10 @@ type MoteUniforms = {
   uCapital: Uniform<number[]>;
   uAlt: Uniform<number[]>;
   uForm: Uniform<number[]>;
+  uZ: Uniform<number[]>;
+  uSpan: Uniform<number[]>;
+  uLift: Uniform<number[]>;
+  uTierGlow: Uniform<number[]>;
   uGroup: Uniform<number[]>;
   uX: Uniform<number[]>;
   uHeight: Uniform<number[]>;
@@ -1415,6 +1689,10 @@ function createMoteMaterial(): Shaded<MoteUniforms> {
     uCapital: { value: new Array<number>(MAX_COLUMNS).fill(1) },
     uAlt: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uForm: { value: new Array<number>(MAX_COLUMNS).fill(1) },
+    uZ: { value: new Array<number>(MAX_COLUMNS).fill(0) },
+    uSpan: { value: new Array<number>(MAX_COLUMNS).fill(1) },
+    uLift: { value: new Array<number>(MAX_COLUMNS).fill(0) },
+    uTierGlow: { value: [1, 1, 1] },
     uGroup: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uX: { value: new Array<number>(MAX_COLUMNS).fill(0) },
     uHeight: { value: new Array<number>(MAX_COLUMNS).fill(0) },
@@ -1508,13 +1786,12 @@ function distanceToSegment(
 }
 
 /** Which reading of the row is on stage. */
-export type RefugeMode = 'practices' | 'habitat' | 'ecosystem';
+export type RefugeMode = 'all' | 'practices' | 'habitat' | 'ecosystem';
 
 export interface RefugeProps {
   data: InstallationData;
   reveal?: number;
-  /** 0 = camera/mammal Shannon comparison, 1 = bird richness comparison. Cross-fade between them. */
-  metric?: number;
+
   /**
    * Which question the row answers — see the head of this file. All three are
    * about this estate alone.
@@ -1529,13 +1806,20 @@ export interface RefugeProps {
    * labels of is decoration — and text drawn inside the canvas would need a
    * font file, which this piece cannot fetch.
    */
-  onLayout?: (marks: { landUse: string; x: number; y: number; self: boolean; value: number }[]) => void;
+  onLayout?: (marks: {
+    landUse: string;
+    x: number;
+    y: number;
+    self: boolean;
+    value: number;
+    /** Which tier the column belongs to, so captions can rank the focused one. */
+    form: number;
+  }[]) => void;
 }
 
 export function Refuge({
   data,
   reveal = 1,
-  metric = 0,
   mode = 'practices',
   selected = null,
   onSelect,
@@ -1544,10 +1828,7 @@ export function Refuge({
   const lastLayout = useRef(0);
   const groupRef = useRef<THREE.Group>(null);
   const revealRef = useRef(0);
-  /** Seeded from the prop so the first frame is already the requested metric. */
-  const metricRef = useRef(THREE.MathUtils.clamp(metric, 0, 1));
-  /** The reading being drawn, and the one asked for; they differ mid-change. */
-  const shownRef = useRef<RefugeMode>(mode);
+  /** The focus asked for last frame, so a change can fire the wave. */
   const requestedRef = useRef<RefugeMode>(mode);
   const morphAt = useRef(-999);
   /** The arrangement being drawn, for the pick. Written by the frame loop. */
@@ -1558,9 +1839,7 @@ export function Refuge({
   const { camera, size } = useThree();
 
   const columns = useMemo(() => buildHabitats(data), [data]);
-  const practices = useMemo(() => buildPractices(data), [data]);
-  const pillars = useMemo(() => buildPillars(data), [data]);
-  const overall = data.narrative.ecosystemScore.overall;
+  const unified = useMemo(() => buildUnified(columns, data), [columns, data]);
   const hero = useMemo(() => columns.find(column => column.self) ?? null, [columns]);
 
   /** protConn is a percentage; at 0.0% the sheet's fill has no height whatsoever. */
@@ -1569,9 +1848,23 @@ export function Refuge({
     [data.narrative.protection.protConn]
   );
 
-  const moteGeometry = useMemo(() => buildMoteGeometry(columns), [columns]);
+  const moteGeometry = useMemo(() => buildMoteGeometry(unified.slots), [unified]);
+  const linkGeometry = useMemo(() => buildLinkGeometry(unified.links), [unified]);
+  /** Who touches whom, by label — the selection lights partners through this. */
+  const adjacency = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const [a, b] of unified.links) {
+      const la = unified.slots[a].label;
+      const lb = unified.slots[b].label;
+      if (!map.has(la)) map.set(la, new Set());
+      if (!map.has(lb)) map.set(lb, new Set());
+      map.get(la)!.add(lb);
+      map.get(lb)!.add(la);
+    }
+    return map;
+  }, [unified]);
   const shaftGeometry = useMemo(() => buildShaftGeometry(MAX_COLUMNS), []);
-  const skylineGeometry = useMemo(() => buildSkylineGeometry(columns), [columns]);
+  const skylineGeometry = useMemo(() => buildSkylineGeometry(unified.slots), [unified]);
   const poolGeometry = useMemo(() => buildPoolGeometry(MAX_COLUMNS), []);
   const baselineGeometry = useMemo(() => buildBaselineGeometry(columns), [columns]);
   const protectionGeometry = useMemo(() => buildProtectionGeometry(columns), [columns]);
@@ -1599,6 +1892,12 @@ export function Refuge({
   );
   const protection = useMemo(() => createProtectionMaterial(protectedHeight), [protectedHeight]);
   const ring = useMemo(() => createRingMaterial(), []);
+  const linkMaterial = useMemo(
+    // Shares the mote uniform record wholesale, which is the point: the links
+    // read the very arrays the columns ease through, so they cannot disagree.
+    () => createSharedMaterial(motes.uniforms, LINK_VERT, LINK_FRAG, THREE.DoubleSide),
+    [motes]
+  );
   const baselineMaterial = useMemo(
     () =>
       new THREE.LineBasicMaterial({
@@ -1634,6 +1933,7 @@ export function Refuge({
   useEffect(() => {
     const geometries = [
       moteGeometry,
+      linkGeometry,
       shaftGeometry,
       skylineGeometry,
       poolGeometry,
@@ -1644,6 +1944,7 @@ export function Refuge({
     ];
     const materials = [
       motes.material,
+      linkMaterial,
       shaftMaterial,
       skylineMaterial,
       poolMaterial,
@@ -1659,6 +1960,7 @@ export function Refuge({
     };
   }, [
     moteGeometry,
+    linkGeometry,
     shaftGeometry,
     skylineGeometry,
     poolGeometry,
@@ -1667,6 +1969,7 @@ export function Refuge({
     ringGeometry,
     backdropGeometry,
     motes,
+    linkMaterial,
     shaftMaterial,
     skylineMaterial,
     poolMaterial,
@@ -1689,6 +1992,8 @@ export function Refuge({
     const group = groupRef.current;
     if (!group) return null;
     const xs = motes.uniforms.uX.value;
+    const zs = motes.uniforms.uZ.value;
+    const lifts = motes.uniforms.uLift.value;
     const heights = motes.uniforms.uHeight.value;
     const presence = motes.uniforms.uPresence.value;
     // The arrangement actually on screen. This used to read `columns` — the
@@ -1706,8 +2011,8 @@ export function Refuge({
     for (let i = 0; i < slots.length; i++) {
       // A column that has faded out is not there to be touched.
       if (presence[i] < 0.25 || slots[i].presence <= 0) continue;
-      foot.set(xs[i], 0, 0).applyMatrix4(group.matrixWorld).project(camera);
-      head.set(xs[i], heights[i], 0).applyMatrix4(group.matrixWorld).project(camera);
+      foot.set(xs[i], lifts[i], zs[i]).applyMatrix4(group.matrixWorld).project(camera);
+      head.set(xs[i], lifts[i] + heights[i], zs[i]).applyMatrix4(group.matrixWorld).project(camera);
       const distance = distanceToSegment(
         clientX,
         clientY,
@@ -1738,40 +2043,42 @@ export function Refuge({
       current + (target - current) * (1 - Math.exp(-dt * rate));
 
     revealRef.current = ease(revealRef.current, THREE.MathUtils.clamp(reveal, 0, 1), 2.6);
-    metricRef.current = ease(metricRef.current, THREE.MathUtils.clamp(metric, 0, 1), 1.5);
     focusRef.current = ease(focusRef.current, selected === null ? 0 : 1, 4.5);
 
-    /* ---- which reading is on stage ---- */
+    /* ---- where the light is ---- */
 
-    // A change of reading is not a re-scaling of the same row — it is a
-    // different question — so the row dims almost to nothing, swaps at the
-    // bottom of that dip, and comes back. Sliding ten habitats into five
-    // practice stages at full brightness would read as an equivalence between
-    // "grassland" and "drip irrigation", which is not a claim anyone is making.
+    // Nothing swaps any more — the scene is one — but a change of focus still
+    // sends the wave through the row at half depth, so the shift of light
+    // reads as an event rather than as a fade that might be a glitch.
     if (mode !== requestedRef.current) {
       requestedRef.current = mode;
       morphAt.current = time;
     }
     const morphAge = (time - morphAt.current) / MORPH_SECONDS;
-    const morph = morphAge < 1 ? Math.sin(Math.max(0, morphAge) * Math.PI) : 0;
-    // Committed at the bottom of the dip, while there is nothing on screen to see
-    // change. Before that the outgoing reading is still the one being drawn.
-    if (morphAge >= 0.5) shownRef.current = requestedRef.current;
+    const morph = morphAge < 1 ? Math.sin(Math.max(0, morphAge) * Math.PI) * 0.5 : 0;
 
-    const shown = shownRef.current;
-    const target =
-      shown === 'practices'
-        ? practices
-        : shown === 'ecosystem'
-          ? pillars
-          : habitatSlots(columns);
-
+    const u = motes.uniforms;
+    const target = unified.slots;
     slotsRef.current = target;
+    const partners = selected ? adjacency.get(selected) : null;
+
+    // The reading buttons move the light between the tiers, never the data:
+    // the un-focused tiers step well back but stay present, because the whole
+    // point of one stage is that the rest of the argument never leaves it.
+    const tierTargets: [number, number, number] =
+      mode === 'practices'
+        ? [1, 0.34, 0.22]
+        : mode === 'habitat'
+          ? [0.3, 1, 0.3]
+          : mode === 'ecosystem'
+            ? [0.26, 0.4, 1]
+            : [0.55, 1, 0.62];
+    for (let tier = 0; tier < 3; tier++) {
+      u.uTierGlow.value[tier] = ease(u.uTierGlow.value[tier], tierTargets[tier], 4);
+    }
 
     const r = revealRef.current;
     const eased = r * r * (3 - 2 * r);
-
-    const u = motes.uniforms;
     let measureHeight = 0;
     // Fast enough to have arrived by the time the row is bright again, so the
     // change is something that happened in the dark rather than a slide.
@@ -1784,6 +2091,9 @@ export function Refuge({
       u.uPresence.value[i] = ease(u.uPresence.value[i], slot.presence, rate);
       u.uCapital.value[i] = ease(u.uCapital.value[i], slot.capital, rate);
       u.uAlt.value[i] = ease(u.uAlt.value[i], slot.alt, rate);
+      u.uZ.value[i] = ease(u.uZ.value[i], slot.z, rate);
+      u.uSpan.value[i] = ease(u.uSpan.value[i], slot.span, rate);
+      u.uLift.value[i] = ease(u.uLift.value[i], slot.lift, rate);
       // Not eased: a shaft halfway between a practice taper and a pillar's bulk
       // is neither, and the morph wave already hides the swap.
       u.uForm.value[i] = slot.form;
@@ -1792,7 +2102,13 @@ export function Refuge({
       u.uColumnColor.value[i].lerp(slot.color, 1 - Math.exp(-dt * rate));
       // Selection is a prop change rather than a continuous control, so this one
       // gets its own ease. It never touches React state.
-      u.uSelect.value[i] = ease(u.uSelect.value[i], slot.label === selected ? 1 : 0, 5.5);
+      // Three levels, not two: the chosen column, the columns its threads
+      // touch, and the rest. Without the middle level a selection blacked out
+      // the very things the threads were pointing at, and "its threads light
+      // what it touches" showed threads pointing into the dark.
+      const selectTarget =
+        slot.label === selected ? 1 : selected && partners?.has(slot.label) ? 0.52 : 0;
+      u.uSelect.value[i] = ease(u.uSelect.value[i], selectTarget, 5.5);
       if (slot.label === selected && slot.presence > 0) measureHeight = u.uHeight.value[i];
     }
 
@@ -1805,11 +2121,7 @@ export function Refuge({
     // Only the ecosystem reading has a datum: a published overall score the three
     // pillars are read against. The other two readings are profiles, and the
     // thread joins their heads.
-    u.uDatum.value = ease(
-      u.uDatum.value,
-      shown === 'ecosystem' ? (overall / 100) * MAX_HEIGHT : 0,
-      rate
-    );
+    u.uDatum.value = ease(u.uDatum.value, 0, rate);
 
     /* ---- captions ---- */
 
@@ -1823,12 +2135,15 @@ export function Refuge({
         target.map((slot, i) => {
           // The live uniform x, not the slot's own: mid-change the column is
           // somewhere between its two homes and the caption has to be with it.
-          foot.set(u.uX.value[i], 0, 0).applyMatrix4(group.matrixWorld).project(camera);
+          foot.set(u.uX.value[i], u.uLift.value[i], u.uZ.value[i])
+            .applyMatrix4(group.matrixWorld)
+            .project(camera);
           return {
             landUse: slot.label,
             x: (foot.x * 0.5 + 0.5) * size.width,
             y: (-foot.y * 0.5 + 0.5) * size.height,
             self: slot.self,
+            form: slot.form,
             // Faded out with its column, and dropped entirely while the row is
             // dissolved. A slot with no reading behind it is gone outright, not
             // merely faint: an eased value never quite reaches zero, and a label
@@ -1840,12 +2155,14 @@ export function Refuge({
     }
 
     protection.uniforms.uTime.value = time;
-    protection.uniforms.uReveal.value = eased;
+    // The protection sheet is a statement about the score; in the unified
+    // diorama it only rises when the score tier holds the light.
+    protection.uniforms.uReveal.value = eased * (mode === 'ecosystem' ? 1 : 0);
     ring.uniforms.uTime.value = time;
     // The ring marks one column as the estate's own, which only means anything
     // in the habitat reading — the other two are already about nothing else.
     ring.uniforms.uReveal.value =
-      eased * (1 - focusRef.current * 0.35) * (shown === 'habitat' ? 1 : 0) * (1 - morph);
+      eased * (1 - focusRef.current * 0.35) * (mode === 'habitat' ? 1 : 0) * (1 - morph);
     baselineMaterial.opacity = eased * 0.9;
     // The measure rises to the chosen capital and dies with the selection —
     // and with the morph wave, so it never asserts a height mid-change.
@@ -1891,6 +2208,8 @@ export function Refuge({
           offset into XZ directly, so this must not be rotated flat a second time. */}
       <mesh geometry={poolGeometry} material={poolMaterial} renderOrder={1} />
       <lineSegments geometry={baselineGeometry} material={baselineMaterial} renderOrder={2} />
+      {/* The web of claims, behind the columns it connects. */}
+      <lineSegments geometry={linkGeometry} material={linkMaterial} renderOrder={1} />
       {/* Same rule geometry, lifted: the ticks land over each column's axis. */}
       <lineSegments
         ref={measureRef}
