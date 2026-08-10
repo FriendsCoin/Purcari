@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { InstallationData, Species } from '../core/types';
 import { logScale } from '../core/data';
 import { GUILD_COLORS, PALETTE, toRGB } from '../core/palette';
+import type { DayClock } from '../core/dayClock';
 import { SIMPLEX_3D, SPRITE } from './chunks';
 import { GLYPH_POINTS, glyphCloud, glyphFor } from './silhouettes';
 
@@ -453,6 +454,8 @@ export interface ChoirProps {
   cluster?: number;
   /** Clock hour driving which species are lit. */
   hour?: number;
+  /** The running day, read in the frame loop rather than through render. */
+  clock?: DayClock;
   selected?: Species | null;
   onSelect?: (species: Species | null) => void;
   /**
@@ -469,6 +472,7 @@ export function Choir({
   reveal = 1,
   cluster = 0,
   hour = 12,
+  clock,
   selected = null,
   onSelect,
   flagshipOnly = false,
@@ -947,7 +951,13 @@ export function Choir({
     const t = state.clock.elapsedTime;
     revealRef.current += (reveal - revealRef.current) * Math.min(1, delta * 2);
     clusterRef.current += (cluster - clusterRef.current) * Math.min(1, delta * 1.4);
-    hourRef.current += (hour - hourRef.current) * Math.min(1, delta * 1.2);
+    // Wrapped, because the day loops: eased straight, 23:59 -> 00:01 would run
+    // the whole choir backwards through the afternoon.
+    const hourTarget = clock ? clock.hour : hour;
+    let hourDiff = hourTarget - hourRef.current;
+    if (hourDiff > 12) hourDiff -= 24;
+    if (hourDiff < -12) hourDiff += 24;
+    hourRef.current = (hourRef.current + hourDiff * Math.min(1, delta * 3) + 24) % 24;
 
     uniforms.uTime.value = t;
     uniforms.uReveal.value = revealRef.current;

@@ -13,6 +13,7 @@ import { Spectrogram, SPECTROGRAM_AXES } from '../ui/Spectrogram';
 import { Vignette } from '../ui/Vignette';
 import { VIGNETTE_SOURCE, type VignetteKind } from '../ui/vignetteData';
 import { useChapterTransition } from '../core/useChapterTransition';
+import { useDayClock } from '../core/dayClock';
 import { Stage, CameraRig, ChapterFrame } from '../gl/Stage';
 import { Constellation, type Lens, type MapAnchor } from '../gl/Constellation';
 import { Chronogram } from '../gl/Chronogram';
@@ -198,10 +199,18 @@ export default function IndoorApp() {
    * a whole day and watch the community hand over from the day shift to the
    * night one. Every response to it comes from measured hourly profiles.
    */
-  const [hour, setHour] = useState(() => {
-    const now = new Date();
-    return now.getHours() + now.getMinutes() / 60;
-  });
+  /**
+   * The estate's day, running on its own and looping. Lives outside React —
+   * see `core/dayClock.ts`: writing the hour to state on every pointer move was
+   * re-rendering the whole chapter tree, scene elements included, which is
+   * exactly the judder the scrubber used to have.
+   */
+  const {
+    clock: dayClock,
+    label: hour,
+    playing: dayPlaying,
+    scrub: scrubHour,
+  } = useDayClock(new Date().getHours() + new Date().getMinutes() / 60);
   const [clockTouched, setClockTouched] = useState(false);
 
   /**
@@ -401,6 +410,7 @@ export default function IndoorApp() {
             reveal={reveal}
             lens={lens}
             hour={hour}
+            clock={dayClock}
             selectedSite={selectedSite}
             onSelectSite={interactive ? handleSelectSite : undefined}
             onMapAnchors={interactive ? setMapAnchors : undefined}
@@ -470,6 +480,7 @@ export default function IndoorApp() {
             reveal={reveal}
             cluster={clusterGuilds ? 1 : 0}
             hour={hour}
+            clock={dayClock}
             flagshipOnly={flagshipOnly}
             selected={selectedSpecies}
             onSelect={interactive ? handleSelectSpecies : undefined}
@@ -545,7 +556,15 @@ export default function IndoorApp() {
             */}
             <div className="inst-clock" style={{ marginBottom: '1rem' }}>
               <div className="inst-clock-head">
-                <span className="inst-label">Hour of day</span>
+                {/*
+                  The day runs on its own and loops. Saying which state it is in
+                  matters: without it a visitor cannot tell whether the estate is
+                  changing because of them or because time is passing, and the
+                  scrubber looks broken for the four seconds after they let go.
+                */}
+                <span className="inst-label">
+                  Hour of day {dayPlaying ? '· running' : '· yours'}
+                </span>
                 <span className="inst-clock-time">{formatHour(hour)}</span>
               </div>
               <input
@@ -558,7 +577,7 @@ export default function IndoorApp() {
                 onChange={(event) => {
                   touch();
                   setClockTouched(true);
-                  setHour(Number(event.target.value));
+                  scrubHour(Number(event.target.value));
                 }}
               />
               <div className="inst-clock-scale">
@@ -634,7 +653,15 @@ export default function IndoorApp() {
             */}
             <div className="inst-clock" style={{ marginBottom: '1rem' }}>
               <div className="inst-clock-head">
-                <span className="inst-label">Hour of day</span>
+                {/*
+                  The day runs on its own and loops. Saying which state it is in
+                  matters: without it a visitor cannot tell whether the estate is
+                  changing because of them or because time is passing, and the
+                  scrubber looks broken for the four seconds after they let go.
+                */}
+                <span className="inst-label">
+                  Hour of day {dayPlaying ? '· running' : '· yours'}
+                </span>
                 <span className="inst-clock-time">{formatHour(hour)}</span>
               </div>
               <input
@@ -647,7 +674,7 @@ export default function IndoorApp() {
                 onChange={(event) => {
                   touch();
                   setClockTouched(true);
-                  setHour(Number(event.target.value));
+                  scrubHour(Number(event.target.value));
                 }}
               />
               <div className="inst-clock-scale">

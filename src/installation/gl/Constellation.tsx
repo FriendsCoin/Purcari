@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { InstallationData, LandscapeData, Site } from '../core/types';
 import { layoutSites, loadLandscape, logScale } from '../core/data';
+import type { DayClock } from '../core/dayClock';
 import { PALETTE, toRGB, TYPOLOGY_COLORS, CLASS_COLORS } from '../core/palette';
 import { SIMPLEX_3D, DITHER, SPRITE, TONEMAP } from './chunks';
 import {
@@ -101,17 +102,39 @@ function siteColor(site: Site, lens: Lens): [number, number, number] {
  * vineyard blocks and the château all turn together.
  */
 const HOUR_TINT = /* glsl */ `
+/* Where the sun is, at this hour. x/z point at it, y is its height above the
+ * horizon — negative at night. Sunrise and sunset at this latitude sit near
+ * 06:00 and 20:00, so the arc is built around those. */
+vec3 sunAt(float hour){
+  float phase = (hour - 6.0) / 14.0;            // 0 at sunrise, 1 at sunset
+  float az = 3.14159265 * phase;                 // swings east to west
+  float el = sin(3.14159265 * phase);            // up over the day, under at night
+  return normalize(vec3(-cos(az) * 0.9, el * 0.85 + 0.06, -0.45 - abs(el) * 0.25));
+}
+
 vec3 hourTint(float hour){
-  float dawn = 1.0 - smoothstep(0.0, 2.2, abs(hour - 6.0));
-  float dusk = 1.0 - smoothstep(0.0, 2.4, abs(hour - 20.0));
-  float day = smoothstep(5.0, 8.5, hour) * (1.0 - smoothstep(18.0, 21.5, hour));
-  vec3 night = vec3(0.52, 0.66, 1.20);
-  vec3 noon = vec3(1.0, 0.98, 0.92);
-  vec3 twilight = vec3(1.25, 0.68, 0.42);
+  float dawn = 1.0 - smoothstep(0.0, 1.7, abs(hour - 6.2));
+  float dusk = 1.0 - smoothstep(0.0, 1.9, abs(hour - 19.8));
+  float day = smoothstep(5.4, 8.0, hour) * (1.0 - smoothstep(18.4, 21.0, hour));
+  // Pushed well past the wash it used to be. A day that a visitor watches loop
+  // has to actually *turn*: deep cold blue at night, a hard low amber through
+  // both twilights, clean light at noon. Multiplicative still, so it tints what
+  // is there rather than adding light of its own.
+  vec3 night = vec3(0.30, 0.46, 1.35);
+  vec3 noon = vec3(1.06, 1.02, 0.94);
+  vec3 twilight = vec3(1.52, 0.74, 0.38);
   vec3 tint = mix(night, noon, day);
-  return mix(tint, twilight, clamp(dawn + dusk, 0.0, 1.0) * 0.85);
+  return mix(tint, twilight, clamp(dawn + dusk, 0.0, 1.0) * 0.82);
+}
+
+/* How much light there is at all — the difference between noon and 03:00 is not
+ * only colour. Never reaches zero: the map has to stay legible at midnight. */
+float hourLevel(float hour){
+  float day = smoothstep(4.8, 7.6, hour) * (1.0 - smoothstep(18.6, 21.4, hour));
+  return mix(0.5, 1.0, day);
 }
 `;
+
 
 /* ----------------------------------------------------------------- terrain */
 
@@ -187,14 +210,22 @@ void main(){
   // gradient of the elevation grid, not a screen-space derivative, so the
   // shading stays smooth instead of faceting on the grid's whole-metre steps.
   // No lights in the scene — this is the only shading in the piece.
-  vec3 sun = normalize(vec3(-0.55, 0.42, -0.55));
+  // The sun moves. A fixed light made every hour of the day look like the same
+  // afternoon with a colour filter over it; swinging it from east to west means
+  // the ravines fill with shadow in the morning, the plateau flares at noon and
+  // the whole west-facing slope catches fire at dusk. It is the single thing
+  // that makes the loop worth watching.
+  vec3 sun = sunAt(uHour);
   float shade = clamp(dot(normalize(vNormal), sun) * 0.5 + 0.5, 0.0, 1.0);
+  // After dark the raking light is gone and the relief is read by a flat fill,
+  // the way a landscape actually looks under a moon.
+  shade = mix(0.55, shade, smoothstep(-0.05, 0.22, sun.y));
   // Kept deliberately dim. The contour lines carry the landform, the colour
   // fills are only a wash, and the twelve stations must stay the brightest thing
   // on screen once bloom is applied. A little more body than the abstract ground
   // it replaces, because here the shading is carrying real slope and the
   // hillside is worth seeing.
-  soil *= (0.25 + pow(shade, 1.6) * 0.75) * 0.28;
+  soil *= (0.25 + pow(shade, 1.6) * 0.75) * 0.28 * hourLevel(uHour);
 
   // True contours, ${CONTOUR_INTERVAL.toFixed(0)} m apart, with every fifth — each 50 m — burning
   // brighter, the way a survey sheet indexes its own lines. The screen-space
@@ -504,6 +535,12 @@ interface ConstellationProps {
    * the pond margin come up.
    */
   hour?: number;
+  /**
+   * The running day. Read inside the frame loop, so scrubbing and playback
+   * never re-render this component — see `core/dayClock.ts` for why that is
+   * the difference between a smooth ramp and the judder it replaced.
+   */
+  clock?: DayClock;
 }
 
 /**
@@ -524,6 +561,7 @@ export function Constellation({
   reveal = 1,
   lens = 'both',
   hour = 12,
+  clock,
   selectedSite = null,
   onSelectSite,
   onMapAnchors,
@@ -1154,11 +1192,11 @@ export function Constellation({
     /* ---- clock ---- */
     // Eased across the 24h wrap so scrubbing past midnight does not run the
     // whole day backwards.
-    const target = hour;
+    const target = clock ? clock.hour : hour;
     let diff = target - hourRef.current;
     if (diff > 12) diff -= 24;
     if (diff < -12) diff += 24;
-    hourRef.current = (hourRef.current + diff * Math.min(1, delta * 5) + 24) % 24;
+    hourRef.current = (hourRef.current + diff * Math.min(1, delta * (clock && !clock.scrubbing ? 14 : 5)) + 24) % 24;
 
     const attr = stationGeometry.getAttribute('aActivity') as THREE.BufferAttribute;
     const values = attr.array as Float32Array;
