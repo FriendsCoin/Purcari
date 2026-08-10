@@ -15,6 +15,8 @@ import { color, guildColorArray, guildCss, guildIndex, PALETTE } from '../engine
 import { speciesSelection } from '../engine/selection';
 import type { ChapterId, FrameContext, Readout } from '../engine/Scene';
 import { atlas, maxStationTotal, points, speciesAtStation } from '../data/atlas';
+import { passages, type PassageSpecies } from '../data/passages';
+import { figure, type FigureId } from './figures';
 import {
   basemap,
   CHATEAU,
@@ -82,6 +84,7 @@ type Focus =
   | { kind: 'station'; index: number }
   | { kind: 'chateau' }
   | { kind: 'zone'; index: number }
+  | { kind: 'camera'; index: number }
   | null;
 
 /**
@@ -202,6 +205,18 @@ export class TerroirScene extends ChapterBase {
 
   private focus: Focus = null;
   private readonly zones: { id: ChapterId; label: string; note: string; position: Vector3 }[] = [];
+
+  /**
+   * The camera-trap dive. Tapping a diamond falls to the trap and raises a
+   * theatre of everything it photographed: each species as its guild silhouette
+   * drawing itself in around the instrument, each of its passings a spark on a
+   * 24-hour ring on the ground. Three numbers of text; the rest is figures.
+   */
+  private trap: number | null = null;
+  private trapSpecies: number | null = null;
+  private trapElapsed = 0;
+  private trapTheatre: Points[] = [];
+  private trapCast: { species: PassageSpecies; here: number; anchor: Vector3 }[] = [];
   private navigate: ((id: ChapterId) => void) | null = null;
   private focusStrength = 0;
   private pinchPrevious = 0;
@@ -317,6 +332,19 @@ export class TerroirScene extends ChapterBase {
     const chateau = lonLatToScene(CHATEAU.lon, CHATEAU.lat);
     this.markers.push({ focus: { kind: 'chateau' }, position: new Vector3(chateau.x, 0, chateau.z), label: CHATEAU.name });
 
+    // The camera traps. Most stand beside an acoustic recorder — the surveys
+    // paired their deployments — so each mark is stepped eighteen metres east
+    // of its true point, the way a cartographer offsets a label, or the two
+    // instruments would be a single unpickable dot.
+    passages.cameras.forEach((camera, i) => {
+      const c = lonLatToScene(camera.lon, camera.lat);
+      this.markers.push({
+        focus: { kind: 'camera', index: i },
+        position: new Vector3(c.x + 0.6, 0, c.z),
+        label: camera.code,
+      });
+    });
+
     // The chapters, standing on the estate. They join the markers so that
     // picking, framing and the selection ring all treat them like any other
     // place on the map.
@@ -340,7 +368,8 @@ export class TerroirScene extends ChapterBase {
       const station = m.focus?.kind === 'station' ? atlas.stations[m.focus.index] : null;
       weight[i] = station ? clamp(station.total / maxStationTotal, 0.16, 1) : 0.7;
       index[i] = i;
-      isEstate[i] = m.focus?.kind === 'chateau' ? 1 : m.focus?.kind === 'zone' ? 2 : 0;
+      isEstate[i] =
+        m.focus?.kind === 'chateau' ? 1 : m.focus?.kind === 'zone' ? 2 : m.focus?.kind === 'camera' ? 3 : 0;
     });
 
     const geometry = new BufferGeometry();
@@ -612,6 +641,162 @@ export class TerroirScene extends ChapterBase {
     this.navigate?.(zone.id);
   }
 
+  private enterTrap(index: number): void {
+    const camera = passages.cameras[index];
+    const site = lonLatToScene(camera.lon, camera.lat);
+    this.mapAltitude = this.altitudeTarget;
+    this.altitudeTarget = POST_ALTITUDE;
+    this.trap = index;
+    this.trapSpecies = null;
+    this.trapElapsed = 0;
+    this.centreTarget.set(site.x, 0, site.z);
+    this.focus = { kind: 'camera', index };
+    this.buildTrapTheatre(index, site.x, site.z);
+  }
+
+  private leaveTrap(): void {
+    this.trap = null;
+    this.trapSpecies = null;
+    this.altitudeTarget = this.mapAltitude;
+    for (const mesh of this.trapTheatre) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as ShaderMaterial).dispose();
+    }
+    this.trapTheatre = [];
+    this.trapCast = [];
+  }
+
+  /** Everything this trap saw, staged around it. Built fresh on each dive. */
+  private buildTrapTheatre(index: number, cx: number, cz: number): void {
+    // Who, and how often *here* — counted from the per-event record, because a
+    // species' total is not this camera's total.
+    const byHere = passages.species
+      .map(species => ({ species, here: 0 }))
+      .filter(entry => entry.species.cameras.includes(index));
+    const speciesIndex = new Map(passages.species.map((sp, i) => [i, sp]));
+    const counts = new Map<number, number>();
+    for (let e = 0; e < passages.events.species.length; e += 1) {
+      if (passages.events.camera[e] !== index) continue;
+      counts.set(passages.events.species[e], (counts.get(passages.events.species[e]) ?? 0) + 1);
+    }
+    for (const entry of byHere) {
+      const i = passages.species.indexOf(entry.species);
+      entry.here = counts.get(i) ?? 0;
+    }
+    byHere.sort((a, b) => b.here - a.here);
+
+    // The cast stands in a ring, most-seen first, facing inward at the trap.
+    const R = 1.7;
+    this.trapCast = byHere.map((entry, rank) => {
+      const angle = Math.PI * 0.5 - (rank / byHere.length) * Math.PI * 2;
+      return {
+        species: entry.species,
+        here: entry.here,
+        anchor: new Vector3(cx + Math.cos(angle) * R, 1.05, cz - Math.sin(angle) * R),
+      };
+    });
+
+    // -- the figures ---------------------------------------------------------
+    const offset: number[] = [];
+    const centre: number[] = [];
+    const rankAttr: number[] = [];
+    const role: number[] = [];
+    const order: number[] = [];
+    const seed: number[] = [];
+    this.trapCast.forEach((member, rank) => {
+      const shape: FigureId = member.species.kind === 'bird' ? 'songbird' : 'mammal';
+      const built = figure(shape, 170);
+      const scale = 0.6 + Math.min(0.45, Math.log(member.here + 1) / 7);
+      const push = (x: number, y: number, kind: number, o: number, i: number): void => {
+        offset.push(x * scale, y * scale);
+        centre.push(member.anchor.x, member.anchor.y, member.anchor.z);
+        rankAttr.push(rank);
+        role.push(kind);
+        order.push(o);
+        seed.push(hash(rank * 9.31 + i * 0.71));
+      };
+      built.outline.forEach((pt, i) => push(pt.x, pt.y, 0, i / built.outline.length, i));
+      built.detail.forEach((pt, i) => push(pt.x, pt.y, 1, i / built.detail.length, i));
+    });
+
+    const fig = new BufferGeometry();
+    fig.setAttribute('position', new BufferAttribute(Float32Array.from(centre), 3));
+    fig.setAttribute('aOffset', new BufferAttribute(Float32Array.from(offset), 2));
+    fig.setAttribute('aRank', new BufferAttribute(Float32Array.from(rankAttr), 1));
+    fig.setAttribute('aRole', new BufferAttribute(Float32Array.from(role), 1));
+    fig.setAttribute('aOrder', new BufferAttribute(Float32Array.from(order), 1));
+    fig.setAttribute('aSeed', new BufferAttribute(Float32Array.from(seed), 1));
+    const figures = new Points(
+      fig,
+      new ShaderMaterial({
+        uniforms: this.uniforms,
+        vertexShader: TRAP_FIGURE_VERTEX,
+        fragmentShader: TRAP_FIGURE_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        ...ADDITIVE,
+      })
+    );
+    figures.frustumCulled = false;
+    figures.renderOrder = 4;
+
+    // -- the passings, on the day's own dial ---------------------------------
+    const sp: number[] = [];
+    const sMinute: number[] = [];
+    const sSeed: number[] = [];
+    for (let e = 0; e < passages.events.species.length; e += 1) {
+      if (passages.events.camera[e] !== index) continue;
+      const count = passages.events.count[e];
+      const who = speciesIndex.get(passages.events.species[e]);
+      for (let c = 0; c < count; c += 1) {
+        const minute = passages.events.minute[e];
+        const angle = Math.PI * 0.5 - (minute / 1440) * Math.PI * 2;
+        const r = 1.35 + hash(e * 3.7 + c) * 0.22;
+        sp.push(cx + Math.cos(angle) * r, 0.06, cz - Math.sin(angle) * r);
+        // Night is 21:00–05:00, the atlas' own convention.
+        sMinute.push(minute >= 1260 || minute < 300 ? 1 : 0);
+        sSeed.push(hash(e * 1.91 + c * 7.3) + (who ? 0 : 0));
+      }
+    }
+    const dial = new BufferGeometry();
+    dial.setAttribute('position', new BufferAttribute(Float32Array.from(sp), 3));
+    dial.setAttribute('aNight', new BufferAttribute(Float32Array.from(sMinute), 1));
+    dial.setAttribute('aSeed', new BufferAttribute(Float32Array.from(sSeed), 1));
+    const sparks = new Points(
+      dial,
+      new ShaderMaterial({
+        uniforms: this.uniforms,
+        vertexShader: TRAP_SPARK_VERTEX,
+        fragmentShader: TRAP_SPARK_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        ...ADDITIVE,
+      })
+    );
+    sparks.frustumCulled = false;
+    sparks.renderOrder = 3;
+
+    this.trapTheatre = [figures, sparks];
+    this.scene.add(figures, sparks);
+  }
+
+  private pickTrapFigure(ndcX: number, ndcY: number): number | null {
+    let best: number | null = null;
+    // Generous: a silhouette is a hand-sized target, not a pin.
+    let bestDistance = 0.24;
+    this.trapCast.forEach((member, i) => {
+      this.probe.copy(member.anchor).project(this.camera);
+      if (this.probe.z > 1) return;
+      const distance = Math.hypot(this.probe.x - ndcX, this.probe.y - ndcY);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = i;
+      }
+    });
+    return best;
+  }
+
   private enterPost(index: number): void {
     const station = atlas.stations[index];
     const site = lonLatToScene(station.lon, station.lat);
@@ -685,6 +870,19 @@ export class TerroirScene extends ChapterBase {
     this.uniforms.uReveal.value = damp(this.uniforms.uReveal.value, 1, 1.0, ctx.delta);
 
     for (const tap of ctx.pointer.consumeTaps()) {
+      if (this.trap !== null) {
+        // Inside the trap theatre a silhouette is a species; anything else is
+        // the way back up to the map.
+        const hit = this.pickTrapFigure(tap.ndc.x, tap.ndc.y);
+        if (hit !== null) {
+          this.trapSpecies = this.trapSpecies === hit ? null : hit;
+          speciesSelection.set(this.trapSpecies === null ? null : this.trapCast[hit].species.fr);
+        } else {
+          speciesSelection.clear();
+          this.leaveTrap();
+        }
+        continue;
+      }
       if (this.post !== null) {
         // Inside a post: a filament is a species, and the ground outside the
         // instrument is the way back up to the map.
@@ -717,10 +915,23 @@ export class TerroirScene extends ChapterBase {
         // one flies down to it and opens its own record on the ground it stands
         // on.
         if (this.focus.kind === 'station') this.enterPost(this.focus.index);
+        if (this.focus.kind === 'camera') this.enterTrap(this.focus.index);
       }
     }
 
     this.handleNavigation(ctx);
+
+    if (this.trap !== null) {
+      this.trapElapsed += ctx.delta;
+      this.uniforms.uTrapTime.value = this.trapElapsed;
+      this.uniforms.uTrapSel.value = this.trapSpecies ?? -1;
+      this.camera.getWorldDirection(this.probe);
+      this.uniforms.uFigRight.value.set(-this.probe.z, 0, this.probe.x).normalize();
+      this.uniforms.uFigUp.value
+        .crossVectors(this.probe, this.uniforms.uFigRight.value)
+        .normalize()
+        .negate();
+    }
 
     this.focusStrength = damp(this.focusStrength, this.focus ? 1 : 0, 2.4, ctx.delta);
     this.uniforms.uFocus.value =
@@ -937,7 +1148,9 @@ export class TerroirScene extends ChapterBase {
 
   private refreshReadout(): void {
     const key =
-      this.post !== null
+      this.trap !== null
+        ? `trap-${this.trap}-${this.trapSpecies ?? 'all'}`
+        : this.post !== null
         ? `post-${this.post}-${this.postSpecies ?? 'all'}`
         : !this.focus
           ? 'overview'
@@ -949,7 +1162,11 @@ export class TerroirScene extends ChapterBase {
     if (key !== this.readoutKey) {
       this.readoutKey = key;
       this.cachedReadout =
-        this.post !== null
+        this.trap !== null
+          ? this.trapSpecies === null
+            ? this.trapReadout(this.trap)
+            : this.trapSpeciesReadout(this.trapSpecies)
+          : this.post !== null
           ? this.postSpecies === null
             ? this.postReadout(this.post)
             : this.postSpeciesReadout(this.post, this.postSpecies)
@@ -964,6 +1181,42 @@ export class TerroirScene extends ChapterBase {
     this.cachedReadout.marker = this.marker;
     this.cachedReadout.scale = this.scale;
     return;
+  }
+
+  /** Three numbers and a sentence; the theatre carries the rest. */
+  private trapReadout(index: number): Readout {
+    const camera = passages.cameras[index];
+    return {
+      eyebrow: 'Piège photo',
+      title: camera.code,
+      body: 'Touchez une silhouette.',
+      stats: [
+        { label: 'Passages', value: String(camera.total) },
+        { label: 'Espèces', value: String(camera.species) },
+        { label: 'La nuit', value: `${Math.round(camera.nightShare * 100)} %` },
+      ],
+      period: '29 mai — 16 août 2025',
+      source: `Every1Counts · pièges photo · imagerie ${basemap.attribution}`,
+      accent: PALETTE.ember,
+    };
+  }
+
+  private trapSpeciesReadout(member: number): Readout {
+    const cast = this.trapCast[member];
+    return {
+      eyebrow: cast.species.kind === 'bird' ? 'Oiseau' : 'Mammifère',
+      title: cast.species.fr,
+      body: `${cast.species.scientific}.`,
+      stats: [
+        { label: 'Ici', value: String(cast.here) },
+        { label: 'Partout', value: String(cast.species.count) },
+        { label: 'La nuit', value: `${Math.round(cast.species.nightShare * 100)} %` },
+      ],
+      spark: cast.species.hourly.map(v => v / Math.max(1, ...cast.species.hourly)),
+      period: '29 mai — 16 août 2025',
+      source: `Every1Counts · pièges photo · imagerie ${basemap.attribution}`,
+      accent: PALETTE.ember,
+    };
   }
 
   /** A chapter standing on the estate: what it is, and the way in. */
@@ -1152,6 +1405,10 @@ function createUniforms(touch: TouchUniforms) {
     uGold: { value: color(PALETTE.gold) },
     uBone: { value: color(PALETTE.bone) },
     uWine: { value: color(PALETTE.wine) },
+    uTrapTime: { value: 0 },
+    uTrapSel: { value: -1 },
+    uFigRight: { value: new Vector3(1, 0, 0) },
+    uFigUp: { value: new Vector3(0, 1, 0) },
     uDusk: { value: color(PALETTE.dusk) },
     ...touch,
   };
@@ -1414,10 +1671,12 @@ void main(){
   // the map out and it cannot crush it to black.
   float band = clamp(luma * 2.3, 0.0, 1.0);
   float wobble = snoise(vec3(vWorld.xz * 0.24, 4.7)) * 0.07;
-  // Shade almost at the void, a cool grey through the middle, gold only at the
-  // top: the estate at night, not a wine stain. Wine belongs to the markers.
-  vec3 painted = ramp3(band, vec3(0.045, 0.033, 0.062), mix(uBone, uWine, 0.55) * 0.4, uGold * 1.05, 0.2, wobble);
-  graded = mix(graded, painted, 0.58);
+  // Deep shade, a restrained middle, hot gold at the top — and a contrast lift
+  // after the mix. The first pass of this wash was pale: mid and lit sat too
+  // close together and the whole estate read as fog.
+  vec3 painted = ramp3(band, vec3(0.014, 0.010, 0.028), mix(uBone, uWine, 0.55) * 0.33, uGold * 1.5, 0.17, wobble);
+  graded = mix(graded, painted, 0.56);
+  graded = clamp((graded - 0.045) * 1.34, 0.0, 4.0);
   graded *= 1.25;
   // Toe and shoulder in one: a gain of about four near black, so the woodland
   // and the vine rows keep their shape instead of blocking up, and a roll-off at
@@ -1479,6 +1738,7 @@ const MARKER_FRAGMENT = /* glsl */ `
 uniform float uTime;
 uniform vec3 uGold;
 uniform vec3 uBone;
+uniform vec3 uWine;
 varying float vWeight;
 varying float vEstate;
 varying float vSelected;
@@ -1496,7 +1756,8 @@ void main(){
   float pulse = (1.0 - smoothstep(0.02, 0.06, abs(d - (0.34 + pulsePhase * 0.6)))) * (1.0 - pulsePhase) * 0.55;
   float halo = exp(-d * 3.4) * 0.16;
 
-  float isZone = step(1.5, vEstate);
+  float isZone = step(1.5, vEstate) * step(vEstate, 2.5);
+  float isCam = step(2.5, vEstate);
   // A zone is a doorway, not a reading: a bracketed square, so a visitor can
   // tell at a glance which marks are places that listened and which are ways in.
   vec2 q = abs(uv) * 2.0;
@@ -1505,8 +1766,15 @@ void main(){
               * step(min(q.x, q.y), 0.34);
   float centre = 1.0 - smoothstep(0.05, 0.12, box);
   float mark = mix(dot0 + ring + pulse + halo, frame + centre * 0.7 + halo, isZone);
+  // A camera is a diamond with a shutter dot: distinct from the recorder's
+  // ring at a glance, because they stand side by side on this estate.
+  vec2 r45 = abs(vec2(uv.x + uv.y, uv.x - uv.y)) * 1.41421;
+  float dia = max(r45.x, r45.y);
+  float diamond = (1.0 - smoothstep(0.02, 0.055, abs(dia - 0.42))) + (1.0 - smoothstep(0.04, 0.1, dia)) * 0.7;
+  mark = mix(mark, diamond + halo * 0.6, isCam);
   vec3 tint = mix(uGold, uBone, min(vEstate, 1.0) * 0.75 + vSelected * 0.25);
   tint = mix(tint, uBone, isZone * 0.55);
+  tint = mix(tint, mix(uWine * 1.9, uBone, 0.42), isCam);
 
   float a = mark * vAlpha * (0.72 + vSelected * 0.4);
   if (a < 0.004) discard;
@@ -1582,5 +1850,112 @@ void main(){
   float a = spriteAlpha(gl_PointCoord, 0.85) * vAlpha;
   if (a < 0.004) discard;
   gl_FragColor = vec4(vColor * a * 0.24, a);
+}
+`;
+
+function hash(n: number): number {
+  const v = Math.sin(n) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+// ---------------------------------------------------------- trap theatre --
+
+const TRAP_FIGURE_VERTEX = /* glsl */ `
+uniform float uTime;
+uniform float uTrapTime;
+uniform float uTrapSel;
+uniform vec3 uFigRight;
+uniform vec3 uFigUp;
+uniform vec3 uBone;
+uniform vec3 uGold;
+uniform vec3 uWine;
+attribute vec2 aOffset;
+attribute float aRank;
+attribute float aRole;
+attribute float aOrder;
+attribute float aSeed;
+varying vec3 vColor;
+varying float vAlpha;
+
+${TOUCH_UNIFORMS}
+${POINT_SIZE}
+
+void main(){
+  // Each member of the cast draws itself in turn, outline first, the interior
+  // strokes once it is half there — the same draughtsman's schedule as the
+  // Red Book, at hand scale.
+  float start = aRank * 0.34;
+  float local = clamp((uTrapTime * 0.8 - start), 0.0, 1.0);
+  float draw = aRole < 0.5
+    ? smoothstep(aOrder, aOrder + 0.09, local * 1.35)
+    : smoothstep(aOrder, aOrder + 0.12, clamp(local * 1.8 - 0.7, 0.0, 1.0));
+
+  float held = uTrapSel < -0.5 ? 0.0 : step(abs(uTrapSel - aRank), 0.5);
+  float nib = smoothstep(0.07, 0.0, abs(local * 1.35 - aOrder)) * (1.0 - step(1.0, local));
+
+  vec3 pos = position + (uFigRight * aOffset.x + uFigUp * aOffset.y) * (1.0 + sin(uTime * 0.8 + aRank) * 0.015);
+
+  vColor = mix(mix(uWine * 1.6, uBone, 0.42), uGold * 1.3, held * 0.6 + nib * 0.8);
+  vAlpha = draw * mix(0.55, 1.0, held) * (uTrapSel < -0.5 ? 1.0 : mix(0.3, 1.0, held));
+
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  gl_PointSize = pointSizeFor((aRole < 0.5 ? 0.055 : 0.045) * (1.0 + held * 0.4 + nib * 0.9), mv.z);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+const TRAP_FIGURE_FRAGMENT = /* glsl */ `
+varying vec3 vColor;
+varying float vAlpha;
+void main(){
+  vec2 uv = gl_PointCoord - 0.5;
+  float d = length(uv) * 2.0;
+  float core = 1.0 - smoothstep(0.0, 0.6, d);
+  float a = (core + exp(-d * 2.8) * 0.3) * vAlpha;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vColor * a, a);
+}
+`;
+
+const TRAP_SPARK_VERTEX = /* glsl */ `
+uniform float uTime;
+uniform float uTrapTime;
+uniform vec3 uGold;
+uniform vec3 uWine;
+uniform vec3 uBone;
+attribute float aNight;
+attribute float aSeed;
+varying vec3 vColor;
+varying float vAlpha;
+
+${TOUCH_UNIFORMS}
+${POINT_SIZE}
+
+void main(){
+  // The trap's whole record on a 24-hour dial around the instrument: midnight
+  // away from the visitor, each passing at the minute it happened. Day passes
+  // burn gold, night passes violet-blue — the same night the actogram keeps.
+  vec3 pos = position;
+  pos.y += sin(uTime * 1.1 + aSeed * 30.0) * 0.02;
+
+  float reveal = smoothstep(aSeed, aSeed + 0.25, uTrapTime * 0.55);
+  vColor = mix(uGold, mix(uWine, vec3(0.42, 0.4, 0.85), 0.6), aNight);
+  vAlpha = reveal * (0.5 + 0.5 * sin(uTime * 1.3 + aSeed * 44.0));
+
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  gl_PointSize = pointSizeFor(0.05 + aSeed * 0.02, mv.z);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+const TRAP_SPARK_FRAGMENT = /* glsl */ `
+varying vec3 vColor;
+varying float vAlpha;
+void main(){
+  vec2 uv = gl_PointCoord - 0.5;
+  float d = length(uv) * 2.0;
+  float a = (1.0 - smoothstep(0.0, 0.55, d)) * vAlpha;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vColor * a, a);
 }
 `;
